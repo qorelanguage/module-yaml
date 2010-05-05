@@ -1,7 +1,22 @@
+/* indent-tabs-mode: nil -*- */
 /*
   yaml Qore module
 
   Copyright (C) 2010 David Nichols, all rights reserved
+
+  This library is free software; you can redistribute it and/or
+  modify it under the terms of the GNU Lesser General Public
+  License as published by the Free Software Foundation; either
+  version 2.1 of the License, or (at your option) any later version.
+
+  This library is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+  Lesser General Public License for more details.
+
+  You should have received a copy of the GNU Lesser General Public
+  License along with this library; if not, write to the Free Software
+  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 #include "yaml-module.h"
@@ -23,160 +38,111 @@ DLLEXPORT qore_module_ns_init_t qore_module_ns_init = yaml_module_ns_init;
 DLLEXPORT qore_module_delete_t qore_module_delete = yaml_module_delete;
 DLLEXPORT qore_license_t qore_module_license = QL_LGPL;
 
-static const char *YAML_EMITTER_ERROR = "YAML-EMITTER-ERROR";
+const char *QY_EMIT_ERR = "YAML-EMITTER-ERROR";
 
-static YAML::Emitter& operator << (YAML::Emitter& emitter, int64 v) {
-   return emitter.WriteIntegralType(v);
+QoreString NullStr("null");
+
+#define QY_NUM_TAGS (sizeof(QoreYamlEmitter::qore_tags)/sizeof(yaml_tag_directive_t))
+
+int qore_yaml_write_handler(QoreYamlWriteHandler *wh, unsigned char *buffer, size_t size) {
+   return wh->write(buffer, size);
 }
 
-static YAML::Emitter& operator << (YAML::Emitter& emitter, const DateTime &d) { 
-   //if (d.isRelative()) {}
-   qore_tm info;
-   d.getInfo(info);
-
-   // shorthand type name
-   QoreString str("!!timestamp ");
-   d.format(str, "YYYY-MM-DD");
-   if (!info.isTimeNull() || info.secsEast()) {
-      // use spaces for enhanced readability
-      if (!info.us)
-	 d.format(str, " HH:mm:SS Z");
-      else if (!(info.us % 1000))
-	 d.format(str, " HH:mm:SS.ms Z");
-      else
-	 d.format(str, " HH:mm:SS.xx Z");
+QoreYamlEmitter::QoreYamlEmitter(QoreYamlWriteHandler &n_wh, int flags, ExceptionSink *n_xsink) : wh(n_wh), xsink(n_xsink), valid(false), implicit_start_doc(flags & QYE_IMPLICIT_START_DOC), implicit_end_doc(flags & QYE_IMPLICIT_END_DOC) {
+   if (!yaml_emitter_initialize(&emitter)) {
+      err("unknown error initializing yaml emitter");
+      return;
    }
-   return emitter.WriteStreamable(str.getBuffer());
+
+   if (flags & QYE_CANONICAL)
+      setCanonical();
+
+   if (!(flags & QYE_ESCAPE_UNICODE))
+      setUnicode();
+
+   yaml_emitter_set_output(&emitter, (yaml_write_handler_t *)qore_yaml_write_handler, &wh);
+
+   if (!streamStart() && !docStart())
+      valid = true;
 }
 
-static YAML::Emitter& operator << (YAML::Emitter& emitter, const BinaryNode &b) {
-   // shorthand type name
-   QoreString str("!!binary \"");
-   str.concatBase64(&b);
-   str.concat('"');
-   return emitter.WriteStreamable(str.getBuffer());
-}
-
-static int makeYAML(YAML::Emitter &out, const AbstractQoreNode *p, ExceptionSink *xsink) {
+int QoreYamlEmitter::emit(const AbstractQoreNode *p) {
    qore_type_t t = get_node_type(p);
    switch (t) {
-      case NT_STRING: {
-	 TempEncodingHelper tmp(reinterpret_cast<const QoreStringNode *>(p), QCS_UTF8, xsink);
-	 if (!tmp)
-	    return -1;
-	 out << tmp->getBuffer();
-	 break;
-      }	 
-      case NT_INT: {
-	 out << reinterpret_cast<const QoreBigIntNode *>(p)->val;
-	 break;
-      }
-      case NT_FLOAT: {
-	 out << reinterpret_cast<const QoreFloatNode *>(p)->f;
-	 break;
-      }
-      case NT_BOOLEAN: {
-	 out << reinterpret_cast<const QoreBoolNode *>(p)->getValue();
-	 break;
-      }
-      case NT_LIST: {
-	 out << YAML::BeginSeq;
-	 ConstListIterator li(reinterpret_cast<const QoreListNode *>(p));
-	 while (li.next()) {
-	    if (makeYAML(out, li.getValue(), xsink))
-	       return -1;
-	 }
-	 out << YAML::EndSeq;
-	 break;
-      }
-      case NT_HASH: {
-	 out << YAML::BeginMap;
-	 ConstHashIterator hi(reinterpret_cast<const QoreHashNode *>(p));
-	 while (hi.next()) {
-	    out << YAML::Key << hi.getKey();
-	    out << YAML::Value;
-	    if (makeYAML(out, hi.getValue(), xsink))
-	       return -1;
-	 }
-	 out << YAML::EndMap;
-	 break;
-      }
-      case NT_DATE: {
-	 out << *reinterpret_cast<const DateTimeNode *>(p);
-	 break;
-      }
-      case NT_BINARY: {
-	 out << *reinterpret_cast<const BinaryNode *>(p);
-	 break;
-      }
-      case NT_NOTHING: {
-	 out << YAML::Null;
-	 break;
-      }
-      default:
-	 xsink->raiseException(YAML_EMITTER_ERROR, "cannot convert Qore type '%s' to YAML", get_type_name(p));
-	 break;
-   }
+      case NT_STRING:
+	 return emit(*reinterpret_cast<const QoreStringNode *>(p));
 
-   if (!out.good()) {
-      xsink->raiseException(YAML_EMITTER_ERROR, out.GetLastError().c_str());
-      return -1;
+      case NT_INT:
+	 return emit(*reinterpret_cast<const QoreBigIntNode *>(p));
+
+      case NT_FLOAT:
+	 return emit(*reinterpret_cast<const QoreFloatNode *>(p));
+
+      case NT_BOOLEAN:
+	 return emit(*reinterpret_cast<const QoreBoolNode *>(p));
+
+      case NT_LIST:
+	 return emit(*reinterpret_cast<const QoreListNode *>(p));
+
+      case NT_HASH:
+	 return emit(*reinterpret_cast<const QoreHashNode *>(p));
+
+      case NT_DATE:
+	 return emit(*reinterpret_cast<const DateTimeNode *>(p));
+
+      case NT_BINARY:
+	 return emit(*reinterpret_cast<const BinaryNode *>(p));
+
+      case NT_NULL:
+      case NT_NOTHING:
+	 return emitNull();
+
+      default:
+	 xsink->raiseException(QY_EMIT_ERR, "cannot convert Qore type '%s' to YAML", get_type_name(p));
+	 break;
    }
 
    return 0;
 }
 
 static AbstractQoreNode *f_makeYAML(const QoreListNode *args, ExceptionSink *xsink) {
-   YAML::Emitter out;
-   out << YAML::Flow;
+   const AbstractQoreNode *p = get_param(args, 0);
+   int flags = HARD_QORE_INT(args, 1);
 
-   unsigned i = 0;
-   while (true) {
-      const AbstractQoreNode *p = get_param(args, ++i);
-      if (!p)
-	 break;
-
-      YAML::EMITTER_MANIP m = (YAML::EMITTER_MANIP)p->getAsInt();
-      out << m;
+   QoreYamlStringWriteHandler str;
+   {
+      QoreYamlEmitter emitter(str, flags, xsink);
+      if (*xsink)
+	 return 0;
+   
+      if (emitter.emit(p))
+	 return 0;
    }
 
-
-   if (makeYAML(out, get_param(args, 0), xsink))
-      return 0;
-
-   return new QoreStringNode(out.c_str(), QCS_UTF8);
+   return str.take();
 }
+
+/*
+static AbstractQoreNode *f_parseYAML(const QoreListNode *args, ExceptionSink *xsink) {
+   return 0;
+}
+*/
 
 QoreNamespace YNS("YAML");
 
 QoreStringNode *yaml_module_init() {
    // add functions
-   builtinFunctions.add2("makeYAML", f_makeYAML, QC_RET_VALUE_ONLY | QC_USES_EXTRA_ARGS, QDOM_DEFAULT, stringTypeInfo);
+   builtinFunctions.add2("makeYAML", f_makeYAML, QC_RET_VALUE_ONLY, QDOM_DEFAULT, stringTypeInfo, 2, anyTypeInfo, QORE_PARAM_NO_ARG, bigIntTypeInfo, new QoreBigIntNode(QYE_DEFAULT));
+   //builtinFunctions.add2("parseYAML", f_parseYAML, QC_NO_FLAGS, QDOM_DEFAULT, anyTypeInfo, 1, anyTypeInfo, QORE_PARAM_NO_ARG);
 
    // setup namespace
-   YNS.addConstant("Auto", new QoreBigIntNode(YAML::Auto));
-   YNS.addConstant("EmitNonAscii", new QoreBigIntNode(YAML::EmitNonAscii));
-   YNS.addConstant("EscapeNonAscii", new QoreBigIntNode(YAML::EscapeNonAscii));
-   YNS.addConstant("SingleQuoted", new QoreBigIntNode(YAML::SingleQuoted));
-   YNS.addConstant("DoubleQuoted", new QoreBigIntNode(YAML::DoubleQuoted));
-   YNS.addConstant("Literal", new QoreBigIntNode(YAML::Literal));
-   YNS.addConstant("YesNoBool", new QoreBigIntNode(YAML::YesNoBool));
-   YNS.addConstant("TrueFalseBool", new QoreBigIntNode(YAML::TrueFalseBool));
-   YNS.addConstant("OnOffBool", new QoreBigIntNode(YAML::OnOffBool));
-   YNS.addConstant("UpperCase", new QoreBigIntNode(YAML::UpperCase));
-   YNS.addConstant("LowerCase", new QoreBigIntNode(YAML::LowerCase));
-   YNS.addConstant("CamelCase", new QoreBigIntNode(YAML::CamelCase));
-   YNS.addConstant("LongBool", new QoreBigIntNode(YAML::LongBool));
-   YNS.addConstant("ShortBool", new QoreBigIntNode(YAML::ShortBool));
-   YNS.addConstant("Dec", new QoreBigIntNode(YAML::Dec));
-   YNS.addConstant("Hex", new QoreBigIntNode(YAML::Hex));
-   YNS.addConstant("Oct", new QoreBigIntNode(YAML::Oct));
-   YNS.addConstant("Flow", new QoreBigIntNode(YAML::Flow));
-   YNS.addConstant("Block", new QoreBigIntNode(YAML::Block));
+   YNS.addConstant("Canonical", new QoreBigIntNode(QYE_CANONICAL));
+   YNS.addConstant("EscapeUnicode", new QoreBigIntNode(QYE_ESCAPE_UNICODE));
+   YNS.addConstant("ImplicitStartDoc", new QoreBigIntNode(QYE_IMPLICIT_START_DOC));
+   YNS.addConstant("ImplicitEndDoc", new QoreBigIntNode(QYE_IMPLICIT_END_DOC));
 
    return 0;
 }
-
 
 void yaml_module_ns_init(QoreNamespace *rns, QoreNamespace *qns) {
    qns->addNamespace(YNS.copy());

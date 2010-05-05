@@ -6,15 +6,18 @@
 
 class yaml_test {
     constructor() {
-	my $d = ( 1, 2, NOTHING, hash(), (), "three",
+	my $d = ( 1, 2, 
+		  NOTHING, hash(),
+		  (), "three",
 		  now_us(),
-		  1970-01-01,
+		  1970-01-01Z,
 		  binary("hello"),
 		  False,
 		  ( "a" : 2.0, 
 		    "b" : "hello",
-		    "key" : True ) );
-	my string $str = makeYAML($d, Flow, DoubleQuoted);
+		    "key" : True )
+	    );
+	my string $str = makeYAML($d);
 	printf("%s\n", $str);
     }
 }

@@ -224,10 +224,10 @@ AC_ARG_ENABLE([single-compilation-unit],
       esac],
   [enable_single_compilation_unit=yes])
 
-AC_ARG_WITH([yaml-cpp],
-    [AS_HELP_STRING([--with-yaml-cpp@<:@=DIR@:>@],
-                    [YAML-CPP base directory])],
-    [if test ! -d "${with_yaml_cpp}"; then AC_MSG_ERROR(directory ${with_yaml_cpp} does not exist for --with-yaml-cpp); unset with_yaml_cpp; fi])
+AC_ARG_WITH([libyaml],
+    [AS_HELP_STRING([--with-libyaml@<:@=DIR@:>@],
+                    [libyaml base directory])],
+    [if test ! -d "${with_libyaml}"; then AC_MSG_ERROR(directory ${with_libyaml} does not exist for --with-libyaml); unset with_libyaml; fi])
 
 check_yaml() {
     inc="$1/include"
@@ -237,8 +237,8 @@ check_yaml() {
     #echo DBG: checking $1 inc=$inc
     if test -f "$inc/yaml.h"; then
        with_yaml_includes=$inc
-    elif test -f "$inc/yaml-cpp/yaml.h"; then
-       with_yaml_includes=$inc/yaml-cpp
+    elif test -f "$inc/yaml/yaml.h"; then
+       with_yaml_includes=$inc/yaml
     fi
 
     if test -z "$with_yaml_includes"; then
@@ -248,15 +248,15 @@ check_yaml() {
 
     lib="$1/lib${LIBSUFFIX}"
 
-    if test -f "$lib/libyaml-cpp.${SHLIB_SUFFIX}" -o -f "$lib/libyaml-cpp.so"; then
+    if test -f "$lib/libyaml.${SHLIB_SUFFIX}" -o -f "$lib/libyaml.so"; then
        with_yaml_libs=$lib
-    elif test -f "$lib/yaml-cpp/libyaml-cpp.${SHLIB_SUFFIX}"; then
-       with_yaml_libs=$lib/yaml-cpp
-    elif test -f "$lib/libyaml-cpp.a"; then
+    elif test -f "$lib/yaml/libyaml.${SHLIB_SUFFIX}"; then
+       with_yaml_libs=$lib/yaml
+    elif test -f "$lib/libyaml.a"; then
        with_yaml_libs=$lib
        yaml_static=1
-    elif test -f "$lib/yaml-cpp/libyaml-cpp.a"; then
-       with_yaml_libs=$lib/yaml-cpp
+    elif test -f "$lib/yaml/libyaml.a"; then
+       with_yaml_libs=$lib/yaml
        yaml_static=1
     fi
 
@@ -275,7 +275,7 @@ check_yaml() {
 
 # see if we can figure out where the yaml include files and libraries are
 if test "${with_yaml}" != "no"; then
-   AC_MSG_CHECKING([for YAML-CPP includes and libraries])
+   AC_MSG_CHECKING([for libyaml includes and libraries])
 
    if test -n "$with_yaml"; then
       check_yaml "$with_yaml"
@@ -302,7 +302,7 @@ if test "${with_yaml}" != "no"; then
       AC_MSG_ERROR([not found])
    fi
 else
-   AC_MSG_ERROR([cannot build module without YAML-CPP support])
+   AC_MSG_ERROR([cannot build module without libyaml support])
 fi
 
 if test "${with_yaml}" = yes; then
@@ -312,12 +312,12 @@ if test "${with_yaml}" = yes; then
           YAML_INCLUDES="-I$with_yaml_includes"
      fi
      if test -n "$yaml_static"; then
-          YAML_LIBS="$with_yaml_libs/libyaml-cpp.a"
+          YAML_LIBS="$with_yaml_libs/libyaml.a"
      else
 	if test -n "$yaml_app_libs"; then
-	   YAML_LIBS="-L$with_yaml_libs -lyaml-cpp"
+	   YAML_LIBS="-L$with_yaml_libs -lyaml"
 	else
-	   YAML_LIBS="-lyaml-cpp"
+	   YAML_LIBS="-lyaml"
 	fi
      fi
      # check if C++ compiler can link with YAML libs
@@ -328,21 +328,21 @@ if test "${with_yaml}" = yes; then
      AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
 #include <yaml.h>
 	 ]],[[
-YAML::Emitter out;
+yaml_parser_t parser; yaml_emitter_t emitter;
 	]])], yaml_links=yes, yaml_links=no)
 
      CXXFLAGS="$SAVE_CXXFLAGS"
      LDFLAGS="$SAVE_LDFLAGS"
 
      if test "$yaml_links" = "no"; then
-        AC_MSG_ERROR([could not compile a test YAML-CPP program])
+        AC_MSG_ERROR([could not compile a test libyaml program])
      else
         AC_SUBST(YAML_INCLUDES)
 	AC_SUBST(YAML_LIBS)
         with_yaml=yes
      fi
   else
-     AC_MSG_ERROR([no YAML-CPP libraries or includes found])
+     AC_MSG_ERROR([no libyaml libraries or includes found])
   fi
 fi
 
