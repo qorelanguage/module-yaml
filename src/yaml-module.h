@@ -30,20 +30,39 @@
 
 #include <yaml.h>
 
+#include <map>
+
 #define QYE_NONE                0
 #define QYE_CANONICAL           (1 << 0)
 #define QYE_ESCAPE_UNICODE      (1 << 1)
-#define QYE_IMPLICIT_START_DOC  (1 << 2)
-#define QYE_IMPLICIT_END_DOC    (1 << 3)
+#define QYE_EXPLICIT_START_DOC  (1 << 2)
+#define QYE_EXPLICIT_END_DOC    (1 << 3)
+#define QYE_BLOCK_STYLE         (1 << 4)
+#define QYE_VER_1_1             (1 << 5)
+#define QYE_VER_1_2             (1 << 6)
 
-#define QYE_DEFAULT (QYE_IMPLICIT_END_DOC)
+#define QYE_DEFAULT (QYE_NONE)
 
 #ifndef YAML_BINARY_TAG
 #define YAML_BINARY_TAG "tag:yaml.org,2002:binary"
 #endif
 
+#ifndef YAML_OMAP_TAG
+#define YAML_OMAP_TAG "tag:yaml.org,2002:omap"
+#endif
+
 DLLLOCAL extern const char *QY_EMIT_ERR;
+
+DLLLOCAL extern const char *QY_PARSE_ERR;
+
 DLLLOCAL extern QoreString NullStr;
+
+DLLLOCAL extern yaml_version_directive_t yaml_ver_1_1, yaml_ver_1_2;
+
+typedef std::map<int, const char *> event_map_t;
+DLLLOCAL extern event_map_t event_map;
+
+DLLLOCAL extern const char *get_event_name(yaml_event_type_t type);
 
 class QoreYamlWriteHandler {
 public:
@@ -54,18 +73,28 @@ public:
    DLLLOCAL virtual int write(unsigned char *buffer, size_t size) = 0;
 };
 
-DLLLOCAL int qore_yaml_write_handler(QoreYamlWriteHandler *wh, unsigned char *buffer, size_t size);
-
-class QoreYamlEmitter {
+class QoreYamlBase {
 protected:
-   yaml_emitter_t emitter;
-   QoreYamlWriteHandler &wh;
    yaml_event_t event;
    ExceptionSink *xsink;
 
-   bool valid,
+   bool valid;
+
+public:
+   DLLLOCAL QoreYamlBase(ExceptionSink *n_xsink) : xsink(n_xsink), valid(false) {
+   }
+};
+
+class QoreYamlEmitter : public QoreYamlBase {
+protected:
+   yaml_emitter_t emitter;
+   QoreYamlWriteHandler &wh;
+
+   bool block,
       implicit_start_doc, 
       implicit_end_doc;
+
+   yaml_version_directive_t *yaml_ver;
 
    DLLLOCAL int err(const char *msg) {
       xsink->raiseException(QY_EMIT_ERR, msg);
@@ -106,7 +135,7 @@ public:
    }
 
    DLLLOCAL int docStart(yaml_tag_directive_t *start = 0, unsigned elements = 0) {
-      if (!yaml_document_start_event_initialize(&event, 0, start, start + elements, implicit_start_doc))
+      if (!yaml_document_start_event_initialize(&event, yaml_ver, start, start + elements, implicit_start_doc))
 	 return err("unknown error initializing yaml document start event");
 
       return emit();
@@ -152,7 +181,7 @@ public:
       return emit();
    }
 
-   DLLLOCAL int scalar(const QoreString &value, const char *tag = 0, const char *anchor = 0, 
+   DLLLOCAL int emitScalar(const QoreString &value, const char *tag = 0, const char *anchor = 0, 
 		       bool plain_implicit = true, bool quoted_implicit = true, 
 		       yaml_scalar_style_t style = YAML_ANY_SCALAR_STYLE) {
       if (!yaml_scalar_event_initialize(&event, (yaml_char_t *)anchor, (yaml_char_t *)tag, 
@@ -163,7 +192,7 @@ public:
       return emit();
    }
 
-   DLLLOCAL int scalar(const char *value, const char *tag = 0, const char *anchor = 0, 
+   DLLLOCAL int emitScalar(const char *value, const char *tag = 0, const char *anchor = 0, 
 		       bool plain_implicit = true, bool quoted_implicit = true, 
 		       yaml_scalar_style_t style = YAML_ANY_SCALAR_STYLE) {
       if (!yaml_scalar_event_initialize(&event, (yaml_char_t *)anchor, (yaml_char_t *)tag, 
@@ -178,29 +207,29 @@ public:
       TempEncodingHelper tmp(&str, QCS_UTF8, xsink);
       if (!tmp)
 	 return -1;
-      return scalar(**tmp, YAML_STR_TAG, 0, true, true, YAML_DOUBLE_QUOTED_SCALAR_STYLE);
+      return emitScalar(**tmp, YAML_STR_TAG, 0, true, true, YAML_DOUBLE_QUOTED_SCALAR_STYLE);
    }
    
    DLLLOCAL int emit(const QoreBigIntNode &bi) {
       QoreString tmp;
       tmp.sprintf("%lld", bi.val);
-      return scalar(tmp, YAML_INT_TAG);
+      return emitScalar(tmp, YAML_INT_TAG);
    }
 
    DLLLOCAL int emit(const QoreFloatNode &f) {
       QoreString tmp;
       tmp.sprintf("%g", f.f);
-      return scalar(tmp, YAML_FLOAT_TAG);
+      return emitScalar(tmp, YAML_FLOAT_TAG);
    }
 
    DLLLOCAL int emit(const QoreBoolNode &b) {
       QoreString tmp;
       tmp.sprintf("%s", b.getValue() ? "true" : "false");
-      return scalar(tmp, YAML_BOOL_TAG);
+      return emitScalar(tmp, YAML_BOOL_TAG);
    }
 
    DLLLOCAL int emit(const QoreListNode &l) {
-      if (seqStart(YAML_FLOW_SEQUENCE_STYLE))
+      if (seqStart(block ? YAML_BLOCK_SEQUENCE_STYLE : YAML_FLOW_SEQUENCE_STYLE))
 	 return -1;
       ConstListIterator li(l);
       while (li.next()) {
@@ -211,11 +240,11 @@ public:
    }
 
    DLLLOCAL int emit(const QoreHashNode &h) {
-      if (mapStart(YAML_FLOW_MAPPING_STYLE))
+      if (mapStart(block ? YAML_BLOCK_MAPPING_STYLE : YAML_FLOW_MAPPING_STYLE))
 	 return -1;
       ConstHashIterator hi(h);
       while (hi.next()) {
-	 if (scalar(hi.getKey(), YAML_STR_TAG, 0, true, true, YAML_DOUBLE_QUOTED_SCALAR_STYLE))
+	 if (emitScalar(hi.getKey(), YAML_STR_TAG, 0, true, true, YAML_DOUBLE_QUOTED_SCALAR_STYLE))
 	    return -1;
 	 if (emit(hi.getValue()))
 	    return -1;
@@ -223,47 +252,18 @@ public:
       return mapEnd();
    }
 
-   DLLLOCAL int emit(const DateTime &d) {
-      qore_tm info;
-      d.getInfo(info);
-
-      // shorthand type name
-      QoreString str(QCS_UTF8);
-      if (emitter.canonical) {
-	 d.format(str, "YYYY-MM-DDTHH:mm:SS.xx");
-	 // remove trailing zeros from microseconds time
-	 str.trim_trailing('0');
-	 // remove empty decimal point if us == 0
-	 str.trim_trailing('.');
-	 // add time zone offset (or "Z")
-	 d.format(str, "Z");
-      }
-      else {
-	 d.format(str, "YYYY-MM-DD");
-	 if (!info.isTimeNull() || info.secsEast()) {
-	    // use spaces for enhanced readability
-	    if (!info.us)
-	       d.format(str, " HH:mm:SS Z");
-	    else if (!(info.us % 1000))
-	       d.format(str, " HH:mm:SS.ms Z");
-	    else
-	       d.format(str, " HH:mm:SS.xx Z");
-	 }
-      }
-
-      return scalar(str, YAML_TIMESTAMP_TAG, 0, false, false);
-   }
+   DLLLOCAL int emit(const DateTime &d);
 
    DLLLOCAL int emit(const BinaryNode &b) {
       QoreString str(QCS_UTF8);
       str.concatBase64(&b);
-      return scalar(str, YAML_BINARY_TAG, 0, false, false, YAML_DOUBLE_QUOTED_SCALAR_STYLE);
+      return emitScalar(str, YAML_BINARY_TAG, 0, false, false, YAML_DOUBLE_QUOTED_SCALAR_STYLE);
    }
 
    DLLLOCAL int emit(const AbstractQoreNode *p);
    
    DLLLOCAL int emitNull() {
-      return scalar(NullStr, YAML_NULL_TAG);
+      return emitScalar(NullStr, YAML_NULL_TAG);
    }
    
    DLLLOCAL void setCanonical(bool b = true) {
@@ -295,6 +295,65 @@ public:
       assert(str);
       str->concat((const char *)buffer, size);
       return 1;
+   }
+};
+
+class QoreYamlParser : public QoreYamlBase {
+protected:
+   yaml_parser_t parser;
+   bool discard;
+
+   DLLLOCAL void discardEvent() {
+      if (discard) {
+	 yaml_event_delete(&event);
+	 discard = false;
+      }
+   }
+
+   DLLLOCAL int getEvent() {
+      discardEvent();
+	 
+      if (!yaml_parser_parse(&parser, &event)) {
+	 valid = false;
+	 return -1;
+      }
+      discard = true;
+      return 0;
+   }
+
+   DLLLOCAL int checkEvent(yaml_event_type_t type) {
+      if (event.type != type) {
+	 xsink->raiseException(QY_PARSE_ERR, "expecting '%s' event; got '%s' event instead", get_event_name(type), get_event_name(event.type));
+	 return -1;
+      }
+      return 0;
+   }
+
+   DLLLOCAL int getCheckEvent(yaml_event_type_t type) {
+      if (getEvent())
+	 return -1;
+
+      return checkEvent(type);
+   }
+
+   DLLLOCAL QoreListNode *parseSeq();
+   DLLLOCAL QoreHashNode *parseMap();
+   DLLLOCAL AbstractQoreNode *parseScalar();
+   DLLLOCAL AbstractQoreNode *parseNode();
+
+public:
+   DLLLOCAL QoreYamlParser(const QoreString &str, ExceptionSink *n_xsink) : QoreYamlBase(n_xsink), discard(false) {
+      yaml_parser_initialize(&parser);
+      yaml_parser_set_input_string(&parser, (const unsigned char *)str.getBuffer(), str.strlen());
+      yaml_parser_set_encoding(&parser, YAML_UTF8_ENCODING);
+      valid = true;
+   }
+
+   DLLLOCAL AbstractQoreNode *parse();
+
+   DLLLOCAL ~QoreYamlParser() {
+      discardEvent();
+      yaml_parser_delete(&parser); 
    }
 };
 

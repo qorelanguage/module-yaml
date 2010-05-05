@@ -1,7 +1,7 @@
 if COND_SINGLE_COMPILATION_UNIT
 YAML_SOURCES = single-compilation-unit.cpp
 else
-YAML_SOURCES = yaml-module.cpp
+YAML_SOURCES = yaml-module.cpp QoreYamlEmitter.cpp QoreYamlParser.cpp
 endif
 
 lib_LTLIBRARIES = yaml.la

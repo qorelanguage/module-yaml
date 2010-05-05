@@ -6,18 +6,20 @@
 
 class yaml_test {
     constructor() {
-	my $d = ( 1, 2, 
-		  NOTHING, hash(),
-		  (), "three",
-		  now_us(),
-		  1970-01-01Z,
-		  binary("hello"),
-		  False,
-		  ( "a" : 2.0, 
-		    "b" : "hello",
-		    "key" : True )
+	my $d = (1, "two", 
+		 NOTHING,
+		 False,
+		 1970-01-01Z,
+		 #(hash(), (), "three \"things\""),
+		 now_us(),
+		 binary("hello"),
+		 #("a" : 2.0, 
+		 # "b" : "hello",
+		 # "key" : True)
 	    );
 	my string $str = makeYAML($d);
 	printf("%s\n", $str);
+
+	printf("parsed: %N\n", parseYAML($str));
     }
 }
