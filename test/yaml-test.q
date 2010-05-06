@@ -18,7 +18,7 @@ class yaml_test {
 		  "b" : "hello",
 		  "key" : True)
 	    );
-	my string $ystr = makeYAML($d);
+	my string $ystr = makeYAML($d, Yaml1_1);
 	#my string $xstr = makeXMLString(("data":$d));
 	#my string $jstr = makeJSONString($d);
 	#printf("ystr: %d, xstr: %d, jstr: %d\n", strlen($ystr), strlen($xstr), strlen($jstr));

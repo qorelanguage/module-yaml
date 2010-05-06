@@ -317,6 +317,8 @@ protected:
 	 valid = false;
 	 return -1;
       }
+      //printd(5, "QoreYamlParser::getEvent() got %s event (%d)\n", get_event_name(event.type), event.type);
+
       discard = true;
       return 0;
    }

@@ -50,10 +50,13 @@ AbstractQoreNode *QoreYamlParser::parse() {
 
 	 if (getCheckEvent(YAML_DOCUMENT_END_EVENT))
 	    return 0;
+
+	 if (getEvent())
+	    return 0;
       }
    }
 
-   if (getCheckEvent(YAML_STREAM_END_EVENT))
+   if (checkEvent(YAML_STREAM_END_EVENT))
       return 0;
 
    return rv.release();
