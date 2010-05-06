@@ -110,14 +110,10 @@ static AbstractQoreNode *dt_err(ExceptionSink *xsink, const char *val, const cha
 AbstractQoreNode *QoreYamlParser::parseScalar() {
    //ReferenceHolder<AbstractQoreNode> rv(xsink);
 
-   printd(0, "QoreYamlParser::parseScalar() anchor=%s tag=%s value=%s len=%d plain_implicit=%d quoted_implicit=%d style=%d\n",
-	  event.data.scalar.anchor ? event.data.scalar.anchor : (yaml_char_t*)"n/a", 
-	  event.data.scalar.tag ? event.data.scalar.tag : (yaml_char_t*)"n/a", 
-	  event.data.scalar.value, event.data.scalar.length, event.data.scalar.plain_implicit, 
-	  event.data.scalar.quoted_implicit, event.data.scalar.style);
-
    const char *val = (const char *)event.data.scalar.value;
    size_t len = event.data.scalar.length;
+
+   //printd(5, "QoreYamlParser::parseScalar() anchor=%s tag=%s value=%s len=%d plain_implicit=%d quoted_implicit=%d style=%d\n", event.data.scalar.anchor ? event.data.scalar.anchor : (yaml_char_t*)"n/a", event.data.scalar.tag ? event.data.scalar.tag : (yaml_char_t*)"n/a", val, len, event.data.scalar.plain_implicit, event.data.scalar.quoted_implicit, event.data.scalar.style);
 
    if (!event.data.scalar.tag) {
       if (event.data.scalar.quoted_implicit) {
@@ -176,7 +172,7 @@ AbstractQoreNode *QoreYamlParser::parseScalar() {
 	 ++p;
       }
 
-      printd(0, "date: %04d-%02d-%02d\n", year, month, day);
+      //printd(5, "date: %04d-%02d-%02d\n", year, month, day);
 
       // according to the YAML draft timestamp spec, if no time or time zone 
       // information is given, then the value is assumed to be in UTC
