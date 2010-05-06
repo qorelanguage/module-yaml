@@ -11,15 +11,18 @@ class yaml_test {
 		 2010-05-05T15:35:02.100,
 		 False,
 		 1970-01-01Z,
-		 #(hash(), (), "three \"things\""),
+		 (hash(), (), "three \"things\""),
 		 now_us(),
-		 binary("hello"),
-		 #("a" : 2.0, 
-		 # "b" : "hello",
-		 # "key" : True)
+		 binary("hello, how's it going, this is a long string, you know XXXXXXXXXXXXXXXXXXXXXXXX"),
+		 ("a" : 2.0, 
+		  "b" : "hello",
+		  "key" : True)
 	    );
-	my string $str = makeYAML($d);
-	printf("%s", $str);
-	printf("parsed: %N\n", parseYAML($str));
+	my string $ystr = makeYAML($d);
+	#my string $xstr = makeXMLString(("data":$d));
+	#my string $jstr = makeJSONString($d);
+	#printf("ystr: %d, xstr: %d, jstr: %d\n", strlen($ystr), strlen($xstr), strlen($jstr));
+	printf("%s", $ystr);
+	printf("parsed: %N\n", parseYAML($ystr));
     }
 }

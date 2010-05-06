@@ -340,6 +340,8 @@ protected:
    DLLLOCAL QoreHashNode *parseMap();
    DLLLOCAL AbstractQoreNode *parseScalar();
    DLLLOCAL AbstractQoreNode *parseNode();
+   DLLLOCAL DateTimeNode *parseAbsoluteDate();
+   DLLLOCAL QoreBoolNode *parseBool();
 
 public:
    DLLLOCAL QoreYamlParser(const QoreString &str, ExceptionSink *n_xsink) : QoreYamlBase(n_xsink), discard(false) {

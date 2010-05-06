@@ -37,6 +37,11 @@ QoreYamlEmitter::QoreYamlEmitter(QoreYamlWriteHandler &n_wh, int flags, Exceptio
       return;
    }
 
+   if (flags & QYE_VER_1_1 && flags & QYE_VER_1_2) {
+      err("cannot set both Yaml1_1 and Yaml1_2 version flags");
+      return;
+   }
+
    if (flags & QYE_CANONICAL)
       setCanonical();
 
@@ -132,5 +137,5 @@ int QoreYamlEmitter::emit(const DateTime &d) {
    else
       d.format(str, "Z");
 
-   return emitScalar(str, YAML_TIMESTAMP_TAG, 0, false, false);
+   return emitScalar(str, YAML_TIMESTAMP_TAG);
 }

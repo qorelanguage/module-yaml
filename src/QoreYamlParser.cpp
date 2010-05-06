@@ -99,10 +99,40 @@ QoreListNode *QoreYamlParser::parseSeq() {
 QoreHashNode *QoreYamlParser::parseMap() {
    ReferenceHolder<QoreHashNode> h(new QoreHashNode, xsink);
 
+   while (true) {
+      if (getEvent())
+	 return 0;
+
+      if (event.type == YAML_MAPPING_END_EVENT) 
+	 break;
+
+      // get key node and convert to string
+      ReferenceHolder<AbstractQoreNode> key(parseNode(), xsink);
+      if (*xsink)
+	 return 0;
+
+      // convert to string in default encoding
+      QoreStringValueHelper str(*key, QCS_DEFAULT, xsink);
+      if (*xsink)
+	 return 0;
+
+      // get value
+      if (getEvent())
+	 return 0;
+
+      AbstractQoreNode *value = parseNode();
+      if (*xsink)
+	 return 0;
+
+      h->setKeyValue(str->getBuffer(), value, xsink);
+      if (*xsink)
+	 return 0;
+   }
+
    return h.release();
 }
 
-static AbstractQoreNode *dt_err(ExceptionSink *xsink, const char *val, const char *msg) {
+static DateTimeNode *dt_err(ExceptionSink *xsink, const char *val, const char *msg) {
    xsink->raiseException(QY_PARSE_ERR, "cannot parse timestamp value '%s': %s", val, msg);
    return 0;
 }
@@ -112,21 +142,28 @@ AbstractQoreNode *QoreYamlParser::parseScalar() {
 
    const char *val = (const char *)event.data.scalar.value;
    size_t len = event.data.scalar.length;
-
-   //printd(5, "QoreYamlParser::parseScalar() anchor=%s tag=%s value=%s len=%d plain_implicit=%d quoted_implicit=%d style=%d\n", event.data.scalar.anchor ? event.data.scalar.anchor : (yaml_char_t*)"n/a", event.data.scalar.tag ? event.data.scalar.tag : (yaml_char_t*)"n/a", val, len, event.data.scalar.plain_implicit, event.data.scalar.quoted_implicit, event.data.scalar.style);
+   
+   //printd(0, "QoreYamlParser::parseScalar() anchor=%s tag=%s value=%s len=%d plain_implicit=%d quoted_implicit=%d style=%d\n", event.data.scalar.anchor ? event.data.scalar.anchor : (yaml_char_t*)"n/a", event.data.scalar.tag ? event.data.scalar.tag : (yaml_char_t*)"n/a", val, len, event.data.scalar.plain_implicit, event.data.scalar.quoted_implicit, event.data.scalar.style);
 
    if (!event.data.scalar.tag) {
-      if (event.data.scalar.quoted_implicit) {
+      if (event.data.scalar.quoted_implicit && event.data.scalar.style == YAML_DOUBLE_QUOTED_SCALAR_STYLE) {
 	 // assume it's a string
 	 return new QoreStringNode(val, len, QCS_UTF8);
       }
 
+      // check for boolean values
       if (!strcmp(val, "true"))
 	 return &True;
       if (!strcmp(val, "false"))
 	 return &False;
-      if (!strcmp(val, "null"))
+
+      // check for null
+      if (!strcmp(val, "null") || !strcmp(val, "~"))
 	 return 0;
+      
+      // check for absolute date/time values
+      if (isdigit(val[0]) && isdigit(val[1]) && isdigit(val[2]) && isdigit(val[3]) && val[4] == '-')
+	 return parseAbsoluteDate();
 
       double f = atof(val);
 
@@ -142,204 +179,231 @@ AbstractQoreNode *QoreYamlParser::parseScalar() {
    }
 
    const char *tag = (const char *)event.data.scalar.tag;
-   if (!strcmp(tag, YAML_TIMESTAMP_TAG)) {
-      if (len < 8)
-	 return dt_err(xsink, val, invalid_date_format);
-      
-      int year = atol(val);
-      const char *p = val + 4;
-
-      if (*p != '-')
-	 return dt_err(xsink, val, invalid_date_format);
-
-      ++p;
-      int month = *p - '0';
-      ++p;
-      if (isdigit(*p)) {
-	 month = month * 10 + (*p - '0');
-	 ++p;
-      }
-
-      if (*p != '-')
-	 return dt_err(xsink, val, invalid_date_format);
-
-      ++p;
-
-      int day = *p - '0';
-      ++p;
-      if (isdigit(*p)) {
-	 day = day * 10 + (*p - '0');
-	 ++p;
-      }
-
-      //printd(5, "date: %04d-%02d-%02d\n", year, month, day);
-
-      // according to the YAML draft timestamp spec, if no time or time zone 
-      // information is given, then the value is assumed to be in UTC
-      // http://yaml.org/type/timestamp.html
-
-      // if there is no time portion, return date in UTC
-      if (!*p)
-	 return DateTimeNode::makeAbsolute(0, year, month, day);
-
-      if (*p != ' ' && *p != 't' && *p != 'T')
-	 return dt_err(xsink, val, "invalid date/time separator character");
-
-      ++p;
-      if (!isdigit(*p))
-	 return dt_err(xsink, val, truncated_date);
-
-      int hour = *p - '0';
-      ++p;
-      if (isdigit(*p)) {
-	 hour = hour * 10 + (*p - '0');
-	 ++p;
-      }
-
-      if (!*p)
-	 return dt_err(xsink, val, truncated_date);
-      if (*p != ':')
-	 return dt_err(xsink, val, "invalid hours/minutes separator character");
-      
-      ++p;
-      if (!isdigit(*p))
-	 return dt_err(xsink, val, truncated_date);
-
-      int minute = *p - '0';
-      ++p;
-      if (isdigit(*p)) {
-	 minute = minute * 10 + (*p - '0');
-	 ++p;
-      }      
-
-      if (!*p)
-	 return dt_err(xsink, val, truncated_date);
-      if (*p != ':')
-	 return dt_err(xsink, val, "invalid minutes/seconds separator character");
-
-      ++p;
-      if (!isdigit(*p))
-	 return dt_err(xsink, val, truncated_date);
-
-      int second = *p - '0';
-      ++p;
-      if (isdigit(*p)) {
-	 second = second * 10 + (*p - '0');
-	 ++p;
-      }      
-
-      if (!*p)
-	 return DateTimeNode::makeAbsolute(0, year, month, day, hour, minute, second);
-	 
-      int us = 0;
-      if (*p == '.') {
-	 ++p;
-	 if (!isdigit(*p))
-	    return dt_err(xsink, val, truncated_date);
-	 
-	 // read all digits
-	 int len = 0;
-	 while (isdigit(*p)) {
-	    us *= 10;
-	    us += *p - '0';
-	    ++len;
-	    ++p;
-	 }
-	 
-	 // adjust to microseconds
-	 while (len < 6) {
-	    us *= 10;
-	    ++len;
-	 }
-	 while (len > 6) {
-	    us /= 10;
-	    --len;
-	 }
-      }
-
-      if (!*p)
-	 return DateTimeNode::makeAbsolute(0, year, month, day, hour, minute, second, us);
-
-      // get time zone offset
-      const AbstractQoreZoneInfo *zone = 0;
-
-      // read 
-      if (*p == ' ') {
-	 ++p;
-	 if (!*p)
-	    return dt_err(xsink, val, truncated_date);
-      }
-      if (*p == 'Z') {
-	 ++p;
-      }
-      else if (*p == '+' || *p == '-') {
-	 int mult = *p == '-' ? -1 : 1;
-	 
-	 ++p;
-	 if (!isdigit(*p))
-	    return dt_err(xsink, val, truncated_date);
-	 
-	 int utc_h = *p - '0';
-	 ++p;
-	 if (isdigit(*p)) {
-	    utc_h = utc_h * 10 + (*p - '0');
-	    ++p;
-	 }
-	 
-	 int offset = utc_h * 3600;
-	 
-	 if (*p) {
-	    if (*p != ':')
-	       return dt_err(xsink, val, "invalid time zone hours/minutes separator character");
-	    
-	    ++p;
-	    if (!isdigit(*p))
-	       return dt_err(xsink, val, truncated_date);
-	    
-	    int utc_m = *p - '0';
-	    ++p;
-	    if (isdigit(*p)) {
-	       utc_m = utc_m * 10 + (*p - '0');
-	       ++p;
-	    }
-	    
-	    offset += utc_m * 60;
-	    
-	    if (*p) {
-	       if (*p != ':')
-		  return dt_err(xsink, val, "invalid time zone hours/minutes separator character");
-	       
-	       ++p;
-	       if (!isdigit(*p))
-		  return dt_err(xsink, val, truncated_date);
-	       
-	       int utc_s = *p - '0';
-	       ++p;
-	       if (isdigit(*p)) {
-		  utc_s = utc_s * 10 + (*p - '0');
-		  ++p;
-	       }
-	       
-	       offset += utc_s;		    
-	    }
-	 }
-	 
-	 zone = findCreateOffsetZone(offset * mult);
-      }
-      else {
-	 return dt_err(xsink, val, invalid_chars_after_time);
-      }
-
-      if (*p)
-	 return dt_err(xsink, val, invalid_chars_after_time);
-
-      return DateTimeNode::makeAbsolute(zone, year, month, day, hour, minute, second, us);
-   }
-
+   if (!strcmp(tag, YAML_TIMESTAMP_TAG))
+      return parseAbsoluteDate();
    if (!strcmp(tag, YAML_BINARY_TAG))
       return parseBase64(val, len, xsink);
+   if (!strcmp(tag, YAML_STR_TAG))
+      return new QoreStringNode(val, len, QCS_UTF8);
+   if (!strcmp(tag, YAML_NULL_TAG))
+      return 0;
+   if (!strcmp(tag, YAML_BOOL_TAG))
+      return parseBool();
+   if (!strcmp(tag, YAML_INT_TAG))
+      return new QoreBigIntNode(q_atoll(val));
+   if (!strcmp(tag, YAML_FLOAT_TAG))
+      return new QoreBigIntNode(atof(val));
 
    xsink->raiseException(QY_PARSE_ERR, "don't know how to parse scalar tag '%s'", tag);
 
    return 0;
+}
+
+QoreBoolNode *QoreYamlParser::parseBool() {
+   const char *val = (const char *)event.data.scalar.value;
+
+   if (!strcmp(val, "true"))
+      return &True;
+   if (!strcmp(val, "false"))
+      return &False;
+
+   xsink->raiseException(QY_PARSE_ERR, "cannot parse boolean value '%s'", val);
+   return 0;
+}
+
+DateTimeNode *QoreYamlParser::parseAbsoluteDate() {
+   const char *val = (const char *)event.data.scalar.value;
+   size_t len = event.data.scalar.length;
+
+   if (len < 8)
+      return dt_err(xsink, val, invalid_date_format);
+      
+   int year = atol(val);
+   const char *p = val + 4;
+
+   if (*p != '-')
+      return dt_err(xsink, val, invalid_date_format);
+
+   ++p;
+   int month = *p - '0';
+   ++p;
+   if (isdigit(*p)) {
+      month = month * 10 + (*p - '0');
+      ++p;
+   }
+
+   if (*p != '-')
+      return dt_err(xsink, val, invalid_date_format);
+
+   ++p;
+
+   int day = *p - '0';
+   ++p;
+   if (isdigit(*p)) {
+      day = day * 10 + (*p - '0');
+      ++p;
+   }
+
+   //printd(5, "date: %04d-%02d-%02d\n", year, month, day);
+
+   // according to the YAML draft timestamp spec, if no time or time zone 
+   // information is given, then the value is assumed to be in UTC
+   // http://yaml.org/type/timestamp.html
+
+   // if there is no time portion, return date in UTC
+   if (!*p)
+      return DateTimeNode::makeAbsolute(0, year, month, day);
+
+   if (*p != ' ' && *p != 't' && *p != 'T')
+      return dt_err(xsink, val, "invalid date/time separator character");
+
+   ++p;
+   if (!isdigit(*p))
+      return dt_err(xsink, val, truncated_date);
+
+   int hour = *p - '0';
+   ++p;
+   if (isdigit(*p)) {
+      hour = hour * 10 + (*p - '0');
+      ++p;
+   }
+
+   if (!*p)
+      return dt_err(xsink, val, truncated_date);
+   if (*p != ':')
+      return dt_err(xsink, val, "invalid hours/minutes separator character");
+      
+   ++p;
+   if (!isdigit(*p))
+      return dt_err(xsink, val, truncated_date);
+
+   int minute = *p - '0';
+   ++p;
+   if (isdigit(*p)) {
+      minute = minute * 10 + (*p - '0');
+      ++p;
+   }      
+
+   if (!*p)
+      return dt_err(xsink, val, truncated_date);
+   if (*p != ':')
+      return dt_err(xsink, val, "invalid minutes/seconds separator character");
+
+   ++p;
+   if (!isdigit(*p))
+      return dt_err(xsink, val, truncated_date);
+
+   int second = *p - '0';
+   ++p;
+   if (isdigit(*p)) {
+      second = second * 10 + (*p - '0');
+      ++p;
+   }      
+
+   if (!*p)
+      return DateTimeNode::makeAbsolute(0, year, month, day, hour, minute, second);
+	 
+   int us = 0;
+   if (*p == '.') {
+      ++p;
+      if (!isdigit(*p))
+	 return dt_err(xsink, val, truncated_date);
+	 
+      // read all digits
+      int len = 0;
+      while (isdigit(*p)) {
+	 us *= 10;
+	 us += *p - '0';
+	 ++len;
+	 ++p;
+      }
+	 
+      // adjust to microseconds
+      while (len < 6) {
+	 us *= 10;
+	 ++len;
+      }
+      while (len > 6) {
+	 us /= 10;
+	 --len;
+      }
+   }
+
+   if (!*p)
+      return DateTimeNode::makeAbsolute(0, year, month, day, hour, minute, second, us);
+
+   // get time zone offset
+   const AbstractQoreZoneInfo *zone = 0;
+
+   // read 
+   if (*p == ' ') {
+      ++p;
+      if (!*p)
+	 return dt_err(xsink, val, truncated_date);
+   }
+   if (*p == 'Z') {
+      ++p;
+   }
+   else if (*p == '+' || *p == '-') {
+      int mult = *p == '-' ? -1 : 1;
+	 
+      ++p;
+      if (!isdigit(*p))
+	 return dt_err(xsink, val, truncated_date);
+	 
+      int utc_h = *p - '0';
+      ++p;
+      if (isdigit(*p)) {
+	 utc_h = utc_h * 10 + (*p - '0');
+	 ++p;
+      }
+	 
+      int offset = utc_h * 3600;
+	 
+      if (*p) {
+	 if (*p != ':')
+	    return dt_err(xsink, val, "invalid time zone hours/minutes separator character");
+	    
+	 ++p;
+	 if (!isdigit(*p))
+	    return dt_err(xsink, val, truncated_date);
+	    
+	 int utc_m = *p - '0';
+	 ++p;
+	 if (isdigit(*p)) {
+	    utc_m = utc_m * 10 + (*p - '0');
+	    ++p;
+	 }
+	    
+	 offset += utc_m * 60;
+	    
+	 if (*p) {
+	    if (*p != ':')
+	       return dt_err(xsink, val, "invalid time zone hours/minutes separator character");
+	       
+	    ++p;
+	    if (!isdigit(*p))
+	       return dt_err(xsink, val, truncated_date);
+	       
+	    int utc_s = *p - '0';
+	    ++p;
+	    if (isdigit(*p)) {
+	       utc_s = utc_s * 10 + (*p - '0');
+	       ++p;
+	    }
+	       
+	    offset += utc_s;		    
+	 }
+      }
+	 
+      zone = findCreateOffsetZone(offset * mult);
+   }
+   else {
+      return dt_err(xsink, val, invalid_chars_after_time);
+   }
+
+   if (*p)
+      return dt_err(xsink, val, invalid_chars_after_time);
+
+   return DateTimeNode::makeAbsolute(zone, year, month, day, hour, minute, second, us);
 }
