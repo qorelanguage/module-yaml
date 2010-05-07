@@ -73,14 +73,57 @@ static AbstractQoreNode *f_parseYAML(const QoreListNode *args, ExceptionSink *xs
    return parser.parse();
 }
 
+/*
+static AbstractQoreNode *f_makeOkayRpcRequest(const QoreListNode *args, ExceptionSink *xsink) {
+   const QoreStringNode *method = HARD_QORE_STRING(args, 0);
+   const AbstractQoreNode *p = get_param(args, 1);
+   int flags = HARD_QORE_INT(args, 2);
+
+   QoreYamlStringWriteHandler str;
+   {
+      QoreYamlEmitter emitter(str, flags, xsink);
+      if (*xsink)
+	 return 0;
+
+      if (emitter.mapStart(emitter.getBlock() ? YAML_BLOCK_MAPPING_STYLE : YAML_FLOW_MAPPING_STYLE, "!okay/rpc/method", 0, false))
+	 return 0;
+
+      // emit method name as key
+      if (emitter.emitScalar(*method, YAML_STR_TAG, 0, true, true, YAML_DOUBLE_QUOTED_SCALAR_STYLE))
+	 return 0;
+
+      bool is_list = p && p->getType() == NT_LIST;
+
+      // if argument is not a list, then emit as list
+      if (!is_list && emitter.seqStart(emitter.getBlock() ? YAML_BLOCK_SEQUENCE_STYLE : YAML_FLOW_SEQUENCE_STYLE))
+	 return 0;
+
+      if (emitter.emit(p))
+	 return 0;
+      
+      if (!is_list && emitter.seqEnd())
+	 return 0;
+
+      if (emitter.mapEnd())
+	 return 0;
+   }
+
+   return str.take();   
+}
+*/
+
 QoreNamespace YNS("YAML");
 
 QoreStringNode *yaml_module_init() {
    // add functions
    builtinFunctions.add2("makeYAML", f_makeYAML, QC_RET_VALUE_ONLY, QDOM_DEFAULT, stringTypeInfo, 2, anyTypeInfo, QORE_PARAM_NO_ARG, bigIntTypeInfo, new QoreBigIntNode(QYE_DEFAULT));
+
    builtinFunctions.add2("parseYAML", f_parseYAML, QC_NO_FLAGS, QDOM_DEFAULT, anyTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG);
 
+   //builtinFunctions.add2("makeOkayRpcRequest", f_makeOkayRpcRequest, QC_NO_FLAGS, QDOM_DEFAULT, stringTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, anyTypeInfo, QORE_PARAM_NO_ARG, bigIntTypeInfo, new QoreBigIntNode(QYE_DEFAULT));
+
    // setup namespace
+   YNS.addConstant("None", new QoreBigIntNode(QYE_NONE));
    YNS.addConstant("Canonical", new QoreBigIntNode(QYE_CANONICAL));
    YNS.addConstant("EscapeUnicode", new QoreBigIntNode(QYE_ESCAPE_UNICODE));
    YNS.addConstant("ExplicitStartDoc", new QoreBigIntNode(QYE_EXPLICIT_START_DOC));

@@ -184,8 +184,12 @@ public:
    DLLLOCAL int emitScalar(const QoreString &value, const char *tag = 0, const char *anchor = 0, 
 		       bool plain_implicit = true, bool quoted_implicit = true, 
 		       yaml_scalar_style_t style = YAML_ANY_SCALAR_STYLE) {
+      TempEncodingHelper str(&value, QCS_UTF8, xsink);
+      if (*xsink)
+	 return -1;
+
       if (!yaml_scalar_event_initialize(&event, (yaml_char_t *)anchor, (yaml_char_t *)tag, 
-					(yaml_char_t *)value.getBuffer(), value.strlen(), 
+					(yaml_char_t *)str->getBuffer(), str->strlen(), 
 					plain_implicit, quoted_implicit, style))
 	 return err("unknown error initializing yaml scalar output event");
 
@@ -272,6 +276,10 @@ public:
 
    DLLLOCAL void setUnicode(bool b = true) {
       yaml_emitter_set_unicode(&emitter, b);
+   }
+   
+   DLLLOCAL bool getBlock() const {
+      return block;
    }
 };
 
