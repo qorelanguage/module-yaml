@@ -30,6 +30,8 @@
 
 #include <yaml.h>
 
+#include <stdarg.h>
+
 #include <map>
 
 #define QYE_NONE                0
@@ -96,8 +98,17 @@ protected:
 
    yaml_version_directive_t *yaml_ver;
 
-   DLLLOCAL int err(const char *msg) {
-      xsink->raiseException(QY_EMIT_ERR, msg);
+   DLLLOCAL int err(const char *fmt, ...) {
+      QoreStringNode *desc = new QoreStringNode;
+      while (true) {
+         va_list args;
+         va_start(args, fmt);
+         int rc = desc->vsprintf(fmt, args);
+         va_end(args);
+         if (!rc)
+            break;
+      }
+      xsink->raiseException(QY_EMIT_ERR, desc);
       valid = false;
       return -1;
    }

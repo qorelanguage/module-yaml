@@ -91,8 +91,8 @@ int QoreYamlEmitter::emit(const AbstractQoreNode *p) {
 	 return emitNull();
 
       default:
-	 xsink->raiseException(QY_EMIT_ERR, "cannot convert Qore type '%s' to YAML", get_type_name(p));
-	 break;
+	 err("cannot convert Qore type '%s' to YAML", get_type_name(p));
+	 return -1;
    }
 
    return 0;

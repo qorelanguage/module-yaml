@@ -154,4 +154,3 @@ void yaml_module_ns_init(QoreNamespace *rns, QoreNamespace *qns) {
 
 void yaml_module_delete() {
 }
-
