@@ -168,6 +168,10 @@ AbstractQoreNode *QoreYamlParser::parseScalar() {
       if (isdigit(val[0]) && isdigit(val[1]) && isdigit(val[2]) && isdigit(val[3]) && val[4] == '-')
 	 return parseAbsoluteDate();
 
+      // check for relative date/time values (durations)
+      if (*val == 'p' || *val == 'P')
+	 return new DateTimeNode(val);
+
       double f = atof(val);
 
       // assume it's a string if it can't be converted to a number
@@ -196,6 +200,8 @@ AbstractQoreNode *QoreYamlParser::parseScalar() {
       return new QoreBigIntNode(q_atoll(val));
    if (!strcmp(tag, YAML_FLOAT_TAG))
       return new QoreBigIntNode(atof(val));
+   if (!strcmp(tag, QORE_YAML_DURATION_TAG))
+      return new DateTimeNode(val);
 
    xsink->raiseException(QY_PARSE_ERR, "don't know how to parse scalar tag '%s'", tag);
 

@@ -53,6 +53,8 @@
 #define YAML_OMAP_TAG "tag:yaml.org,2002:omap"
 #endif
 
+DLLLOCAL extern const char *QORE_YAML_DURATION_TAG;
+
 DLLLOCAL extern const char *QY_EMIT_ERR;
 
 DLLLOCAL extern const char *QY_PARSE_ERR;

@@ -40,6 +40,8 @@ DLLEXPORT qore_license_t qore_module_license = QL_LGPL;
 
 QoreString NullStr("null");
 
+const char *QORE_YAML_DURATION_TAG = "!duration";
+
 yaml_version_directive_t yaml_ver_1_1 = {1, 1}, yaml_ver_1_2 = {1, 2};
 
 // yaml event code to event string map

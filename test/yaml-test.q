@@ -12,6 +12,7 @@ class yaml_test {
 		 False,
 		 1970-01-01Z,
 		 (hash(), (), "three \"things\""),
+		 P2M3DT10H14u,
 		 now_us(),
 		 binary("hello, how's it going, this is a long string, you know XXXXXXXXXXXXXXXXXXXXXXXX"),
 		 ("a" : 2.0, 

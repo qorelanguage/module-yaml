@@ -102,8 +102,49 @@ int QoreYamlEmitter::emit(const DateTime &d) {
    qore_tm info;
    d.getInfo(info);
 
-   // shorthand type name
    QoreString str(QCS_UTF8);
+
+   if (d.isRelative()) {
+      str.concat('P');
+      if (info.year)
+	 str.sprintf("%dY", info.year);
+      if (info.month)
+	 str.sprintf("%dM", info.month);
+      if (info.day)
+	 str.sprintf("%dD", info.day);
+
+      bool has_t = false;
+
+      if (info.hour) {
+	 str.sprintf("T%dH", info.hour);
+	 has_t = true;
+      }
+      if (info.minute) {
+	 if (!has_t) {
+	    str.concat('T');
+	    has_t = true;
+	 }
+	 str.sprintf("%dM", info.minute);
+      }
+      if (info.second) {
+	 if (!has_t) {
+	    str.concat('T');
+	    has_t = true;
+	 }
+	 str.sprintf("%dS", info.second);
+      }
+      if (info.us) {
+	 if (!has_t) {
+	    str.concat('T');
+	    has_t = true;
+	 }
+	 str.sprintf("%du", info.us);
+      }
+
+      return emitScalar(str, QORE_YAML_DURATION_TAG);
+   }
+
+   // shorthand type name
    if (emitter.canonical) {
       d.format(str, "YYYY-MM-DDTHH:mm:SS.xx");
    }
