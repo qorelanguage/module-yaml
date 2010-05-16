@@ -172,14 +172,15 @@ AbstractQoreNode *QoreYamlParser::parseScalar() {
       if (*val == 'p' || *val == 'P')
 	 return new DateTimeNode(val);
 
-      double f = atof(val);
+      // FIXME: need to improve float/integer conversions
+      double f = strtof(val, 0);
 
       // assume it's a string if it can't be converted to a number
       if (!f && len)
 	 return new QoreStringNode(val, len, QCS_UTF8);
 
-      // if the integer value is equal to the fp value, then it's an integer
-      if (((double)((int64)f)) == f) 
+      // if the integer value is equal to the fp value (and there's no decimal), then it's an integer
+      if (((double)((int64)f)) == f && !strchr(val, '.')) 
 	 return new QoreBigIntNode((int64)f);
 
       return new QoreFloatNode(f);

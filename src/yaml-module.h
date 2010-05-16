@@ -235,7 +235,10 @@ public:
 
    DLLLOCAL int emit(const QoreFloatNode &f) {
       QoreString tmp;
-      tmp.sprintf("%g", f.f);
+      if (((double)((int64)f.f)) == f.f)
+         tmp.sprintf("%g.0", f.f);
+      else
+         tmp.sprintf("%g", f.f);
       return emitScalar(tmp, YAML_FLOAT_TAG);
    }
 
