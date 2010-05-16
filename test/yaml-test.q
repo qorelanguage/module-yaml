@@ -30,9 +30,12 @@ class yaml_test {
 	printf("parsed: %n\n", $l);
 	printf("equal: %n\n", $l === $d);
 
-	for (my int $i = 0; $i < elements $l; ++$i) {
-	    if ($l[$i] !== $d[$i]) {
-		printf("ERROR %d: %s != %s\n", $i, dbg_node_info($l[$i]), dbg_node_info($d[$i]));
+	if ($l !== $d) {
+	    for (my int $i = 0; $i < elements $l; ++$i) {
+		if ($l[$i] !== $d[$i]) {
+		    #printf("ERROR %d: %s != %s\n", $i, dbg_node_info($l[$i]), dbg_node_info($d[$i]));
+		    #printf("ERROR %d: %s != %s\n", $i, $l[$i], $d[$i]);
+		}
 	    }
 	}
     }
