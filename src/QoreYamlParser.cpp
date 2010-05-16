@@ -173,7 +173,7 @@ AbstractQoreNode *QoreYamlParser::parseScalar() {
 	 return new DateTimeNode(val);
 
       // FIXME: need to improve float/integer conversions
-      double f = strtof(val, 0);
+      double f = strtod(val, 0);
 
       // assume it's a string if it can't be converted to a number
       if (!f && len)

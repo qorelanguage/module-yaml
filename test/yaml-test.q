@@ -10,6 +10,8 @@ class yaml_test {
 		      NOTHING,
 		      2010-05-05T15:35:02.100,
 		      False,
+		      M_PI,
+		      250.192393,
 		      1970-01-01Z,
 		      (hash(), (), "three \"things\""),
 		      P2M3DT10H14u,
