@@ -34,7 +34,7 @@ class yaml_test {
 	    for (my int $i = 0; $i < elements $l; ++$i) {
 		if ($l[$i] !== $d[$i]) {
 		    #printf("ERROR %d: %s != %s\n", $i, dbg_node_info($l[$i]), dbg_node_info($d[$i]));
-		    #printf("ERROR %d: %s != %s\n", $i, $l[$i], $d[$i]);
+		    printf("ERROR %d: %s != %s\n", $i, $l[$i], $d[$i]);
 		}
 	    }
 	}
