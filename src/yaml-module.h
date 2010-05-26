@@ -364,8 +364,8 @@ protected:
 
    DLLLOCAL QoreListNode *parseSeq();
    DLLLOCAL QoreHashNode *parseMap();
-   DLLLOCAL AbstractQoreNode *parseScalar();
-   DLLLOCAL AbstractQoreNode *parseNode();
+   DLLLOCAL AbstractQoreNode *parseScalar(bool favor_string = false);
+   DLLLOCAL AbstractQoreNode *parseNode(bool favor_string = false);
    DLLLOCAL DateTimeNode *parseAbsoluteDate();
    DLLLOCAL QoreBoolNode *parseBool();
 

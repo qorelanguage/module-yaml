@@ -62,10 +62,10 @@ AbstractQoreNode *QoreYamlParser::parse() {
    return rv.release();
 }
 
-AbstractQoreNode *QoreYamlParser::parseNode() {
+AbstractQoreNode *QoreYamlParser::parseNode(bool favor_string) {
    switch (event.type) {
       case YAML_SCALAR_EVENT:
-	 return parseScalar();
+	 return parseScalar(favor_string);
 
       case YAML_SEQUENCE_START_EVENT:
 	 return parseSeq();
@@ -110,9 +110,11 @@ QoreHashNode *QoreYamlParser::parseMap() {
 	 break;
 
       // get key node and convert to string
-      ReferenceHolder<AbstractQoreNode> key(parseNode(), xsink);
+      ReferenceHolder<AbstractQoreNode> key(parseNode(true), xsink);
       if (*xsink)
 	 return 0;
+
+      //printd(5, "key=%p type=%s\n", *key, key->getTypeName());
 
       // convert to string in default encoding
       QoreStringValueHelper str(*key, QCS_DEFAULT, xsink);
@@ -140,16 +142,27 @@ static DateTimeNode *dt_err(ExceptionSink *xsink, const char *val, const char *m
    return 0;
 }
 
-AbstractQoreNode *QoreYamlParser::parseScalar() {
+static bool is_number(const char *&tv) {
+   if (*tv == '-')
+      ++tv;
+   if (!isdigit(*tv))
+      return false;
+   ++tv;
+   while (isdigit(*tv))
+      ++tv;
+   return true;
+}
+
+AbstractQoreNode *QoreYamlParser::parseScalar(bool favor_string) {
    //ReferenceHolder<AbstractQoreNode> rv(xsink);
 
    const char *val = (const char *)event.data.scalar.value;
    size_t len = event.data.scalar.length;
    
-   //printd(0, "QoreYamlParser::parseScalar() anchor=%s tag=%s value=%s len=%d plain_implicit=%d quoted_implicit=%d style=%d\n", event.data.scalar.anchor ? event.data.scalar.anchor : (yaml_char_t*)"n/a", event.data.scalar.tag ? event.data.scalar.tag : (yaml_char_t*)"n/a", val, len, event.data.scalar.plain_implicit, event.data.scalar.quoted_implicit, event.data.scalar.style);
+   //printd(5, "QoreYamlParser::parseScalar() anchor=%s tag=%s value=%s len=%d plain_implicit=%d quoted_implicit=%d style=%d\n", event.data.scalar.anchor ? event.data.scalar.anchor : (yaml_char_t*)"n/a", event.data.scalar.tag ? event.data.scalar.tag : (yaml_char_t*)"n/a", val, len, event.data.scalar.plain_implicit, event.data.scalar.quoted_implicit, event.data.scalar.style);
 
    if (!event.data.scalar.tag) {
-      if (event.data.scalar.quoted_implicit && event.data.scalar.style == YAML_DOUBLE_QUOTED_SCALAR_STYLE) {
+      if (favor_string || (event.data.scalar.quoted_implicit && event.data.scalar.style == YAML_DOUBLE_QUOTED_SCALAR_STYLE)) {
 	 // assume it's a string
 	 return new QoreStringNode(val, len, QCS_UTF8);
       }
@@ -169,8 +182,20 @@ AbstractQoreNode *QoreYamlParser::parseScalar() {
 	 return parseAbsoluteDate();
 
       // check for relative date/time values (durations)
-      if (*val == 'p' || *val == 'P')
-	 return new DateTimeNode(val);
+      if (*val == 'P') {
+	 const char *tv = val + 1;
+	 if (*tv == 'T') {
+	    ++tv;
+	    if (is_number(tv)) {
+	       if (*tv == 'H' || *tv == 'M' || *tv == 'S' || *tv == 'u')
+		  return new DateTimeNode(val);
+	    }
+	 }
+	 else if (is_number(tv)) {
+	    if (*tv == 'Y' || *tv == 'M' || *tv == 'D')
+	       return new DateTimeNode(val);
+	 }
+      }
 
       // FIXME: need to improve float/integer conversions
       double f = strtod(val, 0);
