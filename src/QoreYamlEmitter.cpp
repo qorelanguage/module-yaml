@@ -27,7 +27,7 @@ static int qore_yaml_write_handler(QoreYamlWriteHandler *wh, unsigned char *buff
    return wh->write(buffer, size);
 }
 
-QoreYamlEmitter::QoreYamlEmitter(QoreYamlWriteHandler &n_wh, int flags, ExceptionSink *n_xsink)
+QoreYamlEmitter::QoreYamlEmitter(QoreYamlWriteHandler &n_wh, int flags, int width, int indent, ExceptionSink *n_xsink)
    : QoreYamlBase(n_xsink), wh(n_wh), block(flags & QYE_BLOCK_STYLE), 
      implicit_start_doc(!(flags & QYE_EXPLICIT_START_DOC)), 
      implicit_end_doc(!(flags & QYE_EXPLICIT_END_DOC)),
@@ -55,8 +55,11 @@ QoreYamlEmitter::QoreYamlEmitter(QoreYamlWriteHandler &n_wh, int flags, Exceptio
 
    yaml_emitter_set_output(&emitter, (yaml_write_handler_t *)qore_yaml_write_handler, &wh);   
 
+   //yaml_emitter_set_indent(&emitter, 0);
+   yaml_emitter_set_width(&emitter, -1);
+
    if (!streamStart() && !docStart())
-      valid = true;
+      valid = true;   
 }
 
 int QoreYamlEmitter::emit(const AbstractQoreNode *p) {

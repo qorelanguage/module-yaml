@@ -137,7 +137,7 @@ protected:
    }
 
 public:
-   DLLLOCAL QoreYamlEmitter(QoreYamlWriteHandler &n_wh, int flags, ExceptionSink *n_xsink);
+   DLLLOCAL QoreYamlEmitter(QoreYamlWriteHandler &n_wh, int flags, int width, int indent, ExceptionSink *n_xsink);
 
    DLLLOCAL ~QoreYamlEmitter() {
       if (valid) {

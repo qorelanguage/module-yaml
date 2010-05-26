@@ -55,10 +55,12 @@ const char *get_event_name(yaml_event_type_t type) {
 static AbstractQoreNode *f_makeYAML(const QoreListNode *args, ExceptionSink *xsink) {
    const AbstractQoreNode *p = get_param(args, 0);
    int flags = HARD_QORE_INT(args, 1);
+   int width = HARD_QORE_INT(args, 2);
+   int indent = HARD_QORE_INT(args, 3);
 
    QoreYamlStringWriteHandler str;
    {
-      QoreYamlEmitter emitter(str, flags, xsink);
+      QoreYamlEmitter emitter(str, flags, width, indent, xsink);
       if (*xsink)
 	 return 0;
    
@@ -118,7 +120,9 @@ QoreNamespace YNS("YAML");
 
 QoreStringNode *yaml_module_init() {
    // add functions
-   builtinFunctions.add2("makeYAML", f_makeYAML, QC_RET_VALUE_ONLY, QDOM_DEFAULT, stringTypeInfo, 2, anyTypeInfo, QORE_PARAM_NO_ARG, bigIntTypeInfo, new QoreBigIntNode(QYE_DEFAULT));
+
+   // makeYAML(any $data, int $opts = Yaml::Default, softint $width = -1, softint $indent = 2) returns string
+   builtinFunctions.add2("makeYAML", f_makeYAML, QC_RET_VALUE_ONLY, QDOM_DEFAULT, stringTypeInfo, 4, anyTypeInfo, QORE_PARAM_NO_ARG, bigIntTypeInfo, new QoreBigIntNode(QYE_DEFAULT), softBigIntTypeInfo, new QoreBigIntNode(-1), softBigIntTypeInfo, new QoreBigIntNode(2));
 
    builtinFunctions.add2("parseYAML", f_parseYAML, QC_NO_FLAGS, QDOM_DEFAULT, anyTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG);
 
