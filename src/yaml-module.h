@@ -264,7 +264,7 @@ public:
 	 return -1;
       ConstHashIterator hi(h);
       while (hi.next()) {
-	 if (emitScalar(hi.getKey(), YAML_STR_TAG, 0, true, true, YAML_DOUBLE_QUOTED_SCALAR_STYLE))
+	 if (emitScalar(hi.getKey(), YAML_STR_TAG))
 	    return -1;
 	 if (emit(hi.getValue()))
 	    return -1;
