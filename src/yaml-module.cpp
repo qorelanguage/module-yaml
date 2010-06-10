@@ -42,7 +42,7 @@ QoreString NullStr("null");
 
 const char *QORE_YAML_DURATION_TAG = "!duration";
 
-yaml_version_directive_t yaml_ver_1_1 = {1, 1}, yaml_ver_1_2 = {1, 2};
+yaml_version_directive_t yaml_ver_1_0 = {1, 0}, yaml_ver_1_1 = {1, 1}, yaml_ver_1_2 = {1, 2};
 
 // yaml event code to event string map
 event_map_t event_map;
@@ -71,62 +71,42 @@ static AbstractQoreNode *f_makeYAML(const QoreListNode *args, ExceptionSink *xsi
    return str.take();
 }
 
+// parseYAML(string $yaml) returns any
 static AbstractQoreNode *f_parseYAML(const QoreListNode *args, ExceptionSink *xsink) {
    const QoreStringNode *str = HARD_QORE_STRING(args, 0);
    QoreYamlParser parser(*str, xsink);
    return parser.parse();
 }
 
-/*
-static AbstractQoreNode *f_makeOkayRpcRequest(const QoreListNode *args, ExceptionSink *xsink) {
-   const QoreStringNode *method = HARD_QORE_STRING(args, 0);
-   const AbstractQoreNode *p = get_param(args, 1);
-   int flags = HARD_QORE_INT(args, 2);
+// getYAMLInfo() returns hash
+static AbstractQoreNode *f_getYAMLInfo(const QoreListNode *args, ExceptionSink *xsink) {
+   QoreHashNode *h = new QoreHashNode;
 
-   QoreYamlStringWriteHandler str;
-   {
-      QoreYamlEmitter emitter(str, flags, xsink);
-      if (*xsink)
-	 return 0;
+   h->setKeyValue("version", new QoreStringNode(yaml_get_version_string()), 0);
 
-      if (emitter.mapStart(emitter.getBlock() ? YAML_BLOCK_MAPPING_STYLE : YAML_FLOW_MAPPING_STYLE, "!okay/rpc/method", 0, false))
-	 return 0;
+   int major, minor, patch;
+   yaml_get_version(&major, &minor, &patch);
 
-      // emit method name as key
-      if (emitter.emitScalar(*method, YAML_STR_TAG, 0, true, true, YAML_DOUBLE_QUOTED_SCALAR_STYLE))
-	 return 0;
+   h->setKeyValue("major", new QoreBigIntNode(major), 0);
+   h->setKeyValue("minor", new QoreBigIntNode(minor), 0);
+   h->setKeyValue("patch", new QoreBigIntNode(patch), 0);
 
-      bool is_list = p && p->getType() == NT_LIST;
-
-      // if argument is not a list, then emit as list
-      if (!is_list && emitter.seqStart(emitter.getBlock() ? YAML_BLOCK_SEQUENCE_STYLE : YAML_FLOW_SEQUENCE_STYLE))
-	 return 0;
-
-      if (emitter.emit(p))
-	 return 0;
-      
-      if (!is_list && emitter.seqEnd())
-	 return 0;
-
-      if (emitter.mapEnd())
-	 return 0;
-   }
-
-   return str.take();   
+   return h;
 }
-*/
 
 QoreNamespace YNS("YAML");
 
 QoreStringNode *yaml_module_init() {
    // add functions
 
-   // makeYAML(any $data, int $opts = Yaml::Default, softint $width = -1, softint $indent = 2) returns string
+   // makeYAML(any $data, int $opts = Yaml::None, softint $width = -1, softint $indent = 2) returns string
    builtinFunctions.add2("makeYAML", f_makeYAML, QC_RET_VALUE_ONLY, QDOM_DEFAULT, stringTypeInfo, 4, anyTypeInfo, QORE_PARAM_NO_ARG, bigIntTypeInfo, new QoreBigIntNode(QYE_DEFAULT), softBigIntTypeInfo, new QoreBigIntNode(-1), softBigIntTypeInfo, new QoreBigIntNode(2));
 
+   // parseYAML(string $yaml) returns any
    builtinFunctions.add2("parseYAML", f_parseYAML, QC_NO_FLAGS, QDOM_DEFAULT, anyTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG);
 
-   //builtinFunctions.add2("makeOkayRpcRequest", f_makeOkayRpcRequest, QC_NO_FLAGS, QDOM_DEFAULT, stringTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, anyTypeInfo, QORE_PARAM_NO_ARG, bigIntTypeInfo, new QoreBigIntNode(QYE_DEFAULT));
+   // getYAMLInfo() returns hash
+   builtinFunctions.add2("getYAMLInfo", f_getYAMLInfo, QC_NO_FLAGS, QDOM_DEFAULT, hashTypeInfo);
 
    // setup namespace
    YNS.addConstant("None", new QoreBigIntNode(QYE_NONE));
@@ -135,8 +115,9 @@ QoreStringNode *yaml_module_init() {
    YNS.addConstant("ExplicitStartDoc", new QoreBigIntNode(QYE_EXPLICIT_START_DOC));
    YNS.addConstant("ExplicitEndDoc", new QoreBigIntNode(QYE_EXPLICIT_END_DOC));
    YNS.addConstant("BlockStyle", new QoreBigIntNode(QYE_BLOCK_STYLE));
+   //YNS.addConstant("Yaml1_0", new QoreBigIntNode(QYE_VER_1_0));
    YNS.addConstant("Yaml1_1", new QoreBigIntNode(QYE_VER_1_1));
-   YNS.addConstant("Yaml1_2", new QoreBigIntNode(QYE_VER_1_2));
+   //YNS.addConstant("Yaml1_2", new QoreBigIntNode(QYE_VER_1_2));
 
    // setup event map
    event_map[YAML_NO_EVENT] = "empty";

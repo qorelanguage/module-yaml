@@ -225,7 +225,7 @@ AbstractQoreNode *QoreYamlParser::parseScalar(bool favor_string) {
    if (!strcmp(tag, YAML_INT_TAG))
       return new QoreBigIntNode(q_atoll(val));
    if (!strcmp(tag, YAML_FLOAT_TAG))
-      return new QoreBigIntNode(atof(val));
+      return new QoreFloatNode(strtod(val, 0));
    if (!strcmp(tag, QORE_YAML_DURATION_TAG))
       return new DateTimeNode(val);
 

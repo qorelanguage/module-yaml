@@ -40,8 +40,9 @@
 #define QYE_EXPLICIT_START_DOC  (1 << 2)
 #define QYE_EXPLICIT_END_DOC    (1 << 3)
 #define QYE_BLOCK_STYLE         (1 << 4)
-#define QYE_VER_1_1             (1 << 5)
-#define QYE_VER_1_2             (1 << 6)
+#define QYE_VER_1_0             (1 << 5)
+#define QYE_VER_1_1             (1 << 6)
+#define QYE_VER_1_2             (1 << 7)
 
 #define QYE_DEFAULT (QYE_NONE)
 
@@ -61,7 +62,7 @@ DLLLOCAL extern const char *QY_PARSE_ERR;
 
 DLLLOCAL extern QoreString NullStr;
 
-DLLLOCAL extern yaml_version_directive_t yaml_ver_1_1, yaml_ver_1_2;
+DLLLOCAL extern yaml_version_directive_t yaml_ver_1_0, yaml_ver_1_1, yaml_ver_1_2;
 
 typedef std::map<int, const char *> event_map_t;
 DLLLOCAL extern event_map_t event_map;
@@ -115,10 +116,13 @@ protected:
       return -1;
    }
 
-   DLLLOCAL int emit() {
-      if (!yaml_emitter_emit(&emitter, &event))
-	 return err("error emitting yaml event");
-
+   DLLLOCAL int emit(const char *event_str, const char *tag = 0) {
+      if (!yaml_emitter_emit(&emitter, &event)) {
+         if (tag)
+            return err("error emitting yaml %s %s event", event_str, tag);
+         return err("error emitting yaml %s event", event_str);
+      }
+            
       return 0;
    }
 
@@ -126,14 +130,14 @@ protected:
       if (!yaml_stream_start_event_initialize(&event, YAML_UTF8_ENCODING))
 	 return err("error initializing yaml stream start event");
 
-      return emit();
+      return emit("stream start");
    }
 
    DLLLOCAL int streamEnd() {
       if (!yaml_stream_end_event_initialize(&event))
 	 return err("error initializing yaml stream end event");
 
-      return emit();
+      return emit("stream end");
    }
 
 public:
@@ -151,7 +155,7 @@ public:
       if (!yaml_document_start_event_initialize(&event, yaml_ver, start, start + elements, implicit_start_doc))
 	 return err("unknown error initializing yaml document start event");
 
-      return emit();
+      return emit("doc start");
    }
 
    DLLLOCAL int docEnd() {
@@ -159,42 +163,43 @@ public:
       if (!yaml_document_end_event_initialize(&event, implicit_end_doc))
 	 return err("unknown error initializing yaml document end event");
 
-      return emit();
+      return emit("doc end");
    }
 
    DLLLOCAL int seqStart(yaml_sequence_style_t style = YAML_ANY_SEQUENCE_STYLE,
-			 const char *tag = 0, const char *anchor = 0, bool implicit = true) {
+			 const char *tag = YAML_SEQ_TAG, const char *anchor = 0, bool implicit = true) {
       if (!yaml_sequence_start_event_initialize(&event, (yaml_char_t *)anchor, (yaml_char_t *)tag, 
 						implicit, style))
 	 return err("unknown error initializing yaml sequence start event");
 
-      return emit();
+      //printd(5, "QoreYamlEmitter::seqStart(tag=%s, anchor=%s)\n", tag, anchor ? anchor : "(null)");
+      return emit("seq start");
    }
 
    DLLLOCAL int seqEnd() {
       if (!yaml_sequence_end_event_initialize(&event))
 	 return err("unknown error initializing yaml sequence end event");
 
-      return emit();
+      return emit("seq end");
    }
 
    DLLLOCAL int mapStart(yaml_mapping_style_t style = YAML_ANY_MAPPING_STYLE,
-			 const char *tag = 0, const char *anchor = 0, bool implicit = true) {
+			 const char *tag = YAML_MAP_TAG, const char *anchor = 0, bool implicit = true) {
       if (!yaml_mapping_start_event_initialize(&event, (yaml_char_t *)anchor, (yaml_char_t *)tag, 
 					       implicit, style))
 	 return err("unknown error initializing yaml mapping start event");
 
-      return emit();
+      return emit("map start");
    }
 
    DLLLOCAL int mapEnd() {
       if (!yaml_mapping_end_event_initialize(&event))
 	 return err("unknown error initializing yaml mapping end event");
 
-      return emit();
+      return emit("map end");
    }
 
-   DLLLOCAL int emitScalar(const QoreString &value, const char *tag = 0, const char *anchor = 0, 
+   DLLLOCAL int emitScalar(const QoreString &value, const char *tag, const char *anchor = 0, 
 		       bool plain_implicit = true, bool quoted_implicit = true, 
 		       yaml_scalar_style_t style = YAML_ANY_SCALAR_STYLE) {
       TempEncodingHelper str(&value, QCS_UTF8, xsink);
@@ -206,10 +211,10 @@ public:
 					plain_implicit, quoted_implicit, style))
 	 return err("unknown error initializing yaml scalar output event");
 
-      return emit();
+      return emit("scalar", tag);
    }
 
-   DLLLOCAL int emitScalar(const char *value, const char *tag = 0, const char *anchor = 0, 
+   DLLLOCAL int emitScalar(const char *value, const char *tag, const char *anchor = 0, 
 		       bool plain_implicit = true, bool quoted_implicit = true, 
 		       yaml_scalar_style_t style = YAML_ANY_SCALAR_STYLE) {
       if (!yaml_scalar_event_initialize(&event, (yaml_char_t *)anchor, (yaml_char_t *)tag, 
@@ -217,7 +222,7 @@ public:
 					plain_implicit, quoted_implicit, style))
 	 return err("unknown error initializing yaml scalar output event");
 
-      return emit();
+      return emit("scalar", tag);
    }
 
    DLLLOCAL int emit(const QoreString &str) {

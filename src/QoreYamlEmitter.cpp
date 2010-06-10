@@ -52,11 +52,14 @@ QoreYamlEmitter::QoreYamlEmitter(QoreYamlWriteHandler &n_wh, int flags, int widt
       yaml_ver = &yaml_ver_1_2;
    else if (flags & QYE_VER_1_1)
       yaml_ver = &yaml_ver_1_1;
+   else if (flags & QYE_VER_1_0)
+      yaml_ver = &yaml_ver_1_0;
 
    yaml_emitter_set_output(&emitter, (yaml_write_handler_t *)qore_yaml_write_handler, &wh);   
 
-   //yaml_emitter_set_indent(&emitter, 0);
-   yaml_emitter_set_width(&emitter, -1);
+   //printd(5, "QoreYamlEmitter::QoreYamlEmitter() indent=%d width=%d\n", indent, width);
+   yaml_emitter_set_indent(&emitter, indent);
+   yaml_emitter_set_width(&emitter, width);
 
    if (!streamStart() && !docStart())
       valid = true;   

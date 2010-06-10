@@ -2,10 +2,49 @@
 
 %requires yaml
 
+# the yaml module requires qore 0.8.0+, so we know we have types
+%require-types
+
 %exec-class yaml_test
+
+# the current libyaml version can only output YAML 1.1
+const opts = 
+    ( "canon"  : "canonical,c",
+      #"yaml10" : "yaml10,o",
+      #"yaml12" : "yaml12,n",
+      "len"    : "length,l=i",
+      "indent" : "indent,i=i",
+      "help"   : "help,h"
+    );
+
+const def_len = -1;
+const def_indent = 2;
 
 class yaml_test {
     constructor() {
+	my int $len = def_len;
+	my int $indent = def_indent;
+
+	my GetOpt $g(opts);
+	my hash $o = $g.parse2(\$ARGV);
+	if ($o.help)
+	    $.usage();
+
+	my int $opts = YAML::Yaml1_1;
+	#if ($o.yaml12)
+	#    $opts = YAML::Yaml1_2;
+	#else if ($o.yaml10)
+	#    $opts = YAML::Yaml1_0;
+
+	if ($o.canon)
+	    $opts |= YAML::Canonical;
+
+	if (exists $o.len)
+	    $len = $o.len;
+
+	if (exists $o.indent)
+	    $indent = $o.indent;
+
 	my list $d = (1, "two", 
 		      NOTHING,
 		      2010-05-05T15:35:02.100,
@@ -22,7 +61,7 @@ class yaml_test {
 		       "key" : True)
 	    );
 
-	my string $ystr = makeYAML($d, Yaml1_1);
+	my string $ystr = makeYAML($d, $opts, $o.len, $o.indent);
 	#my string $xstr = makeXMLString(("data":$d));
 	#my string $jstr = makeJSONString($d);
 	#printf("ystr: %d, xstr: %d, jstr: %d\n", strlen($ystr), strlen($xstr), strlen($jstr));
@@ -36,9 +75,19 @@ class yaml_test {
 	    for (my int $i = 0; $i < elements $l; ++$i) {
 		if ($l[$i] !== $d[$i]) {
 		    #printf("ERROR %d: %s != %s\n", $i, dbg_node_info($l[$i]), dbg_node_info($d[$i]));
-		    printf("ERROR %d: %s != %s\n", $i, $l[$i], $d[$i]);
+		    printf("ERROR %d: %n != %n\n", $i, $l[$i], $d[$i]);
 		}
 	    }
 	}
     }
+
+    static usage() {
+	printf("usage: %s [options]
+ -c,--canonical   emit canonical YAML output
+ -l,--line=ARG    line length (default: %d)
+ -i,--indent=ARG  number of spaces when indenting (default: %d)
+ -h,--help        this help text
+", get_script_name(), def_len, def_indent);
+      exit(1);
+   }
 }
