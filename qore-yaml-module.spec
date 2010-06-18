@@ -71,7 +71,6 @@ Requires: /usr/bin/env
 Requires: qore-module-api-%{module_api}
 BuildRequires: gcc-c++
 BuildRequires: qore-devel >= 0.8
-Requires: libyaml
 BuildRequires: libyaml-devel
 BuildRequires: qore
 
