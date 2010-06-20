@@ -1,0 +1,122 @@
+2010-06-15 18:49  david_nichols
+
+	* docs/yaml-module-doc.html: updated tikiwiki and added updated
+	  color scheme
+
+2010-06-15 11:40  david_nichols
+
+	* ChangeLog: checked in empty ChangeLog
+
+2010-06-10 14:21  david_nichols
+
+	* AUTHORS, README, RELEASE-NOTES, docs/yaml-module-doc.html,
+	  src/QoreYamlEmitter.cpp, src/QoreYamlParser.cpp,
+	  src/yaml-module.cpp, src/yaml-module.h, test/yaml-test.q: added
+	  module documentation; fixed YAML emitter to emit tags in
+	  canonical mode for sequences and maps; fixed YAML emitter to
+	  respect line widths; remove YAML::Yaml1_0 and YAML::Yaml1_2
+	  constants because libyaml cannot emit anything other than YAML
+	  1.1; fixed float deserialization with tagged data; drafted README
+	  and RELEASE-NOTES
+
+2010-05-27 04:32  david_nichols
+
+	* src/yaml-module.h: do not need to emit double quotes on YAML map
+	  keys anymore
+
+2010-05-26 18:58  david_nichols
+
+	* src/QoreYamlParser.cpp, src/yaml-module.h: updated to provide
+	  more thorough checking for untagged durations (also all
+	  components must be capitalized as per ISO-8601) and assume hash
+	  keys are strings if it's a scalar without any tag (because they
+	  will be converted to a string anyway when building the Qore hash)
+
+2010-05-26 15:31  david_nichols
+
+	* src/QoreYamlEmitter.cpp, src/yaml-module.cpp, src/yaml-module.h:
+	  made default line lenth unlimited to save space, added two
+	  optional arguments to makeYAML() to set line length and
+	  indentation level
+
+2010-05-16 14:12  david_nichols
+
+	* src/QoreYamlParser.cpp, src/yaml-module.h, test/yaml-test.q:
+	  improved float type de/serialization
+
+2010-05-16 12:44  david_nichols
+
+	* test/yaml-test.q: fixed typo in test
+
+2010-05-16 12:43  david_nichols
+
+	* test/yaml-test.q: updated test to work with non-debugging builds
+	  of qorex
+
+2010-05-16 12:43  david_nichols
+
+	* src/QoreYamlParser.cpp, src/yaml-module.h, test/yaml-test.q:
+	  fixed float de/serialization
+
+2010-05-12 11:49  david_nichols
+
+	* configure.ac: solaris and sun studio compile and warning
+	  fixes/enhancements
+
+2010-05-10 11:46  david_nichols
+
+	* src/QoreYamlEmitter.cpp, src/QoreYamlParser.cpp,
+	  src/yaml-module.cpp, src/yaml-module.h, test/yaml-test.q: updated
+	  yaml parsing and generation to support relative date/time values
+	  with the new tag "!duration"
+
+2010-05-08 10:07  david_nichols
+
+	* src/QoreYamlEmitter.cpp, src/yaml-module.cpp, src/yaml-module.h:
+	  fixed raising multiple exceptions when only the first one should
+	  be raised
+
+2010-05-07 12:25  david_nichols
+
+	* src/yaml-module.cpp, src/yaml-module.h, test/yaml-test.q: new
+	  constants and other minor changes
+
+2010-05-06 09:59  david_nichols
+
+	* src/QoreYamlParser.cpp, src/yaml-module.h, test/yaml-test.q:
+	  fixed parsing empty strings
+
+2010-05-06 08:00  david_nichols
+
+	* src/QoreYamlEmitter.cpp, src/QoreYamlParser.cpp,
+	  src/yaml-module.h, test/yaml-test.q: updated to not emit tag for
+	  timestamp by default; only parse untagged values as strings
+	  unconditionally if they are double-quoted
+
+2010-05-06 07:07  david_nichols
+
+	* src/QoreYamlParser.cpp, test/yaml-test.q: removed debugging
+	  output
+
+2010-05-05 16:09  david_nichols
+
+	* src/Makefile.am, src/QoreYamlEmitter.cpp, src/QoreYamlParser.cpp,
+	  src/single-compilation-unit.cpp, src/yaml-module.cpp,
+	  src/yaml-module.h, test/yaml-test.q: implemented initial yaml
+	  parser, emitting fixes with date/time values
+
+2010-05-05 12:23  david_nichols
+
+	* configure.ac, m4, m4/acx_pthread.m4, qore-yaml-module.spec,
+	  src/yaml-module.cpp, src/yaml-module.h, test/yaml-test.q: updated
+	  to use libyaml instead of yaml-cpp
+
+2010-05-04 13:13  david_nichols
+
+	* ., AUTHORS, COPYING, Makefile.am, README, RELEASE-NOTES,
+	  configure.ac, docs, docs/yaml-module-doc.html,
+	  qore-yaml-module.spec, reconf.sh, src, src/Makefile.am,
+	  src/single-compilation-unit.cpp, src/yaml-module.cpp,
+	  src/yaml-module.h, test, test/yaml-test.q: initial yaml module
+	  based on yaml-cpp
+
