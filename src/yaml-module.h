@@ -209,7 +209,7 @@ public:
       if (!yaml_scalar_event_initialize(&event, (yaml_char_t *)anchor, (yaml_char_t *)tag, 
 					(yaml_char_t *)str->getBuffer(), str->strlen(), 
 					plain_implicit, quoted_implicit, style))
-	 return err("unknown error initializing yaml scalar output event");
+	 return err("unknown error initializing yaml scalar output event for yaml type '%s'", tag);
 
       return emit("scalar", tag);
    }
@@ -220,7 +220,7 @@ public:
       if (!yaml_scalar_event_initialize(&event, (yaml_char_t *)anchor, (yaml_char_t *)tag, 
 					(yaml_char_t *)value, -1, 
 					plain_implicit, quoted_implicit, style))
-	 return err("unknown error initializing yaml scalar output event");
+	 return err("unknown error initializing yaml scalar output event for yaml type '%s'", tag);
 
       return emit("scalar", tag);
    }

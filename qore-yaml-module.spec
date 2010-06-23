@@ -34,7 +34,7 @@
 
 Summary: YAML module for Qore
 Name: qore-yaml-module
-Version: 0.0.1
+Version: 0.0.2
 Release: 1%{dist}
 License: LGPL
 Group: Development/Languages
@@ -79,5 +79,8 @@ rm -rf $RPM_BUILD_ROOT
 %doc COPYING README RELEASE-NOTES ChangeLog AUTHORS test/yaml-test.q docs/yaml-module-doc.html
 
 %changelog
+* Tue Jun 22 2010 David Nichols <david@qore.org>
+- updated to version 0.0.2
+
 * Tue May 4 2010 David Nichols <david_nichols@users.sourceforge.net>
 - initial spec file for yaml module
