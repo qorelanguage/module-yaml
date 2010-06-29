@@ -111,6 +111,11 @@ protected:
          if (!rc)
             break;
       }
+      if (desc->strlen() > 255) {
+         desc->terminate(255);
+         desc->concat("...");
+      }
+
       xsink->raiseException(QY_EMIT_ERR, desc);
       valid = false;
       return -1;
@@ -209,7 +214,7 @@ public:
       if (!yaml_scalar_event_initialize(&event, (yaml_char_t *)anchor, (yaml_char_t *)tag, 
 					(yaml_char_t *)str->getBuffer(), str->strlen(), 
 					plain_implicit, quoted_implicit, style))
-	 return err("unknown error initializing yaml scalar output event for yaml type '%s'", tag);
+	 return err("unknown error initializing yaml scalar output event for yaml type '%s', value '%s'", tag, value.getBuffer());
 
       return emit("scalar", tag);
    }
@@ -219,8 +224,9 @@ public:
 		       yaml_scalar_style_t style = YAML_ANY_SCALAR_STYLE) {
       if (!yaml_scalar_event_initialize(&event, (yaml_char_t *)anchor, (yaml_char_t *)tag, 
 					(yaml_char_t *)value, -1, 
-					plain_implicit, quoted_implicit, style))
-	 return err("unknown error initializing yaml scalar output event for yaml type '%s'", tag);
+					plain_implicit, quoted_implicit, style)) {
+	 return err("unknown error initializing yaml scalar output event for yaml type '%s', value '%s'", tag, value);
+      }
 
       return emit("scalar", tag);
    }
