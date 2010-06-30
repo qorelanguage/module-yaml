@@ -201,7 +201,9 @@ AbstractQoreNode *QoreYamlParser::parseScalar(bool favor_string) {
       double f = strtod(val, 0);
 
       // assume it's a string if it can't be converted to a number
-      if (!f && len)
+      if (!f && len 
+	  && (len != 1 || *val != '0') // check for integer zero
+	  && (len != 3 || val[0] != '0' || val[1] != '.' || val[2] != '0')) // check for float 0
 	 return new QoreStringNode(val, len, QCS_UTF8);
 
       // if the integer value is equal to the fp value (and there's no decimal), then it's an integer

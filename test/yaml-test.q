@@ -47,6 +47,9 @@ class yaml_test {
 
 	my list $d = (1, "two", 
 		      NOTHING,
+		      0,
+		      0.0,
+		      22,
 		      2010-05-05T15:35:02.100,
 		      False,
 		      M_PI,

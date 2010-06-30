@@ -1,3 +1,11 @@
+***********
+version 0.2
+***********
+
+fixed a problem with deserializing integer and floating-point 0
+added additional information to exception when a scalar value cannot be serialized (normally this is when a string has an encoding error)
+
+
 *************
 version 0.0.1
 *************
