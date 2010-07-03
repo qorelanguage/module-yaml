@@ -2,8 +2,8 @@
 version 0.2
 ***********
 
-fixed a problem with deserializing integer and floating-point 0
-added additional information to exception when a scalar value cannot be serialized (normally this is when a string has an encoding error)
+fixed a problem with deserializing untagged and not double quoted integer and floating-point 0 and 0.0; they were incorrectly deserialized as strings
+added additional information to the exception when a scalar value cannot be serialized (normally this happens when a string has an encoding error)
 
 
 *************
