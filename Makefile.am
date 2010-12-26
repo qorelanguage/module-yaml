@@ -7,6 +7,9 @@ noinst_HEADERS = src/yaml-module.h
 EXTRA_DIST = COPYING ChangeLog AUTHORS README \
 	RELEASE-NOTES \
 	test/yaml-test.q \
+	examples/HttpServer.qc \
+	examples/YamlRpcHandler.qc \
+	examples/YamlRpcClient.qc \
 	docs/yaml-module-doc.html \
 	qore-yaml-module.spec
 
