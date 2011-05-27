@@ -350,6 +350,7 @@ protected:
 	 
       if (!yaml_parser_parse(&parser, &event)) {
 	 valid = false;
+      xsink->raiseException(QY_PARSE_ERR, "getEvent: unexpected event '%s' when parsing YAML document", get_event_name(event.type));
 	 return -1;
       }
       //printd(5, "QoreYamlParser::getEvent() got %s event (%d)\n", get_event_name(event.type), event.type);
