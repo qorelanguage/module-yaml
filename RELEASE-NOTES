@@ -1,4 +1,11 @@
 ***********
+version 0.3
+***********
+
+fixed a problem where an exception was not raised with invalid YAML input when parsing, instead NOTHING was returned
+
+
+***********
 version 0.2
 ***********
 
