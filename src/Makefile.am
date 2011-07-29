@@ -1,3 +1,5 @@
+MNAME=yaml
+
 if COND_SINGLE_COMPILATION_UNIT
 YAML_SOURCES = single-compilation-unit.cpp
 else
@@ -6,9 +8,9 @@ endif
 
 lib_LTLIBRARIES = yaml.la
 yaml_la_SOURCES = $(YAML_SOURCES)
-yaml_la_LDFLAGS = -module -avoid-version ${YAML_LIBS}
+yaml_la_LDFLAGS = -module -avoid-version ${YAML_LIBS} ${MODULE_LDFLAGS}
 
-INCLUDES = -I$(top_srcdir)/include $(YAML_INCLUDES)
+INCLUDES = -I$(top_srcdir)/include $(YAML_CPPFLAGS)
 
 AM_CPPFLAGS=$(QORE_CPPFLAGS)
 
@@ -20,6 +22,11 @@ AM_CXXFLAGS=-g
 endif
 endif
 
+if COND_MINGW
+RM_OTHER=$(DESTDIR)$(libdir)/$(MNAME).dll.a
+endif
+
 install-exec-hook:
-	mv $(DESTDIR)$(libdir)/yaml.$(MODULE_SUFFIX) $(DESTDIR)$(libdir)/yaml-api-$(MODULE_API).qmod
-	rm -f $(DESTDIR)$(libdir)/yaml.la
+	mv $(DESTDIR)$(libdir)/$(MNAME).$(MODULE_SUFFIX) $(DESTDIR)$(libdir)/$(MNAME)-api-$(MODULE_API).qmod
+	$(RM) $(DESTDIR)$(libdir)/$(MNAME).la $(RM_OTHER)
+

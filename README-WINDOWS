@@ -1,0 +1,4 @@
+so far only tested with the mingw32 gcc compiler as a cross-compiler
+
+linked against yaml - libyaml can be built with mingw32 using configure as normal and then:
+       make CPPFLAGS=-DYAML_DECLARE_STATIC=1 install
