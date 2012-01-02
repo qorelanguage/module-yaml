@@ -2,7 +2,7 @@
 /*
   yaml Qore module
 
-  Copyright (C) 2010 David Nichols, all rights reserved
+  Copyright (C) 2010 - 2012 David Nichols, all rights reserved
 
   This library is free software; you can redistribute it and/or
   modify it under the terms of the GNU Lesser General Public
@@ -23,6 +23,7 @@
 
 #include <stdlib.h>
 #include <ctype.h>
+#include <errno.h>
 
 const char *QY_PARSE_ERR = "YAML-PARSER-ERROR";
 
@@ -153,6 +154,27 @@ static bool is_number(const char *&tv) {
    return true;
 }
 
+static bool onlydigits(const char *str) {
+   while (*str) {
+      if (!isdigit(*str))
+	 return false;
+      ++str;
+   }
+
+   return true;
+}
+
+static bool is_qore_int(int64& rv, const char* val, size_t len) {
+   unsigned np = (*val == '-' || *val == '+') ? 1 : 0;
+
+   if (len > (19 + np) || !onlydigits(val + np))
+      return false;
+
+   errno = 0;
+   rv = strtoll(val, 0, 10);
+   return errno != ERANGE;
+}
+
 AbstractQoreNode *QoreYamlParser::parseScalar(bool favor_string) {
    //ReferenceHolder<AbstractQoreNode> rv(xsink);
 
@@ -174,7 +196,7 @@ AbstractQoreNode *QoreYamlParser::parseScalar(bool favor_string) {
 	 return &False;
 
       // check for null
-      if (!strcmp(val, "null") || !strcmp(val, "~"))
+      if (!strcmp(val, "null") || !strcmp(val, "~") || !len)
 	 return 0;
       
       // check for absolute date/time values
@@ -197,7 +219,12 @@ AbstractQoreNode *QoreYamlParser::parseScalar(bool favor_string) {
 	 }
       }
 
-      // FIXME: need to improve float/integer conversions
+      {
+	 int64 iv;
+	 if (is_qore_int(iv, val, len))
+	    return new QoreBigIntNode(iv);
+      }
+
       double f = strtod(val, 0);
 
       // assume it's a string if it can't be converted to a number
@@ -206,9 +233,11 @@ AbstractQoreNode *QoreYamlParser::parseScalar(bool favor_string) {
 	  && (len != 3 || val[0] != '0' || val[1] != '.' || val[2] != '0')) // check for float 0
 	 return new QoreStringNode(val, len, QCS_UTF8);
 
+      /**
       // if the integer value is equal to the fp value (and there's no decimal), then it's an integer
       if (((double)((int64)f)) == f && !strchr(val, '.')) 
 	 return new QoreBigIntNode((int64)f);
+      */
 
       return new QoreFloatNode(f);
    }
