@@ -532,8 +532,8 @@ else
       AC_DEFINE_UNQUOTED([QORE_VERSION_CODE], $qvc, [define when missing in Qore headers])
    fi
 
-   if test $qvc -lt 800; then
-      AC_MSG_ERROR([found $qore_version; this module requires at least version 0.8.0])
+   if test $qvc -lt 804; then
+      AC_MSG_ERROR([found $qore_version; this module requires at least version 0.8.4])
    fi
 
    AC_MSG_RESULT([${qore_version} OK])

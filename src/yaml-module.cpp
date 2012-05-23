@@ -47,77 +47,21 @@ yaml_version_directive_t yaml_ver_1_0 = {1, 0}, yaml_ver_1_1 = {1, 1}, yaml_ver_
 // yaml event code to event string map
 event_map_t event_map;
 
+DLLLOCAL void init_yaml_functions(QoreNamespace& ns);
+DLLLOCAL void init_yaml_constants(QoreNamespace& ns);
+
 const char *get_event_name(yaml_event_type_t type) {
    event_map_t::iterator i = event_map.find(type);
    return i != event_map.end() ? i->second : "unknown";
-}
-
-static AbstractQoreNode *f_makeYAML(const QoreListNode *args, ExceptionSink *xsink) {
-   const AbstractQoreNode *p = get_param(args, 0);
-   int flags = HARD_QORE_INT(args, 1);
-   int width = HARD_QORE_INT(args, 2);
-   int indent = HARD_QORE_INT(args, 3);
-
-   QoreYamlStringWriteHandler str;
-   {
-      QoreYamlEmitter emitter(str, flags, width, indent, xsink);
-      if (*xsink)
-	 return 0;
-   
-      if (emitter.emit(p))
-	 return 0;
-   }
-
-   return str.take();
-}
-
-// parseYAML(string $yaml) returns any
-static AbstractQoreNode *f_parseYAML(const QoreListNode *args, ExceptionSink *xsink) {
-   const QoreStringNode *str = HARD_QORE_STRING(args, 0);
-   QoreYamlParser parser(*str, xsink);
-   return parser.parse();
-}
-
-// getYAMLInfo() returns hash
-static AbstractQoreNode *f_getYAMLInfo(const QoreListNode *args, ExceptionSink *xsink) {
-   QoreHashNode *h = new QoreHashNode;
-
-   h->setKeyValue("version", new QoreStringNode(yaml_get_version_string()), 0);
-
-   int major, minor, patch;
-   yaml_get_version(&major, &minor, &patch);
-
-   h->setKeyValue("major", new QoreBigIntNode(major), 0);
-   h->setKeyValue("minor", new QoreBigIntNode(minor), 0);
-   h->setKeyValue("patch", new QoreBigIntNode(patch), 0);
-
-   return h;
 }
 
 QoreNamespace YNS("YAML");
 
 QoreStringNode *yaml_module_init() {
    // add functions
-
-   // makeYAML(any $data, int $opts = Yaml::None, softint $width = -1, softint $indent = 2) returns string
-   builtinFunctions.add2("makeYAML", f_makeYAML, QC_RET_VALUE_ONLY, QDOM_DEFAULT, stringTypeInfo, 4, anyTypeInfo, QORE_PARAM_NO_ARG, bigIntTypeInfo, new QoreBigIntNode(QYE_DEFAULT), softBigIntTypeInfo, new QoreBigIntNode(-1), softBigIntTypeInfo, new QoreBigIntNode(2));
-
-   // parseYAML(string $yaml) returns any
-   builtinFunctions.add2("parseYAML", f_parseYAML, QC_NO_FLAGS, QDOM_DEFAULT, anyTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG);
-
-   // getYAMLInfo() returns hash
-   builtinFunctions.add2("getYAMLInfo", f_getYAMLInfo, QC_NO_FLAGS, QDOM_DEFAULT, hashTypeInfo);
-
-   // setup namespace
-   YNS.addConstant("None", new QoreBigIntNode(QYE_NONE));
-   YNS.addConstant("Canonical", new QoreBigIntNode(QYE_CANONICAL));
-   YNS.addConstant("EscapeUnicode", new QoreBigIntNode(QYE_ESCAPE_UNICODE));
-   YNS.addConstant("ExplicitStartDoc", new QoreBigIntNode(QYE_EXPLICIT_START_DOC));
-   YNS.addConstant("ExplicitEndDoc", new QoreBigIntNode(QYE_EXPLICIT_END_DOC));
-   YNS.addConstant("BlockStyle", new QoreBigIntNode(QYE_BLOCK_STYLE));
-   //YNS.addConstant("Yaml1_0", new QoreBigIntNode(QYE_VER_1_0));
-   YNS.addConstant("Yaml1_1", new QoreBigIntNode(QYE_VER_1_1));
-   //YNS.addConstant("Yaml1_2", new QoreBigIntNode(QYE_VER_1_2));
+   init_yaml_functions(YNS);
+   // add constants
+   init_yaml_constants(YNS);
 
    // setup event map
    event_map[YAML_NO_EVENT] = "empty";

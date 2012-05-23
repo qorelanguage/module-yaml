@@ -1,9 +1,17 @@
 MNAME=yaml
 
+ql_yaml.cpp: ql_yaml.qpp
+	qpp $<
+
+GENERATED_SOURCES = ql_yaml.cpp
+CLEANFILES = $(GENERATED_SOURCES)
+
 if COND_SINGLE_COMPILATION_UNIT
 YAML_SOURCES = single-compilation-unit.cpp
+single-compilation-unit.cpp: $(GENERATED_SOURCES)
 else
 YAML_SOURCES = yaml-module.cpp QoreYamlEmitter.cpp QoreYamlParser.cpp
+nodist_yaml_la_SOURCES = $(GENERATED_SOURCES)
 endif
 
 lib_LTLIBRARIES = yaml.la

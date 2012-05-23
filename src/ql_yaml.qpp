@@ -1,0 +1,138 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+  ql_yaml.qpp
+
+  yaml Qore module
+
+  Copyright (C) 2010 - 2012 David Nichols
+
+  This library is free software; you can redistribute it and/or
+  modify it under the terms of the GNU Lesser General Public
+  License as published by the Free Software Foundation; either
+  version 2.1 of the License, or (at your option) any later version.
+
+  This library is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+  Lesser General Public License for more details.
+
+  You should have received a copy of the GNU Lesser General Public
+  License along with this library; if not, write to the Free Software
+  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+*/
+
+#include "yaml-module.h"
+
+/** @defgroup yaml_emitter_option_constants YAML Emitter Option Constants
+ */
+//@{
+namespace Qore::YAML;
+//! emitter constant: No option (= default output)
+const None = QYE_NONE;
+
+//! emitter constant: Emit canonical YAML
+const Canonical = QYE_CANONICAL;
+
+//! emitter constant: escape unicode characters
+const EscapeUnicode = QYE_ESCAPE_UNICODE;
+
+//! emitter constant: emit an explicit document start sequence
+const ExplicitStartDoc = QYE_EXPLICIT_START_DOC;
+
+//! emitter constant: emit an explicit document end sequence
+const ExplicitEndDoc = QYE_EXPLICIT_END_DOC;
+
+//! emitter constant: emit seq and map with block style
+const BlockStyle = QYE_BLOCK_STYLE;
+
+//const Yaml1_0 = QYE_VER_1_0;
+
+//! emitter constant: emit YAML 1.1 (not necessary to use as this is the default and currently the only YAML version supported by libyaml)
+const Yaml1_1 = QYE_VER_1_1;
+
+//const Yaml1_2 = QYE_VER_1_2;
+//YNS.addConstant("Yaml1_2", new QoreBigIntNode(QYE_VER_1_2));
+//@}
+
+/** @defgroup yaml_functions YAML Functions
+ */
+//@{
+namespace Qore::YAML;
+
+//! Creates a YAML string from Qore data 
+/** For information on Qore to YAML serialization, see @ref qore_to_yaml_type_mappings
+
+    @param data Qore data to convert; cannot contain any objects or a \c YAML-EMITTER-ERROR exception will be raised
+    @param flags binary OR'ed @ref yaml_emitter_option_constants
+    @param width default line width for output, -1 = no line length limit
+    @param indent the number of spaces to use for indentation when outputting block format or multiple lines; note that libyaml seems to be ignoring this parameter for now, so it may not have any effect
+
+    @return the YAML string corresponding to the input
+
+    @par Example:
+    @code
+my string $str = makeYAML($data, YAML::Canonical);
+    @endcode
+
+    @throw YAML-EMITTER-ERROR object found; YAML library error
+ */
+string makeYAML(any data, int flags = 0, softint width = -1, softint indent = 2) [flags=RET_VALUE_ONLY] {
+   QoreYamlStringWriteHandler str;
+   {
+      QoreYamlEmitter emitter(str, flags, width, indent, xsink);
+      if (*xsink)
+	 return 0;
+   
+      if (emitter.emit(data))
+	 return 0;
+   }
+
+   return str.take();
+}
+
+//! Parses a YAML string and returns the corresponding Qore value or data structure
+/** For information on YAML to Qore deserialization, see @ref qore_to_yaml_type_mappings
+
+    @param yaml The YAML string to deserialize
+
+    @return Qore data as deserialized from the YAML string
+
+    @par Example:
+    @code
+my any $data = parseYAML($yaml_string);
+    @endcode
+
+    @throw YAML-PARSER-ERROR error parsing YAML string
+ */
+any parseYAML(string yaml) [flags=RET_VALUE_ONLY] {
+   QoreYamlParser parser(*yaml, xsink);
+   return parser.parse();
+}
+
+//! Returns version information about libyaml being used by the yaml module
+/** @return a hash with keys as in the following table:
+    - \c version: the version string for the library, ex: \c "0.1.3"
+    - \c major: the integer major version for the library, ex: \c 0
+    - \c minor: the integer minor version for the library, ex: \c 1
+    - \c patch: the integer patch version for the library, ex: \c 3
+
+    @par Example:
+    @code
+my hash $hash = getYAMLInfo();
+    @endcode
+*/
+hash getYAMLInfo() [flags=CONSTANT] {
+   QoreHashNode *h = new QoreHashNode;
+
+   h->setKeyValue("version", new QoreStringNode(yaml_get_version_string()), 0);
+
+   int major, minor, patch;
+   yaml_get_version(&major, &minor, &patch);
+
+   h->setKeyValue("major", new QoreBigIntNode(major), 0);
+   h->setKeyValue("minor", new QoreBigIntNode(minor), 0);
+   h->setKeyValue("patch", new QoreBigIntNode(patch), 0);
+
+   return h;
+}
+//@}
