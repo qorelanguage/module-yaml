@@ -76,7 +76,7 @@ my string $str = makeYAML($data, YAML::Canonical);
 
     @throw YAML-EMITTER-ERROR object found; YAML library error
  */
-string makeYAML(any data, int flags = 0, softint width = -1, softint indent = 2) [flags=RET_VALUE_ONLY] {
+string makeYAML(any data, int flags = {Qore::YAML::None}0, softint width = -1, softint indent = 2) [flags=RET_VALUE_ONLY] {
    QoreYamlStringWriteHandler str;
    {
       QoreYamlEmitter emitter(str, flags, width, indent, xsink);
