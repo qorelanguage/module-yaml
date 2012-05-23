@@ -16,7 +16,6 @@ EXTRA_DIST = COPYING ChangeLog AUTHORS README \
 	examples/HttpServer.qc \
 	examples/YamlRpcHandler.qc \
 	examples/YamlRpcClient.qc \
-	docs/yaml-module-doc.html \
 	qore-yaml-module.spec
 
 ACLOCAL_AMFLAGS=-I m4

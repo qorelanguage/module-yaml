@@ -1,3 +1,4 @@
+%define mod_ver 0.3
 %define module_api %(qore --latest-module-api 2>/dev/null)
 %define module_dir %{_libdir}/qore-modules
 
@@ -34,7 +35,7 @@
 
 Summary: YAML module for Qore
 Name: qore-yaml-module
-Version: 0.3
+Version: %{mod_ver}
 Release: 1%{dist}
 License: LGPL
 Group: Development/Languages
@@ -45,7 +46,7 @@ BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
 Requires: /usr/bin/env
 Requires: qore-module-api-%{module_api}
 BuildRequires: gcc-c++
-BuildRequires: qore-devel >= 0.8
+BuildRequires: qore-devel >= 0.8.4
 BuildRequires: libyaml-devel
 BuildRequires: qore
 
@@ -76,10 +77,10 @@ rm -rf $RPM_BUILD_ROOT
 %files
 %defattr(-,root,root,-)
 %{module_dir}
-%doc COPYING README RELEASE-NOTES ChangeLog AUTHORS test/yaml-test.q docs/yaml-module-doc.html
+%doc COPYING README RELEASE-NOTES ChangeLog AUTHORS test/yaml-test.q docs/yaml/html
 
 %changelog
-* Sat May 28 2011 David Nichols <david@qore.org>
+* Sat May 28 2011 David Nichols <david@qore.org> 0.3
 - updated to version 0.3
 
 * Tue Jun 30 2010 David Nichols <david@qore.org>

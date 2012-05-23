@@ -21,9 +21,9 @@
 
 #include "yaml-module.h"
 
-QoreStringNode *yaml_module_init();
-void yaml_module_ns_init(QoreNamespace *rns, QoreNamespace *qns);
-void yaml_module_delete();
+static QoreStringNode *yaml_module_init();
+static void yaml_module_ns_init(QoreNamespace *rns, QoreNamespace *qns);
+static void yaml_module_delete();
 
 // qore module symbols
 DLLEXPORT char qore_module_name[] = "yaml";
@@ -57,7 +57,7 @@ const char *get_event_name(yaml_event_type_t type) {
 
 QoreNamespace YNS("YAML");
 
-QoreStringNode *yaml_module_init() {
+static QoreStringNode* yaml_module_init() {
    // add functions
    init_yaml_functions(YNS);
    // add constants
@@ -79,9 +79,9 @@ QoreStringNode *yaml_module_init() {
    return 0;
 }
 
-void yaml_module_ns_init(QoreNamespace *rns, QoreNamespace *qns) {
+static void yaml_module_ns_init(QoreNamespace *rns, QoreNamespace *qns) {
    qns->addNamespace(YNS.copy());
 }
 
-void yaml_module_delete() {
+static void yaml_module_delete() {
 }
