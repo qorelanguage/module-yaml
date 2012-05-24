@@ -40,8 +40,8 @@ Release: 1%{dist}
 License: LGPL
 Group: Development/Languages
 URL: http://qore.org
-Source: http://prdownloads.sourceforge.net/qore/%{name}-%{version}.tar.gz
-#Source0: %{name}-%{version}.tar.gz
+Source: http://prdownloads.sourceforge.net/qore/%{name}-%{version}.tar.bz2
+#Source0: %{name}-%{version}.tar.bz2
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
 Requires: /usr/bin/env
 Requires: qore-module-api-%{module_api}
@@ -51,12 +51,25 @@ BuildRequires: libyaml-devel
 BuildRequires: qore
 
 %description
-YAML module for the Qore Programming Language.
+This package contains the yaml module for the Qore Programming Language.
 
+YAML is a flexible and concise human-readable data serialization format.
 
 %if 0%{?suse_version}
 %debug_package
 %endif
+
+%package doc
+Summary: Documentation and examples for the Qore YAML module
+Group: Development/Languages
+
+%description doc
+This package contains the HTML documentation and example programs for the Qore
+yaml module.
+
+%files doc
+%defattr(-,root,root,-)
+%doc docs/yaml docs/YamlRpcClient test/yaml-test.q
 
 %prep
 %setup -q
@@ -78,6 +91,8 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(-,root,root,-)
 %{module_dir}
 %doc COPYING README RELEASE-NOTES ChangeLog AUTHORS test/yaml-test.q docs/yaml/html
+
+
 
 %changelog
 * Sat May 28 2011 David Nichols <david@qore.org> 0.3

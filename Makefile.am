@@ -10,6 +10,7 @@ USER_MODULES = qlib/YamlRpcClient.qm
 
 EXTRA_DIST = COPYING ChangeLog AUTHORS README \
 	RELEASE-NOTES \
+	src/ql_yaml.qpp \
 	test/yaml-test.q \
 	examples/HttpServer.qc \
 	examples/YamlRpcHandler.qc \
@@ -49,7 +50,9 @@ doxygen-doc: $(DOXYGEN_OUTPUT)
 
 EXTRA_DIST += $(DOXYGEN_OUTPUT)
 
-install-data-local:
+html-local: $(DOXYGEN_OUTPUT)
+
+install-html-local:
 	$(MKDIR_P) $(DESTDIR)$(datadir)/$(PACKAGE)/docs/yaml/html/search
 	$(MKDIR_P) $(DESTDIR)$(datadir)/$(PACKAGE)/docs/YamlRpcClient/html/search
 	@for dir in $(DOXYGEN_OUTPUT); do \
