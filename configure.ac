@@ -682,7 +682,7 @@ MODULE_VERSION_SUB=`echo $PACKAGE_VERSION | cut -f3 -d\  | sed s/\"//g | cut -f3
 QORE_MODULE_PACKAGE_VERSION="$PACKAGE_VERSION"
 
 # set user module directory
-mymodverdir=qore-modules/${qore_version}
+mymodverdir=${qore_version}
 AC_SUBST([mymodverdir])
 
 # set version information

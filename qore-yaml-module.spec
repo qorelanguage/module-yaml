@@ -69,7 +69,7 @@ yaml module.
 
 %files doc
 %defattr(-,root,root,-)
-%doc docs/yaml docs/YamlRpcClient test/yaml-test.q
+%doc docs/yaml docs/YamlRpcClient test examples
 
 %prep
 %setup -q
@@ -90,11 +90,12 @@ rm -rf $RPM_BUILD_ROOT
 %files
 %defattr(-,root,root,-)
 %{module_dir}
-%doc COPYING README RELEASE-NOTES ChangeLog AUTHORS test/yaml-test.q docs/yaml/html
-
-
+%doc COPYING README RELEASE-NOTES ChangeLog AUTHORS 
 
 %changelog
+* Thu May 24 2012 David Nichols <david@qore.org> 0.3
+- updated spec file for qpp/qdx build
+
 * Sat May 28 2011 David Nichols <david@qore.org> 0.3
 - updated to version 0.3
 

@@ -1,0 +1,399 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file YamlRpcHandler.qm @brief YAML-RPC handler class definition for the HttpServer module
+
+/*  YamlRpcHandler.qm Copyright 2012 David Nichols
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 0.8.4
+
+# requires the binary yaml module
+%requires yaml >= 0.3
+
+# need mime definitions
+%requires Mime >= 1.0
+
+# need HttpServer definitions
+%requires HttpServer >= 0.3.3
+
+module YamlRpcHandler {
+    version = "1.0";
+    desc = "YamlRpcHandler module for use with the HttpServer module";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+}
+
+/*  Version History
+    * 2012-05-24 v1.0: David Nichols <david@qore.org>: updated to a user module
+*/
+
+/** @mainpage YamlRpcHandler Module
+
+    @section intro Introduction
+
+    This module implements server-side support for a proprietary RPC-based protocol using <a href="http://yaml.org">YAML</a> for serialization/deserialization of message data.
+
+    This module provides the @ref YamlRpcHandler::YamlRpcHandler "YamlRpcHandler" class which can be used to provide an RPC handler for the HttpServer class provided by the HttpServer module.
+
+    See the <a href="../../YamlRpcClient/html/index.html">YamlRpcClient module</a> for a description of the YAML-RPC protocol implemented here.
+
+    @section example Example Usage
+    @code
+%requires HttpServer
+%requires YamlRpcHandler
+%requires Mime
+
+const ApiMethods = (
+     ("name": "^sys\\.shutdown\$",
+      "text": "sys.shutdown",
+      "function": sub () { background $http.stop();  return "OK"; },
+      "help": "shuts down this server",
+      "logopt": 0,
+      ),
+);
+
+# a logging closure
+my code $log = sub (string $str) {printf("%y: %s\n", now_us(), $str);};
+
+# our bind address
+const Bind = 8888;
+
+my YamlRpcHandler $yamlRpcHandler(new AbstractAuthenticator(), $api);
+our HttpServer $http($log, $log);
+$http.addListener(Bind);
+$http.setHandler("yamlrpc", "", MimeTypeYamlRpc, $yamlRpcHandler);
+$http.setDefaultHandler("yamlrpc", $yamlRpcHandler);
+$log("now listening on %s\n", Bind);
+$http.waitStop();
+    @endcode
+*/
+
+#! the %YamlRpcHandler namespace holds all public definitions in the %YamlRpcHandler module
+public namespace YamlRpcHandler {
+    #! YamlRpcHandler class definition; to be registered as a handler in the HttpServer class
+    /**
+     */
+    public class YamlRpcHandler inherits public AbstractHttpRequestHandler {
+        #! implementation of the handler
+        const Version = "1.0";
+
+        #! internal methods of the handler (introspection)
+        const InternalMethods = (
+            ("function": "help",
+             "help"    : "shows a list of YAML-RPC methods registered with this handler",
+             "text"    : "help",
+             "logopt"  : 2
+            ),
+            ("function": "listMethods",
+             "help"    : "lists YAML-RPC method names registered with this handler",
+             "text"    : "system.listMethods",
+             "logopt"  : 2
+            ),
+            ("function": "system_describe",
+             "help"    : "returns a service description object, like the one specified by the JSON-RPC 1.1 spec (even though we use YAML instead of JSON)",
+             "text"    : "system.describe",
+             "logopt"  : 2
+            ),
+            );
+
+        #! @cond nodoc
+        private {
+            list $.methods = ();
+            hash $.mi;
+            int $.loglevel;
+
+            # if True then verbose exception info will be logged
+            bool $.debug;
+
+            # a closure/call reference to get the log message and/or process arguments in incoming requests
+            *code $.getLogMessage;
+        }
+        #! @endcond
+
+        #! creates the handler with the given method list
+        /** @param auth an authentication object (use new AbstractAuthenticator() for no authentication)
+            @param methods a list of hashes with the following keys:
+            - \c name: a regular expression to use for matching the method name
+            - \c function: a string (giving a function name to call), a call reference, or a closure to call with the deserialized arguments to the method; the return value will be serialized to YAML-RPC and sent back to the called
+            - \c help: help text for the method
+            - \c text: the human-readable name of the method
+            - \c logopt: (optional - by convention) log options which can be used by a custom logger (see the getLogMessage parameter)
+            @param getLogMessage an optional closure or call reference to be called when an incoming request is received; if this is set then it will be called with the following arguments: a context hash (see HttpServer::AbstractHttpRequestHandler::handleRequest() for a description of the context hash), the method definition as passed in the methods argument to this constructor, and a reference to the arguments in this call
+            @param dbg  this parameter is set to @ref Qore::True "True", then additional information will be logged when errors occur
+         */
+        constructor(AbstractAuthenticator $auth, list $methods, *code $getLogMessage, bool $dbg = False) : AbstractHttpRequestHandler($auth) {
+            $.getLogMessage = $getLogMessage;
+            $.debug = $dbg;
+
+            # add internal methods
+            foreach my hash $im in (YamlRpcHandler::InternalMethods)
+                $.addMethodInternal($im + ( "internal" : True ));
+            
+            foreach my hash $m in ($methods) {
+                if (!exists $m.name)
+                    throw "YAML-RPC-CONSTRUCTOR-ERROR", sprintf("expecting 'name' key in method hash: %y", $m);
+                if (!exists $m.function)
+                    throw "YAML-RPC-CONSTRUCTOR-ERROR", sprintf("expecting 'function' key in method hash: %y", $m);
+
+                if (!exists $m.text)
+                    throw "YAML-RPC-CONSTRUCTOR-ERROR", sprintf("expecting 'text' key in method hash: %y", $m);
+                delete $m.internal;
+                $.addMethodInternal($m);
+            }
+        }
+
+        #! adds a method to the handler dynamically
+        /** @param name a regular expression to use for matching the method name
+            @param func a string (giving a function name to call), a call reference, or a closure to call with the deserialized arguments to the method; the return value will be serialized to YAML-RPC and sent back to the called
+            @param text the human-readable name of the method
+            @param help help text for the method
+            @param logopt log options which can be used by a custom logger (see the getLogMessage parameter)
+            @param cmark any value that will be added in the method hash under the \c "cmark" key
+          */
+        addMethod(string $name, any $func, string $text, string $help, any $logopt, any $cmark) {
+            if (!exists $func)
+                throw "YAML-RPC-HANDLER-ADD-METHOD-ERROR", "expecting function name and text name as hash key in argument";
+
+            $.addMethodInternal(("name"    : $name,
+                                 "function": $func,
+                                 "text"    : $text,
+                                 "help"    : $help,
+                                 "logopt"  : $logopt,
+                                 "cmark"   : $cmark,
+                                ));
+        }
+
+        #! turns on or off debugging; when debugging is enabled more verbose error messages are reported
+        setDebug(bool $dbg = True) {
+            $.debug = $dbg;
+        }
+
+        #! returns the current status of the debug flag
+        bool getDebug() {
+            return $.debug;
+        }
+
+        #! serializes a reponse in YAML-RPC format given the arguments
+        static string makeResponse(any $response, int $flags = YAML::None) {
+            return makeYAML(("result":$response), $flags);
+        }
+        
+        #! serializes an error reponse in YAML-RPC format given the arguments
+        static string makeErrorResponse(int $code, string $mess, any $err, int $flags = YAML::None) {
+            my hash $h = ("name":"YAMLRPCError","code":$code,"message":$mess);
+            if (exists $err)
+                $h.error = $err;
+            return makeYAML(("error":$h), $flags);
+        }
+
+        #! @cond nodoc
+        # method called by HttpServer to handle a request
+        # don't reimplement this method; fix/enhance it in the module
+        final hash handleRequest(hash $cx, hash $hdr, *data $body) {
+            #printf("yamlrpc handler context=%y hdr=%y body=%y\n", $cx, $hdr, $body);
+
+            my hash $yamlrpc;
+
+            if ($hdr.method == "GET") {
+                my string $path = substr($hdr.path, index($hdr.path, "/") + 1);
+                
+                if (!strlen($path))
+                    return ( "code" : 501,
+                             "desc" : "invalid HTTP GET: no path/YAML-RPC method name given" ); 
+
+                my list $args = split("?", $path);
+                $yamlrpc.method = shift $args;
+
+                $args = split("&", $args[0]);
+
+                # process arguments
+                if (elements $args) {
+                    my any $params;
+                    foreach my any $arg in ($args) {
+                        my int $i;
+                        if (($i = index($arg, "=")) == -1)
+                            continue;
+
+                        my string $key = substr($arg, 0, $i);
+                        my string $value = substr($arg, $i + 1);
+                        # if it is a positional parameter
+                        if (int($key) == $key) {
+                            # check for reasonable argument limits, otherwise ignore
+                            if ($key > 0 && $key < 9999)
+                                $.do_param($value, \$params[$key - 1]);
+                        }
+                        else
+                            $.do_param($value, \$params.$key);
+                    }
+                    $yamlrpc.params = $params;
+                    #printf("params=%y\n", $params);
+                }
+                
+                if (index($yamlrpc.method, ".") == -1)
+                    $yamlrpc.method = "omq.system." + $yamlrpc.method;
+            }
+            else {
+                if ($hdr.method != "POST")
+                    return ( "code" : 501,
+                             "body" : sprintf("don't know how to handle method %n", $hdr.method) );
+
+                # accept any content-type with "yaml" in it, otherwise throw an error
+                #if ($hdr."content-type" !~ /yaml/)
+                #	return ( "code" : 501,
+                #		 "body" : sprintf("don't know how to handle content-type %n", $hdr."content-type") );
+
+                try {
+                    $yamlrpc = parseYAML($body);
+                }
+                catch (hash $ex) {
+                    my string $estr = sprintf("%s: %s", $ex.err, $ex.desc);
+                    return ( "code"   : 500,
+                             "errlog" : $estr,
+                             "body"   : $estr );
+                }
+            }
+            $cx.method = $yamlrpc.method;
+            $cx.yamlid = $yamlrpc.id;
+            try {
+                my any $rh = $.callMethod($cx, $yamlrpc.params);
+                #printf("msg=%s\nyamlrpc=%N\nans=%N\n", $body, $yamlrpc, $rh);flush();
+                return ( "code" : 200, "hdr" : ( "Content-Type" : MimeTypeYamlRpc ) ) + $rh;
+            }
+            catch (hash $ex) {
+                # show complete exception trace if system debug option is enabled
+                my string $str = !$.debug
+                    ? sprintf("%s: %s", $ex.err, $ex.desc)
+                    : HttpServer::get_exception_string($ex);
+                return ( "code"   : 200,
+                         "errlog" : $str,
+                         "hdr"    : ( "Content-Type" : MimeTypeYamlRpc ),
+                         "body"   : YamlRpcHandler::makeErrorResponse(104, $str, $ex.arg) );
+            }
+        }
+
+        # don't reimplement this method; fix/enhance it in the module
+        final private addMethodInternal(hash $h) {
+            # check for duplicate in method index
+            my any $i = $.mi.($h.text);
+            if (!exists $i)
+                $i = elements $.methods;
+
+            if (!exists $h.name)
+                $h.name = sprintf("^%s\$", $h.text);
+            $.methods[$i] = $h;
+        }
+
+        private hash help() {
+            my hash $h;
+            foreach my hash $m in ($.methods) {
+                $h.($m.text).description = $m.help;
+                if (exists $m.params)
+                    $h.($m.text).params  = $m.params;
+            }
+            return $h;
+        }
+
+        private hash system_describe() {
+            my string $address = "http://localhost/YAML";
+            my list $procs = ();
+
+            foreach my hash $m in ($.methods)
+                if ($m.text != "service.describe")
+		$procs += (
+                    "name": $m.text,
+                    "summary": $m.help,
+                );
+
+            return (
+                "sdversion": "1.0",
+                "name": "Qore YAML-RPC Handler",
+                "id": $address,
+                "version": YamlRpcHandler::Version,
+                "summary": "provides a YAML-RPC handler to the HTTP server",
+                #"address": $address,
+                "procs": $procs,
+                ); 
+        }
+
+        private list listMethods() {
+            my list $l = ();
+            foreach my hash $m in ($.methods)
+                $l += $m.text;
+            return $l;
+        }
+
+        private log(hash $cx, string $str) {
+            my string $msg = "YAML-RPC ";
+            if (exists $cx.user)
+                $msg += sprintf("user %s ", $cx.user);
+            $msg += sprintf("from %s: ", $cx."peer-info".address_desc);
+            $msg += vsprintf($str, $argv);
+
+            call_function_args($cx.logfunc, $msg);
+        }
+
+        # don't reimplement this method; fix/enhance it in the module
+        final private hash callMethod(hash $cx, any $params) {
+            my string $method = $cx.method;
+            # find method function
+            my hash $found;
+            foreach my hash $m in ($.methods) {
+                if (regex($method, $m.name)) {
+                    $found = $m;
+                    break;
+                }
+            }
+
+            if (exists $found) {
+                # add context marker, if any
+                $cx.cmark = $found.cmark;
+                $cx.function = $found.function;
+
+                my *string $msg = exists $.getLogMessage ? call_function($.getLogMessage, $cx, $found, \$params) : NOTHING;
+                if (exists $msg)
+                    $.log($cx, $msg);
+                
+                #printf("found: %y (method=%s params=%y)\n", $found.text, $method, $params);
+                my any $rv = $found.internal ? callObjectMethodArgs($self, $found.function, $params) : call_function_args($found.function, $params);
+                my hash $h.body = YamlRpcHandler::makeResponse($rv);
+                return $h;
+            }
+            else {
+                my string $err = sprintf("YAML-RPC-SERVER-UNKNOWN-METHOD: unknown method %n", $method);
+                return ("code"   : 200,
+                        "hdr"    : ("Content-Type" : MimeTypeYamlRpc),
+                        "body"   : YamlRpcHandler::makeErrorResponse(105, $err));
+            }
+        }
+
+        # don't reimplement this method; fix/enhance it in the module
+        final private do_param(any $value, reference $param) {
+            if (exists $param) {
+                if ($param.typeCode() != NT_LIST)
+                    $param = list($param);
+                $param += $value;
+            }
+            else
+                $param = $value;
+        }
+        #! @endcond
+    }
+}
