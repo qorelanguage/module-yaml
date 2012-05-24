@@ -1,29 +1,84 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
-/** @file YamlRpcClient.qc @brief provides the definition for the YamlRpcClient class
-    @details YAML-RPC
+#! @file YamlRpcClient.qm @brief provides the definition for the YamlRpcClient class
 
-    @anchor YAMLRPC
+/*  YamlRpcClient.qm Copyright 2012 David Nichols
 
-    YAML-RPC is an HTTP-based RPC protocol used by Qorus; it is not a standard protocol, however it is loosely based on JSON-RPC 1.1.
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
 
-    YAML-RPC is the preferred protocol when communicating with Qorus because it is fast, it supports the best data serialization for Qore data of all RPC protocols supported by Qorus, and it is concise while still being very easy to read.  The major drawback is that it is a proprietary protocol, which is why XML-RPC and JSON-RPC will continue to be supported in the future alongside YAML-RPC.
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
 
-    The information below provides technical information about how the Qorus-specific YAML-RPC protocol is implemented; details which are not normally visible when using the YamlRpcClient class.
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
 
-    Request messages are sent as a YAML-encoded request string as the message body of an HTTP POST message.  The \c "Content-Type" header should be set to \c "application/x-yaml", otherwise there are no special restrictions on the message headers.
+# minimum qore version
+%requires qore >= 0.8.4
+
+# requires the binary yaml module
+%requires yaml >= 0.3
+
+# need mime definitions
+%requires Mime >= 1.0
+
+module YamlRpcClient {
+    version = "1.0";
+    desc = "YamlRpcClient module";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+}
+
+/*  Version History
+    * 2012-05-24 v1.0: David Nichols <david@qore.org>: updated to a user module
+*/
+
+/** @mainpage YamlRpcClient Module
+    
+    @section intro YamlRpcClient Module Introduction
+
+    This module implements client-side support for a proprietary RPC-based protocol using <a href="The Official YAML Web Site">YAML</a> for serialization/deserialization of message data.
+
+    All the functionality in this module is accessible with the @ref YamlRpcClient::YamlRpcClient "YamlRpcClient" class.
+
+    @section YAMLRPC YAML-RPC Protocol Implementation
+
+    YAML-RPC is an HTTP-based RPC protocol; it is not a standard protocol, however it is based on <a href="http://json-rpc.org/wd/JSON-RPC-1-1-WD-20060807.html">JSON-RPC 1.1</a> and similar in approach to <a href="http://xmlrpc.scripting.com/">XML-RPC</a>.
+
+    YAML-RPC has some technical advantages over JSON-RPC and XML-RPC when developing in Qore:
+    - it is relatively fast
+    - it supports the best data serialization for Qore data of all RPC protocols supported by Qore at the moment
+    - it is concise while still being very easy to read.
+
+    The major drawback is that it is a proprietary protocol, which is why Qore will continue to support XML-RPC and JSON-RPC alongside YAML-RPC.
+
+    The information below provides technical information about how this proprietary YAML-RPC protocol is implemented; details which are not normally visible when using the @ref YamlRpcClient::YamlRpcClient "YamlRpcClient" class.
+
+    Request messages are sent as a YAML-encoded request string as the message body of an HTTP POST message.  The \c "Content-Type" header should be set to \c MimeTypeYamlRpc (from Mime.qm), otherwise there are no special restrictions on the message headers.
+
+    Request and response message bodies must always be encoded with UTF-8 encoding.
 
     YAML-RPC request strings are constructed as a simple YAML map with the following keys:
     - \c method: the string method name to call
-    - \c params: any value giving the arguments for the method; if the method takes more than one argument, then the \c "params" key will hold a list of the arguments.   The YamlRpcClient class will always package a single argument in a list.
+    - \c params: any value giving the arguments for the method; if the method takes more than one argument, then the \c "params" key will hold a list of the arguments.  The @ref YamlRpcClient::YamlRpcClient "YamlRpcClient" class will always package a single argument in a list.
 
-    Note that the Qorus YAML-RPC implementation uses the Qore YAML module to encode and decode YAML strings; this ensures maximum data fidelity when serializaing data; note that the Qore yaml module uses the proprietary \c !duration tag for durations, otherwise all other tags are standard YAML tags.  For details on how Qore data is serialized and deserialized by the yaml module, please see the yaml module documentation at <a href="http://qore.org/modules-mainmenu-31/38-yaml-module">yaml module</a>.
+    Note that this YAML-RPC implementation uses the Qore YAML module to encode and decode YAML strings; this ensures maximum data fidelity when serializaing data; note that the Qore yaml module uses the proprietary \c !duration tag for durations, otherwise all other tags are standard YAML tags.  For details on how Qore data is serialized and deserialized by the yaml module, please see the <a href="../../yaml/html/index.html">yaml module documentation</a>.
 
     The following is an example of a simple request message with headers:
     @code
 POST YAML HTTP/1.1
 Content-Type: application/x-yaml;charset=utf-8
 Accept: application/x-yaml
-User-Agent: Qore YAML-RPC Client v0.1
+User-Agent: Qore-YAML-RPC-Client/1.0
 Accept-Encoding: deflate,gzip,bzip2
 Connection: Keep-Alive
 Host: localhost:8001
@@ -32,7 +87,7 @@ Content-Length: 49
 {method: "omq.system.help", params: ["add-user"]}
     @endcode
 
-    @anchor YAMLRPCResult
+    @subsection YAMLRPCResult YAML-RPC Non-Error Responses
 
     Normal (non-error) responses are returned as a YAML map as well with the following key:
     - \c result: a map where the only key is the method name and the value is the value returned by the method.
@@ -41,7 +96,7 @@ Content-Length: 49
     @code
 HTTP/1.1 200 OK
 Content-type: application/x-yaml;charset=utf-8
-Server: Qorus HTTP Server v0.2.9
+Server: Qore-HTTP-Server/0.3.3
 Connection: Keep-Alive
 Date: Mon, 27 Sep 2010 10:34:06 GMT
 Content-Encoding: deflate
@@ -50,7 +105,7 @@ Content-Length: 152
 {result: {omq.system.add-user: {params: "username, password, descriptive_name, role_list, groups", category: "role based access control", maskargs: 1, description: "creates a new RBAC user"}}}
 @endcode
     
-    @anchor YAMLRPCError
+    @subsection YAMLRPCError YAML-RPC Error Responses
 
     Error responses are also returned as a YAML map with a single key, \c error, which is itself a map with the following keys:
     - \c name: always \c "YAMLRPCError"
@@ -62,7 +117,7 @@ Content-Length: 152
     @code
 HTTP/1.1 200 OK
 Content-type: application/x-yaml;charset=utf-8
-Server: Qorus HTTP Server v0.2.9
+Server: Qore-HTTP-Server/0.3.3
 Connection: Keep-Alive
 Date: Mon, 27 Sep 2010 10:38:06 GMT
 Content-Encoding: deflate
@@ -73,34 +128,45 @@ Content-Length: 118
         
 */
 
-# this file is automatically included by the Qorus client library and should not be included directly by Qorus client programs
+#! the %YamlRpcClient namespace holds all public definitions in the %YamlRpcClient module
+public namespace YamlRpcClient;
 
-#! defines a YAML-RPC client class; normally the OMQ::QorusSystemAPIHelper class should be used to communicate with remote Qorus servers instead
-/** The YamlRpcClient class will correctly serialize YAML-RPC messages, send them to the server, deserialize the responses and return a Qore-language data structure for the response.  
+#! defines a YAML-RPC client class
+/** The %YamlRpcClient class will correctly serialize YAML-RPC messages, send them to the server, deserialize the responses and return a Qore-language data structure for the response.  
 
-    YAML-RPC is a proprietary HTTP-based RPC protocol of Qorus Integration Engine; for a description of the YAML-RPC protocol implemented by the YamlRpcClient class, see @ref YAMLRPC "YAML-RPC Protocol Implementation".\n
+    YAML-RPC is a proprietary HTTP-based RPC protocol; for a description of the YAML-RPC protocol implemented by the %YamlRpcClient class, see @ref YAMLRPC.\n
 
     @note subclassed from Qore''s HTTPClient class
-    @note to communicate with Qorus servers, normally the OMQ::QorusSystemAPIHelper class should be used instead.  At the time this documentation was written, Qorus servers are the only servers that can understand this protocol, and the OMQ::QorusSystemAPIHelper class provides a much user-friendlier interface for RPC communication to Qorus servers than this class; the OMQ::QorusSystemAPIHelper class uses this class to communicate if the remote server is new enough to implement this protocol.
   */
-class YamlRpcClient inherits HTTPClient {
+public class YamlRpcClient::YamlRpcClient inherits Qore::HTTPClient {
     #! YAML-RPC Client Version
-    const Version = "0.1";
+    const Version = "1.0";
 
     #! default options for the YamlRpcClient::constructor()
-    const DefaultOptions = ( "protocols" :
-			     ( "yamlrpc"  : ( "port" : 80,  "ssl" : False ),
-			       "yamlrpcs" : ( "port" : 443, "ssl" : True ) ),
-			     "default_path" : "YAML" );
+    const DefaultOptions = (
+        "protocols": (
+            "yamlrpc": (
+                "port": 80,
+                "ssl": False,
+            ),
+            "yamlrpcs": (
+                "port": 443,
+                "ssl": True,
+            ),
+        ),
+        "default_path": "YAML",
+        );
 
-    #! YAML-RPC CLient Version String
-    const VersionString = sprintf("Qore YAML-RPC Client v%s", YamlRpcClient::Version);
+    #! YAML-RPC Client Version String
+    const VersionString = sprintf("Qore-YAML-RPC-Client/%s", YamlRpcClient::Version);
 
     #! default HTTP headers
-    const DefaultHeaders = ( "Content-Type" : "application/x-yaml",
-			     "Accept"       : "application/x-yaml",
-			     "User-Agent"   : YamlRpcClient::VersionString);
-
+    const DefaultHeaders = (
+        "Content-Type": MimeTypeYamlRpc + ";charset=utf-8",
+        "Accept": MimeTypeYamlRpc,
+        "User-Agent": YamlRpcClient::VersionString,
+        );
+    
     private {
 	hash $.headers;
 	int $.flags = YAML::None;
@@ -120,6 +186,9 @@ class YamlRpcClient inherits HTTPClient {
         @param $do_not_connect if \c False (the default), then a connection will be immediately established to the remote server
         */
     constructor(hash $opts = hash(), bool $do_not_connect = False) : HTTPClient(YamlRpcClient::DefaultOptions + $opts) {
+        # unconditionally set the encoding to utf-8
+        $.setEncoding("utf-8");
+
 	if (!$do_not_connect)
 	    $.connect();
 
@@ -138,6 +207,9 @@ class YamlRpcClient inherits HTTPClient {
     /** @param $do_not_connect if \c False (the default), then a connection will be immediately established to the remote server
         */
     constructor(bool $do_not_connect = False) : HTTPClient(YamlRpcClient::DefaultOptions) {
+        # unconditionally set the encoding to utf-8
+        $.setEncoding("utf-8");
+
 	if (!$do_not_connect)
 	    $.connect();
     }
@@ -180,7 +252,7 @@ class YamlRpcClient inherits HTTPClient {
 
     #! makes a method call to the YAML-RPC server using the remaining arguments after the method name as the list of arguments to send
     /** @param $method the remote method to call
-        @return the value returned from the server; if no error occurred, then a hash is returned with a \c result key (see @ref YAMLRPCResult "YAML-RPC Response"), otherwise a hash is returned with an \c error key containing the error information (see @ref YAMLRPCError "YAML-RPC Error")
+        @return the value returned from the server; if no error occurred, then a hash is returned with a \c result key (see @ref YAMLRPCResult), otherwise a hash is returned with an \c error key containing the error information (see @ref YAMLRPCError)
     */
     any call(string $method) {
 	return $.callArgs($method, $argv);
