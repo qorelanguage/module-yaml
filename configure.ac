@@ -278,7 +278,6 @@ AC_ARG_ENABLE([single-compilation-unit],
       esac],
   [enable_single_compilation_unit=yes])
 
-
 AC_ARG_WITH([doxygen],
     [AS_HELP_STRING([--with-doxygen@<:@=PATH@:>@],
                     [path to doxygen binary])],
@@ -300,7 +299,6 @@ fi
 if test -n "${with_doxygen}"; then
    AC_SUBST(DOXYGEN_CMD, $with_doxygen)
 fi
-
 
 AC_ARG_WITH([libyaml],
     [AS_HELP_STRING([--with-libyaml@<:@=DIR@:>@],

@@ -132,7 +132,7 @@ public namespace YamlRpcHandler {
         /** @param auth an authentication object (use new AbstractAuthenticator() for no authentication)
             @param methods a list of hashes with the following keys:
             - \c name: a regular expression to use for matching the method name
-            - \c function: a string (giving a function name to call), a call reference, or a closure to call with the deserialized arguments to the method; the return value will be serialized to YAML-RPC and sent back to the called
+            - \c function: a string (giving a function name to call), a call reference, or a closure to call with the deserialized arguments to the method; the return value will be serialized to YAML-RPC and sent back to the caller
             - \c help: help text for the method
             - \c text: the human-readable name of the method
             - \c logopt: (optional - by convention) log options which can be used by a custom logger (see the getLogMessage parameter)
@@ -162,7 +162,7 @@ public namespace YamlRpcHandler {
 
         #! adds a method to the handler dynamically
         /** @param name a regular expression to use for matching the method name
-            @param func a string (giving a function name to call), a call reference, or a closure to call with the deserialized arguments to the method; the return value will be serialized to YAML-RPC and sent back to the called
+            @param func a string (giving a function name to call), a call reference, or a closure to call with the deserialized arguments to the method; the return value will be serialized to YAML-RPC and sent back to the caller
             @param text the human-readable name of the method
             @param help help text for the method
             @param logopt log options which can be used by a custom logger (see the getLogMessage parameter)

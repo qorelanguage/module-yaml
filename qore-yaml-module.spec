@@ -60,7 +60,7 @@ YAML is a flexible and concise human-readable data serialization format.
 %endif
 
 %package doc
-Summary: Documentation and examples for the Qore YAML module
+Summary: Documentation and examples for the Qore yaml module
 Group: Development/Languages
 
 %description doc

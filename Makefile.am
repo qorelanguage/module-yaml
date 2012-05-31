@@ -57,6 +57,12 @@ docs/yaml/html: $(DOXYFILES)
 	$(QDX) --post docs/yaml/html/*html
 	$(QDX) --post docs/yaml/html/search/*html
 
+docs/mainpage.doxygen: docs/mainpage.doxygen.tmpl
+	$(QDX) -d $< $@
+
+docs/doxyfile: docs/doxyfile.tmpl
+	sed s/__VERSION__/${VERSION}/ $< > $@
+
 doxygen-doc: $(DOXYGEN_OUTPUT)
 
 EXTRA_DIST += $(DOXYGEN_OUTPUT)
@@ -86,9 +92,3 @@ mostlyclean-local:
 
 libtool: $(LIBTOOL_DEPS)
 	$(SHELL) ./config.status --recheck
-
-docs/mainpage.doxygen: docs/mainpage.doxygen.tmpl
-	$(QDX) -d $< $@
-
-docs/doxyfile: docs/doxyfile.tmpl
-	sed s/__VERSION__/${VERSION}/ $< > $@
