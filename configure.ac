@@ -4,7 +4,7 @@
 AC_INIT([qore-yaml-module], [0.3],
         [David Nichols <david@qore.org>],
         [qore-yaml-module])
-AM_INIT_AUTOMAKE([no-dist-gzip dist-bzip2])
+AM_INIT_AUTOMAKE([no-dist-gzip dist-bzip2 tar-ustar])
 AC_CONFIG_HEADER([config.h])
 
 AC_LANG(C++)
