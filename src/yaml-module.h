@@ -258,6 +258,8 @@ public:
    DLLLOCAL int emit(const QoreNumberNode& n) {
       QoreString tmp;
       n.getStringRepresentation(tmp);
+      tmp.concat('n');
+      //printd(5, "yaml emit number: %s\n", tmp.getBuffer());
       return emitScalar(tmp, QORE_YAML_NUMBER_TAG);
    }
 #endif

@@ -164,15 +164,50 @@ static bool onlydigits(const char *str) {
    return true;
 }
 
-static bool is_qore_int(int64& rv, const char* val, size_t len) {
-   unsigned np = (*val == '-' || *val == '+') ? 1 : 0;
+static AbstractQoreNode* try_parse_number(const char* val, size_t len) {
+   bool sign = (*val == '-' || *val == '+');
 
-   if (len > (19 + np) || !onlydigits(val + np))
-      return false;
+   const char* str = val + (int)sign;
+   // only digits flag
+   bool od = true;
+   bool e = false;
+   bool dp = false;
+   while (*str) {
+      if (isdigit(*str)) {
+	 ++str;
+	 continue;
+      }
+#ifdef _QORE_HAS_NUMBER_TYPE
+      if (*str == 'n' && ((size_t)(str - val + 1) == len))
+	 return new QoreNumberNode(val);
+#endif
+      if (od)
+	 od = false;
+      if (*str == '.') {
+	 if (dp)
+	    return 0;
+	 od = true;
+      }
+      else if (*str == 'e' || *str == 'E') {
+	 if (e)
+	    return 0;
+	 e = true;
+      }
+      ++str;
+   }
 
-   errno = 0;
-   rv = strtoll(val, 0, 10);
-   return errno != ERANGE;
+   if (od && (len < 19 
+	      || (len == 19 && !sign 
+		  && ((strcmp(val, "+9223372036854775807") <= 0) || (strcmp(val, "-9223372036854775808") >= 0)))
+	      || (len == 20 && sign
+		  && ((*val == '+' && strcmp(val, "+9223372036854775807") <= 0) || (*val == '-' && strcmp(val, "-9223372036854775808") >= 0))))) {
+      int64 iv = strtoll(val, 0, 10);
+      errno = 0;
+      assert(errno != ERANGE);
+      return new QoreBigIntNode(iv);
+   }
+   
+   return new QoreFloatNode(strtod(val, 0));
 }
 
 AbstractQoreNode *QoreYamlParser::parseScalar(bool favor_string) {
@@ -219,27 +254,11 @@ AbstractQoreNode *QoreYamlParser::parseScalar(bool favor_string) {
 	 }
       }
 
-      {
-	 int64 iv;
-	 if (is_qore_int(iv, val, len))
-	    return new QoreBigIntNode(iv);
-      }
+      AbstractQoreNode* n = try_parse_number(val, len);
+      if (n)
+	 return n;
 
-      double f = strtod(val, 0);
-
-      // assume it's a string if it can't be converted to a number
-      if (!f && len 
-	  && (len != 1 || *val != '0') // check for integer zero
-	  && (len != 3 || val[0] != '0' || val[1] != '.' || val[2] != '0')) // check for float 0
-	 return new QoreStringNode(val, len, QCS_UTF8);
-
-      /**
-      // if the integer value is equal to the fp value (and there's no decimal), then it's an integer
-      if (((double)((int64)f)) == f && !strchr(val, '.')) 
-	 return new QoreBigIntNode((int64)f);
-      */
-
-      return new QoreFloatNode(f);
+      return new QoreStringNode(val, len, QCS_UTF8);
    }
 
    const char *tag = (const char *)event.data.scalar.tag;
