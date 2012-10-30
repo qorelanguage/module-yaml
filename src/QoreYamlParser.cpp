@@ -259,6 +259,10 @@ AbstractQoreNode *QoreYamlParser::parseScalar(bool favor_string) {
       return new QoreFloatNode(strtod(val, 0));
    if (!strcmp(tag, QORE_YAML_DURATION_TAG))
       return new DateTimeNode(val);
+#ifdef _QORE_HAS_NUMBER_TYPE
+   if (!strcmp(tag, QORE_YAML_NUMBER_TAG))
+      return new QoreNumberNode(val);
+#endif
 
    xsink->raiseException(QY_PARSE_ERR, "don't know how to parse scalar tag '%s'", tag);
 

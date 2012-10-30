@@ -54,7 +54,8 @@
 #define YAML_OMAP_TAG "tag:yaml.org,2002:omap"
 #endif
 
-DLLLOCAL extern const char *QORE_YAML_DURATION_TAG;
+DLLLOCAL extern const char* QORE_YAML_DURATION_TAG;
+DLLLOCAL extern const char* QORE_YAML_NUMBER_TAG;
 
 DLLLOCAL extern const char *QY_EMIT_ERR;
 
@@ -253,7 +254,15 @@ public:
       return emitScalar(tmp, YAML_FLOAT_TAG);
    }
 
-   DLLLOCAL int emit(const QoreBoolNode &b) {
+#ifdef _QORE_HAS_NUMBER_TYPE
+   DLLLOCAL int emit(const QoreNumberNode& n) {
+      QoreString tmp;
+      n.getStringRepresentation(tmp);
+      return emitScalar(tmp, QORE_YAML_NUMBER_TAG);
+   }
+#endif
+
+   DLLLOCAL int emit(const QoreBoolNode& b) {
       QoreString tmp;
       tmp.sprintf("%s", b.getValue() ? "true" : "false");
       return emitScalar(tmp, YAML_BOOL_TAG);

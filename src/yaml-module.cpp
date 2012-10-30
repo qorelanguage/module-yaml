@@ -2,7 +2,7 @@
 /*
   yaml Qore module
 
-  Copyright (C) 2010 David Nichols, all rights reserved
+  Copyright (C) 2010 - 2012 David Nichols, all rights reserved
 
   This library is free software; you can redistribute it and/or
   modify it under the terms of the GNU Lesser General Public
@@ -40,7 +40,8 @@ DLLEXPORT qore_license_t qore_module_license = QL_LGPL;
 
 QoreString NullStr("null");
 
-const char *QORE_YAML_DURATION_TAG = "!duration";
+const char* QORE_YAML_DURATION_TAG = "!duration";
+const char* QORE_YAML_NUMBER_TAG = "!number";
 
 yaml_version_directive_t yaml_ver_1_0 = {1, 0}, yaml_ver_1_1 = {1, 1}, yaml_ver_1_2 = {1, 2};
 

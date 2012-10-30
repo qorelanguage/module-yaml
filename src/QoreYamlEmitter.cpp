@@ -55,7 +55,7 @@ QoreYamlEmitter::QoreYamlEmitter(QoreYamlWriteHandler &n_wh, int flags, int widt
    else if (flags & QYE_VER_1_0)
       yaml_ver = &yaml_ver_1_0;
 
-   yaml_emitter_set_output(&emitter, (yaml_write_handler_t *)qore_yaml_write_handler, &wh);   
+   yaml_emitter_set_output(&emitter, (yaml_write_handler_t*)qore_yaml_write_handler, &wh);   
 
    //printd(5, "QoreYamlEmitter::QoreYamlEmitter() indent=%d width=%d\n", indent, width);
    yaml_emitter_set_indent(&emitter, indent);
@@ -65,32 +65,37 @@ QoreYamlEmitter::QoreYamlEmitter(QoreYamlWriteHandler &n_wh, int flags, int widt
       valid = true;   
 }
 
-int QoreYamlEmitter::emit(const AbstractQoreNode *p) {
+int QoreYamlEmitter::emit(const AbstractQoreNode* p) {
    qore_type_t t = get_node_type(p);
    switch (t) {
       case NT_STRING:
-	 return emit(*reinterpret_cast<const QoreStringNode *>(p));
+	 return emit(*reinterpret_cast<const QoreStringNode*>(p));
 
       case NT_INT:
-	 return emit(*reinterpret_cast<const QoreBigIntNode *>(p));
+	 return emit(*reinterpret_cast<const QoreBigIntNode*>(p));
 
       case NT_FLOAT:
-	 return emit(*reinterpret_cast<const QoreFloatNode *>(p));
+	 return emit(*reinterpret_cast<const QoreFloatNode*>(p));
 
       case NT_BOOLEAN:
-	 return emit(*reinterpret_cast<const QoreBoolNode *>(p));
+	 return emit(*reinterpret_cast<const QoreBoolNode*>(p));
 
       case NT_LIST:
-	 return emit(*reinterpret_cast<const QoreListNode *>(p));
+	 return emit(*reinterpret_cast<const QoreListNode*>(p));
 
       case NT_HASH:
-	 return emit(*reinterpret_cast<const QoreHashNode *>(p));
+	 return emit(*reinterpret_cast<const QoreHashNode*>(p));
 
       case NT_DATE:
-	 return emit(*reinterpret_cast<const DateTimeNode *>(p));
+	 return emit(*reinterpret_cast<const DateTimeNode*>(p));
 
       case NT_BINARY:
-	 return emit(*reinterpret_cast<const BinaryNode *>(p));
+	 return emit(*reinterpret_cast<const BinaryNode*>(p));
+
+#ifdef _QORE_HAS_NUMBER_TYPE
+      case NT_NUMBER:
+	 return emit(*reinterpret_cast<const QoreNumberNode*>(p));
+#endif
 
       case NT_NULL:
       case NT_NOTHING:
