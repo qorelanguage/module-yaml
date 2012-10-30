@@ -186,7 +186,7 @@ static AbstractQoreNode* try_parse_number(const char* val, size_t len) {
       if (*str == '.') {
 	 if (dp)
 	    return 0;
-	 od = true;
+	 dp = true;
       }
       else if (*str == 'e' || *str == 'E') {
 	 if (e)
@@ -196,17 +196,26 @@ static AbstractQoreNode* try_parse_number(const char* val, size_t len) {
       ++str;
    }
 
+   //printd(0, "try_parse_number() od: %d len: %d val: %s\n", od, len, val);
+
    if (od && (len < 19 
 	      || (len == 19 && !sign 
-		  && ((strcmp(val, "+9223372036854775807") <= 0) || (strcmp(val, "-9223372036854775808") >= 0)))
+		  && ((strcmp(val, "9223372036854775807") <= 0)))
 	      || (len == 20 && sign
-		  && ((*val == '+' && strcmp(val, "+9223372036854775807") <= 0) || (*val == '-' && strcmp(val, "-9223372036854775808") >= 0))))) {
+		  && ((*val == '+' && strcmp(val, "+9223372036854775807") <= 0)
+		      || (*val == '-' && strcmp(val, "-9223372036854775808") <= 0))))) {
       int64 iv = strtoll(val, 0, 10);
       errno = 0;
       assert(errno != ERANGE);
+      //printd(0, "try_parse_number() returning INT\n");
       return new QoreBigIntNode(iv);
    }
    
+   //printd(0, "try_parse_number() returning FLOAT\n");
+#ifdef _QORE_HAS_NUMBER_TYPE
+   if (od)
+      return new QoreNumberNode(val);
+#endif
    return new QoreFloatNode(strtod(val, 0));
 }
 

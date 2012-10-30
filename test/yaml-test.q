@@ -1,9 +1,12 @@
 #!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
 
 %requires yaml
 
 # the yaml module requires qore 0.8.0+, so we know we have types
 %require-types
+
+%requires qore >= 0.8.6
 
 %exec-class yaml_test
 
@@ -79,8 +82,7 @@ class yaml_test {
 	if ($l !== $d) {
 	    for (my int $i = 0; $i < elements $l; ++$i) {
 		if ($l[$i] !== $d[$i]) {
-		    #printf("ERROR %d: %s != %s\n", $i, dbg_node_info($l[$i]), dbg_node_info($d[$i]));
-		    printf("ERROR %d: %n != %n\n", $i, $l[$i], $d[$i]);
+		    printf("ERROR %d: %y != %y (%s != %s)\n", $i, $l[$i], $d[$i], $l[$i].type(), $d[$i].type());
 		}
 	    }
 	}
