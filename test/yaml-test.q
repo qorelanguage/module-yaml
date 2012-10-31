@@ -11,13 +11,13 @@
 %exec-class yaml_test
 
 # the current libyaml version can only output YAML 1.1
-const opts = 
-    ( "canon"  : "canonical,c",
-      #"yaml10" : "yaml10,o",
-      #"yaml12" : "yaml12,n",
-      "len"    : "length,l=i",
-      "indent" : "indent,i=i",
-      "help"   : "help,h"
+const opts = (
+    "canon"  : "canonical,c",
+    #"yaml10" : "yaml10,o",
+    #"yaml12" : "yaml12,n",
+    "len"    : "length,l=i",
+    "indent" : "indent,i=i",
+    "help"   : "help,h"
     );
 
 const def_len = -1;
@@ -48,25 +48,29 @@ class yaml_test {
 	if (exists $o.indent)
 	    $indent = $o.indent;
 
-	my list $d = (1, "two", 
-		      NOTHING,
-		      0,
-		      0.0,
-		      22,
-		      9223372036854775807,
-		      -9223372036854775807,
-		      2010-05-05T15:35:02.100,
-		      False,
-		      M_PI,
-		      250.192393,
-		      1970-01-01Z,
-		      (hash(), (), "three \"things\""),
-		      P2M3DT10H14u,
-		      now_us(),
-		      binary("hello, how's it going, this is a long string, you know XXXXXXXXXXXXXXXXXXXXXXXX"),
-		      ("a" : 2.0, 
-		       "b" : "hello",
-		       "key" : True)
+	my list $d = (
+            1, "two", 
+            NOTHING,
+            0,
+            0.0,
+            22,
+            9223372036854775807,
+            -9223372036854775807,
+            500n,
+            M_PIn,
+            2.141578291e50n,
+            2010-05-05T15:35:02.100,
+            False,
+            M_PI,
+            250.192393,
+            1970-01-01Z,
+            (hash(), (), "three \"things\""),
+            P2M3DT10H14u,
+            now_us(),
+            binary("hello, how's it going, this is a long string, you know XXXXXXXXXXXXXXXXXXXXXXXX"),
+            ("a" : 2.0, 
+             "b" : "hello",
+             "key" : True)
 	    );
 
 	my string $ystr = makeYAML($d, $opts, $o.len, $o.indent);
@@ -82,7 +86,7 @@ class yaml_test {
 	if ($l !== $d) {
 	    for (my int $i = 0; $i < elements $l; ++$i) {
 		if ($l[$i] !== $d[$i]) {
-		    printf("ERROR %d: %y != %y (%s != %s)\n", $i, $l[$i], $d[$i], $l[$i].type(), $d[$i].type());
+		    printf("ERROR %d: %y != %y (%s != %s)\n", $i, $l[$i], $d[$i], $l[$i].prec(), $d[$i].prec());
 		}
 	    }
 	}

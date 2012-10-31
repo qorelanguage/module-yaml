@@ -154,68 +154,91 @@ static bool is_number(const char *&tv) {
    return true;
 }
 
-static bool onlydigits(const char *str) {
-   while (*str) {
-      if (!isdigit(*str))
-	 return false;
-      ++str;
-   }
+static unsigned is_prec(const char* str, size_t len) {
+   if (*str != '{')
+      return 0;
 
-   return true;
+   const char* p = str + 1;
+   while (isdigit(*p))
+      ++p;
+   if (p == (str + 1) || *p != '}' || (p - str + 1) != len)
+      return 0;
+
+   return (unsigned)atoi(str + 1);
 }
 
+// FIXME: this is still capable of flase positives
 static AbstractQoreNode* try_parse_number(const char* val, size_t len) {
    bool sign = (*val == '-' || *val == '+');
 
    const char* str = val + (int)sign;
    // only digits flag
    bool od = true;
+   // e char flag
    bool e = false;
+   // decimal point flag
    bool dp = false;
+   // plus or minus flag (for exponent)
+   bool pm = false;
    while (*str) {
       if (isdigit(*str)) {
 	 ++str;
 	 continue;
       }
 #ifdef _QORE_HAS_NUMBER_TYPE
-      if (*str == 'n' && ((size_t)(str - val + 1) == len))
-	 return new QoreNumberNode(val);
+      if (*str == 'n') {
+	 if ((size_t)(str - val + 1) == len)
+	    return new QoreNumberNode(val);
+#ifdef _QORE_HAS_NUMBER_CONS_WITH_PREC
+	 else {
+	    unsigned prec = is_prec(str + 1, len - (str - val));
+	    return new QoreNumberNode(val, prec);
+	 }
+      }
+#endif
 #endif
       if (od)
 	 od = false;
       if (*str == '.') {
-	 if (dp)
+	 if (dp || e || pm)
 	    return 0;
 	 dp = true;
       }
       else if (*str == 'e' || *str == 'E') {
-	 if (e)
+	 if (e || pm)
 	    return 0;
 	 e = true;
+      }
+      else if (*str == '+' || *str == '-') {
+	 if (pm || !e)
+	    return 0;
+	 pm = true;
       }
       ++str;
    }
 
    //printd(0, "try_parse_number() od: %d len: %d val: %s\n", od, len, val);
 
-   if (od && (len < 19 
-	      || (len == 19 && !sign 
-		  && ((strcmp(val, "9223372036854775807") <= 0)))
-	      || (len == 20 && sign
-		  && ((*val == '+' && strcmp(val, "+9223372036854775807") <= 0)
-		      || (*val == '-' && strcmp(val, "-9223372036854775808") <= 0))))) {
-      int64 iv = strtoll(val, 0, 10);
-      errno = 0;
-      assert(errno != ERANGE);
-      //printd(0, "try_parse_number() returning INT\n");
-      return new QoreBigIntNode(iv);
-   }
-   
-   //printd(0, "try_parse_number() returning FLOAT\n");
+   if (od) {
+      if ((len < 19 
+	   || (len == 19 && !sign 
+	       && ((strcmp(val, "9223372036854775807") <= 0)))
+	   || (len == 20 && sign
+	       && ((*val == '+' && strcmp(val, "+9223372036854775807") <= 0)
+		   || (*val == '-' && strcmp(val, "-9223372036854775808") <= 0))))) {
+	 int64 iv = strtoll(val, 0, 10);
+	 errno = 0;
+	 assert(errno != ERANGE);
+	 //printd(0, "try_parse_number() returning INT\n");
+	 return new QoreBigIntNode(iv);
+      }
+      //printd(0, "try_parse_number() returning FLOAT\n");
 #ifdef _QORE_HAS_NUMBER_TYPE
-   if (od)
+      // if it is an integer requiring > 64bits, use "number" if possible
       return new QoreNumberNode(val);
 #endif
+   }
+   
    return new QoreFloatNode(strtod(val, 0));
 }
 

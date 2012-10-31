@@ -257,8 +257,15 @@ public:
 #ifdef _QORE_HAS_NUMBER_TYPE
    DLLLOCAL int emit(const QoreNumberNode& n) {
       QoreString tmp;
+#ifdef _QORE_HAS_NUMBER_CONS_WITH_PREC
+      n.toString(tmp, QORE_NF_SCIENTIFIC|QORE_NF_RAW);
+      tmp.concat('n');
+      // append precision
+      tmp.sprintf("{%d}", n.getPrec());
+#else
       n.getStringRepresentation(tmp);
       tmp.concat('n');
+#endif
       //printd(5, "yaml emit number: %s\n", tmp.getBuffer());
       return emitScalar(tmp, QORE_YAML_NUMBER_TAG);
    }
