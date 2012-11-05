@@ -214,6 +214,8 @@ static AbstractQoreNode* try_parse_number(const char* val, size_t len) {
 	    return 0;
 	 pm = true;
       }
+      else
+	 return 0;
       ++str;
    }
 
