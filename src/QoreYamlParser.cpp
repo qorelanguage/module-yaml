@@ -156,6 +156,7 @@ static bool is_number(const char *&tv) {
 }
 
 static unsigned is_prec(const char* str, size_t len) {
+   //printd(5, "is_prec str: '%s' len: %d strlen: %d\n", str, len, strlen(str));
    if (*str != '{')
       return 0;
 
@@ -196,7 +197,6 @@ static AbstractQoreNode* try_parse_number(const char* val, size_t len) {
 #endif
    }
 
-
    const char* str = val + (int)sign;
    // only digits flag
    bool od = true;
@@ -217,8 +217,10 @@ static AbstractQoreNode* try_parse_number(const char* val, size_t len) {
 	    return new QoreNumberNode(val);
 #ifdef _QORE_HAS_NUMBER_CONS_WITH_PREC
 	 else {
-	    unsigned prec = is_prec(str + 1, len - (str - val));
-	    return new QoreNumberNode(val, prec);
+	    unsigned prec = is_prec(str + 1, len - (str - val) - 1);
+	    //printd(5, "%s prec %d\n", val, prec);
+	    if (prec)
+	       return new QoreNumberNode(val, prec);
 	 }
       }
 #endif
@@ -245,7 +247,7 @@ static AbstractQoreNode* try_parse_number(const char* val, size_t len) {
       ++str;
    }
 
-   //printd(0, "try_parse_number() od: %d len: %d val: %s\n", od, len, val);
+   //printd(5, "try_parse_number() od: %d len: %d val: %s\n", od, len, val);
 
    if (od) {
       if ((len < 19 
@@ -257,10 +259,10 @@ static AbstractQoreNode* try_parse_number(const char* val, size_t len) {
 	 int64 iv = strtoll(val, 0, 10);
 	 errno = 0;
 	 assert(errno != ERANGE);
-	 //printd(0, "try_parse_number() returning INT\n");
+	 //printd(5, "try_parse_number() returning INT\n");
 	 return new QoreBigIntNode(iv);
       }
-      //printd(0, "try_parse_number() returning FLOAT\n");
+      //printd(5, "try_parse_number() returning FLOAT\n");
 #ifdef _QORE_HAS_NUMBER_TYPE
       // if it is an integer requiring > 64bits, use "number" if possible
       return new QoreNumberNode(val);

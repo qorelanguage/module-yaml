@@ -91,10 +91,16 @@ class yaml_test {
 	if ($l !== $d) {
 	    for (my int $i = 0; $i < elements $l; ++$i) {
 		if ($l[$i] !== $d[$i]) {
-		    printf("ERROR %d: %y != %y\n", $i, $l[$i], $d[$i]);
+		    printf("ERROR %d: %s != %s\n", $i, $.getValStr($l[$i]), $.getValStr($d[$i]));
 		}
 	    }
 	}
+    }
+
+    string getValStr(any $v) {
+        if ($v.typeCode() == NT_NUMBER)
+            return sprintf("%y (prec %d)", $v, $v.prec());
+        return sprintf("%y", $v);
     }
 
     static usage() {
