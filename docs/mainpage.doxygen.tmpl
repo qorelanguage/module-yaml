@@ -1,10 +1,13 @@
 /** @mainpage %Qore yaml Module
 
+    @tableofcontents
+
     Contents of this documentation:
     - @ref intro
     - @ref functions
     - @ref qore_to_yaml_type_mappings
     - @ref yaml_emitter_option_constants
+    - @ref releasenotes
 
     @section intro Introduction
 
@@ -46,15 +49,32 @@ my any $data = parseYAML($yaml_str);
     Note that all Qore types except objects can be serialized to YAML,
     however \c NULL will be deserialized as \c NOTHING.
 
-    |!QoreType|!YAML Tag|!Qore Example|!YAML Example|!Notes|
-    |int|\c !!int|\c 300|\c 300|direct serialization|
-    |float|\c !!float|\c 3.5|\c 3.5|direct serialization|
-    |string|\c !!str|\c "hello"|\c "hello"|YAML strings are enclosed in double-quotes, and libyaml will perform escaping as necessary to form a proper YAML string|
-    |bool|\c !!bool|\c True|\c true|direct serialization to \c true and \c false|
-    |date (relative)|\c !duration|\c P2M3DT10H14u|\c P2M3DT10H14u|Relative date/time values (durations) are serialized with Qore's <a href="http://en.wikipedia.org/wiki/ISO_8601#Durations">ISO-8601</a>-based format. This tag is a custom tag used only by Qore to store Qore relative date/time values in YAML.|
-    |date (absolute)|\c !!timestamp|\c 2010-05-05T15:35:02.100|\c 2010-05-05T15:35:02.1+02:00|Absolute date/time values are serialized with YAML's <a href="http://yaml.org/type/timestamp.html">timestamp</a> format. Note that qore date/time values without an explicit time zone are assumed to be in the local time zone.  When converting a YAML timestamp to a Qore date, because Qore supports only up to microsecond resolution in date/time values, any digits after microseconds are lost.|
-    |NOTHING|\c !!null|\c NOTHING|\c null|direct serialization|
-    |NULL|\c !!null|\c NULL|\c null|serialization to YAML null, just like \c NOTHING; will be deserialized as \c NOTHING|
-    |list|\c !!seq|\c (1, 2, "three")|\c [1, 2, "three"]|direct serialization|
-    |hash|\c !!map|\c ("key" : 1, "other" : 2.0, "data" : "three")|\c {key: 1, other: 2.0, data: "three"}|direct serialization, although qore will maintain key order as well even though this property is only defined for an ordered map|
+    |!QoreType|!YAML Tag|!Qore Example|!YAML Example|!Notes
+    |int|\c !!int|\c 300|\c 300|direct serialization
+    |float|\c !!float|\c 3.5|\c 3.5|direct serialization; infinity is serialized as <tt>\@inf\@</tt>, "not a number" as <tt>\@nan\@</tt>
+    |number|\c !number|\c 3.5|<tt>3.5n{128}</tt>|String serialization in scientific notation (for brevity) with the number appended with an \c "n"; the number is serialized so that no precision is lost.<br><br>Infinity is serialized as <tt>\@inf\@n{128}</tt>, "not a number" as <tt>\@nan\@n{128}</tt><br><br>The precision is appended to the string in curly brackets (ex: \"1.1n{128}" means the number <tt>1.1</tt> with 128 bits of precision)<br><br>This tag is a custom tag used only by Qore to store Qore relative date/time values in YAML
+    |string|\c !!str|\c "hello"|\c "hello"|YAML strings are enclosed in double-quotes, and libyaml will perform escaping as necessary to form a proper YAML string
+    |bool|\c !!bool|\c True|\c true|direct serialization to \c true and \c false
+    |date (relative)|\c !duration|\c P2M3DT10H14u|\c P2M3DT10H14u|Relative date/time values (durations) are serialized with Qore's <a href="http://en.wikipedia.org/wiki/ISO_8601#Durations">ISO-8601</a>-based format.<br><br>This tag is a custom tag used only by Qore to store Qore relative date/time values in YAML.
+    |date (absolute)|\c !!timestamp|\c 2010-05-05T15:35:02.100|\c 2010-05-05T15:35:02.1+02:00|Absolute date/time values are serialized with YAML's <a href="http://yaml.org/type/timestamp.html">timestamp</a> format.<br><br>Note that qore date/time values without an explicit time zone are assumed to be in the local time zone.<br><br>When converting a YAML timestamp to a Qore date, because Qore supports only up to microsecond resolution in date/time values, any digits after microseconds are lost.
+    |NOTHING|\c !!null|\c NOTHING|\c null|direct serialization
+    |NULL|\c !!null|\c NULL|\c null|serialization to YAML null, just like \c NOTHING; will be deserialized as \c NOTHING.
+    |list|\c !!seq|\c (1, 2, "three")|\c [1, 2, "three"]|direct serialization
+    |hash|\c !!map|\c ("key" : 1, "other" : 2.0, "data" : "three")|\c {key: 1, other: 2.0, data: "three"}|direct serialization, although qore will maintain key order as well even though this property is only defined for an ordered map
+
+    @section releasenotes Release Notes
+
+    @subsection yaml03 yaml Module Version 0.3
+
+    <b>New Features and Bug Fixes</b>
+    - fixed a problem where an exception was not raised with invalid YAML input when parsing, instead NOTHING was returned
+    - fixed a problem deserializing integers; the number was converted to a C++ double (floating-point type) first, causing precision to be lost with large numbers
+    - added support for Qore's new number type when compiled with Qore 0.8.6+
+    - added support for serializing special floating point numbers (nan as <tt>\@nan\@</tt>, inf as <tt>\@inf\@</tt>)
+
+    @subsection yaml02 yaml Module Version 0.2
+
+    <b>New Features and Bug Fixes</b>
+    - fixed a problem with deserializing untagged and not double quoted integer and floating-point 0 and 0.0; they were incorrectly deserialized as strings
+    - added additional information to the exception when a scalar value cannot be serialized (normally this happens when a string has an encoding error)
 */
