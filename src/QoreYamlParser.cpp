@@ -24,6 +24,7 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <errno.h>
+#include <strings.h>
 
 const char *QY_PARSE_ERR = "YAML-PARSER-ERROR";
 
@@ -167,9 +168,34 @@ static unsigned is_prec(const char* str, size_t len) {
    return (unsigned)atoi(str + 1);
 }
 
-// FIXME: this is still capable of flase positives
+// FIXME: this is still capable of false positives
 static AbstractQoreNode* try_parse_number(const char* val, size_t len) {
    bool sign = (*val == '-' || *val == '+');
+
+   // check for @inf@ and @nan@
+   if (!strncasecmp(val + sign, "@nan@", 5) || !strncasecmp(val + sign, "@inf@", 5)) {
+      if (len == (5 + sign)) {
+	 if (val[1 + sign] == 'n' || val[1 + sign] == 'N')
+	    return new QoreFloatNode(strtod("nan", 0));
+	 double d = strtod("inf", 0);
+	 if (*val == '-')
+	    d = -d;
+	 return new QoreFloatNode(d);
+      }
+#ifdef _QORE_HAS_NUMBER_TYPE
+      if (val[5 + sign] == 'n') {
+	 if (len == (6 + sign))
+	    return new QoreNumberNode(val);
+	 else {
+	    unsigned prec = is_prec(val + sign + 6, len - sign - 6);
+	    if (prec)
+	       return new QoreNumberNode(val, prec);
+	 }
+      }
+      return 0;
+#endif
+   }
+
 
    const char* str = val + (int)sign;
    // only digits flag

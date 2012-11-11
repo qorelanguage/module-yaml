@@ -70,7 +70,12 @@ class yaml_test {
             binary("hello, how's it going, this is a long string, you know XXXXXXXXXXXXXXXXXXXXXXXX"),
             ("a" : 2.0, 
              "b" : "hello",
-             "key" : True)
+             "key" : True),
+            @nan@n,
+            @inf@n,
+            -@inf@n,
+            @inf@,
+            -@inf@,
 	    );
 
 	my string $ystr = makeYAML($d, $opts, $o.len, $o.indent);
@@ -86,7 +91,7 @@ class yaml_test {
 	if ($l !== $d) {
 	    for (my int $i = 0; $i < elements $l; ++$i) {
 		if ($l[$i] !== $d[$i]) {
-		    printf("ERROR %d: %y != %y (%s != %s)\n", $i, $l[$i], $d[$i], $l[$i].prec(), $d[$i].prec());
+		    printf("ERROR %d: %y != %y\n", $i, $l[$i], $d[$i]);
 		}
 	    }
 	}

@@ -251,6 +251,15 @@ public:
          tmp.sprintf("%g.0", f.f);
       else
          tmp.sprintf("%.25g", f.f);
+
+      if (tmp == "inf")
+         tmp.set("@inf@");
+      else if (tmp == "-inf")
+         tmp.set("-@inf@");
+      else if (tmp == "nan")
+         tmp.set("@nan@");
+
+      //printd(5, "yaml emit float: %s\n", tmp.getBuffer());
       return emitScalar(tmp, YAML_FLOAT_TAG);
    }
 
@@ -259,7 +268,14 @@ public:
       QoreString tmp;
 #ifdef _QORE_HAS_NUMBER_CONS_WITH_PREC
       n.toString(tmp, QORE_NF_SCIENTIFIC|QORE_NF_RAW);
-      tmp.concat('n');
+      if (tmp == "inf")
+         tmp.set("@inf@n");
+      else if (tmp == "-inf")
+         tmp.set("-@inf@n");
+      else if (tmp == "nan")
+         tmp.set("@nan@n");
+      else
+         tmp.concat('n');
       // append precision
       tmp.sprintf("{%d}", n.getPrec());
 #else
