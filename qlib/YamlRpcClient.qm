@@ -174,7 +174,7 @@ public class YamlRpcClient::YamlRpcClient inherits Qore::HTTPClient {
     }
     
     #! calls the base class HTTPClient constructor, overrides the "protocols" key to "yamlrpc"
-    /** @param $opts valid options are:
+    /** @param opts valid options are:
     - \c url: A string giving the URL to connect to
         - \c default_port: The default port number to connect to if none is given in the URL
         - \c http_version: Either '1.0' or '1.1' for the claimed HTTP protocol version compliancy in outgoing message headers
@@ -183,7 +183,7 @@ public class YamlRpcClient::YamlRpcClient inherits Qore::HTTPClient {
         - \c proxy: The proxy URL for connecting through a proxy
         - \c timeout: The timeout value in milliseconds (also can be a relative date-time value for clarity, ex: 5m)
         - \c connect_timeout: The timeout value in milliseconds for establishing a new socket connection (also can be a relative date-time value for clarity, ex: 30s)
-        @param $do_not_connect if \c False (the default), then a connection will be immediately established to the remote server
+        @param do_not_connect if \c False (the default), then a connection will be immediately established to the remote server
         */
     constructor(hash $opts = hash(), bool $do_not_connect = False) : HTTPClient(YamlRpcClient::DefaultOptions + $opts) {
         # unconditionally set the encoding to utf-8
@@ -204,7 +204,7 @@ public class YamlRpcClient::YamlRpcClient inherits Qore::HTTPClient {
     }
 
     #! simple constructor using default arguments
-    /** @param $do_not_connect if \c False (the default), then a connection will be immediately established to the remote server
+    /** @param do_not_connect if \c False (the default), then a connection will be immediately established to the remote server
         */
     constructor(bool $do_not_connect = False) : HTTPClient(YamlRpcClient::DefaultOptions) {
         # unconditionally set the encoding to utf-8
@@ -215,8 +215,8 @@ public class YamlRpcClient::YamlRpcClient inherits Qore::HTTPClient {
     }
 
     #! makes a call to the YAML-RPC server using the second argument as the list of arguments to send
-    /** @param $method the remote method to call
-        @param $args the argument(s) to the call
+    /** @param method the remote method to call
+        @param args the argument(s) to the call
         @return the value returned from the server; if an error response is returned, an exception is raised
     */
     any callArgs(string $method, any $args) {
@@ -229,9 +229,9 @@ public class YamlRpcClient::YamlRpcClient inherits Qore::HTTPClient {
     }
 
     #! makes a call to the YAML-RPC server using the third argument as the list of arguments to send
-    /** @param $info a reference to a hash with technical information about the call
-        @param $method the remote method to call
-        @param $args the argument(s) to the call
+    /** @param info a reference to a hash with technical information about the call
+        @param method the remote method to call
+        @param args the argument(s) to the call
         @return the value returned from the server; if an error response is returned, an exception is raised
     */
     any callArgsWithInfo(reference $info, string $method, any $args) {
@@ -251,7 +251,7 @@ public class YamlRpcClient::YamlRpcClient inherits Qore::HTTPClient {
     }
 
     #! makes a method call to the YAML-RPC server using the remaining arguments after the method name as the list of arguments to send
-    /** @param $method the remote method to call
+    /** @param method the remote method to call
         @return the value returned from the server; if no error occurred, then a hash is returned with a \c result key (see @ref YAMLRPCResult), otherwise a hash is returned with an \c error key containing the error information (see @ref YAMLRPCError)
     */
     any call(string $method) {
