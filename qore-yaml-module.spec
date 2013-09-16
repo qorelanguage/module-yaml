@@ -1,4 +1,4 @@
-%define mod_ver 0.3
+%define mod_ver 0.4
 %define module_api %(qore --latest-module-api 2>/dev/null)
 %define module_dir %{_libdir}/qore-modules
 
@@ -93,6 +93,9 @@ rm -rf $RPM_BUILD_ROOT
 %doc COPYING README RELEASE-NOTES ChangeLog AUTHORS 
 
 %changelog
+* Thu May 24 2012 David Nichols <david@qore.org> 0.4
+- updated to version 0.4
+
 * Thu May 24 2012 David Nichols <david@qore.org> 0.3
 - updated spec file for qpp/qdx build
 

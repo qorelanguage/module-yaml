@@ -2,7 +2,7 @@
 /*
   yaml Qore module
 
-  Copyright (C) 2010 - 2012 David Nichols, all rights reserved
+  Copyright (C) 2010 - 2013 David Nichols, all rights reserved
 
   This library is free software; you can redistribute it and/or
   modify it under the terms of the GNU Lesser General Public
@@ -117,40 +117,44 @@ int QoreYamlEmitter::emit(const DateTime &d) {
 
    if (d.isRelative()) {
       str.concat('P');
-      if (info.year)
-	 str.sprintf("%dY", info.year);
-      if (info.month)
-	 str.sprintf("%dM", info.month);
-      if (info.day)
-	 str.sprintf("%dD", info.day);
-
-      bool has_t = false;
-
-      if (info.hour) {
-	 str.sprintf("T%dH", info.hour);
-	 has_t = true;
-      }
-      if (info.minute) {
-	 if (!has_t) {
-	    str.concat('T');
+      if (d.hasValue()) {
+	 if (info.year)
+	    str.sprintf("%dY", info.year);
+	 if (info.month)
+	    str.sprintf("%dM", info.month);
+	 if (info.day)
+	    str.sprintf("%dD", info.day);
+	 
+	 bool has_t = false;
+	 
+	 if (info.hour) {
+	    str.sprintf("T%dH", info.hour);
 	    has_t = true;
 	 }
-	 str.sprintf("%dM", info.minute);
-      }
-      if (info.second) {
-	 if (!has_t) {
-	    str.concat('T');
-	    has_t = true;
+	 if (info.minute) {
+	    if (!has_t) {
+	       str.concat('T');
+	       has_t = true;
+	    }
+	    str.sprintf("%dM", info.minute);
 	 }
-	 str.sprintf("%dS", info.second);
-      }
-      if (info.us) {
-	 if (!has_t) {
-	    str.concat('T');
-	    has_t = true;
+	 if (info.second) {
+	    if (!has_t) {
+	       str.concat('T');
+	       has_t = true;
+	    }
+	    str.sprintf("%dS", info.second);
 	 }
-	 str.sprintf("%du", info.us);
+	 if (info.us) {
+	    if (!has_t) {
+	       str.concat('T');
+	       has_t = true;
+	    }
+	    str.sprintf("%du", info.us);
+	 }
       }
+      else
+	 str.concat("0D");
 
       return emitScalar(str, QORE_YAML_DURATION_TAG);
    }
