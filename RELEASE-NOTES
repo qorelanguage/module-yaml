@@ -3,9 +3,11 @@ version 0.4
 ***********
 
 fixed a problem serializing and deserializing 0-length durations; they were serialized as "P" and then deserialized as a string; now they are serialized as "P0D" and deserialized correctly
+enhanced the YamlRpcHandler module for more flexible logging
 
 
 ***********
+>>>>>>> .r6054
 version 0.3
 ***********
 
