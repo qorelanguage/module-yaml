@@ -35,7 +35,7 @@
 %requires HttpServer >= 0.3.3
 
 module YamlRpcHandler {
-    version = "1.0";
+    version = "1.1";
     desc = "YamlRpcHandler module for use with the HttpServer module";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -43,6 +43,7 @@ module YamlRpcHandler {
 
 /*  Version History
     * 2012-05-24 v1.0: David Nichols <david@qore.org>: updated to a user module
+    * 2013-09-24 v1.1: David Nichols <david@qore.org>: added optional log closure to constructor
 */
 
 /** @mainpage YamlRpcHandler Module
@@ -143,8 +144,9 @@ public namespace YamlRpcHandler {
             - \c text: the human-readable name of the method
             - \c logopt: (optional - by convention) log options which can be used by a custom logger (see the getLogMessage parameter)
             @param getLogMessage an optional closure or call reference to be called when an incoming request is received; if this is set then it will be called with the following arguments: a context hash (see HttpServer::AbstractHttpRequestHandler::handleRequest() for a description of the context hash), the method definition as passed in the methods argument to this constructor, and a reference to the arguments in this call
-            @param dbg  this parameter is set to @ref Qore::True "True", then additional information will be logged when errors occur
+            @param dbg this parameter is set to @ref Qore::True "True", then additional information will be logged when errors occur
             @param get_prefix prefix to add to derived methods with GET requests if no "." characters are in the path
+            @param log an optional closure or call reference to be called when logging
 
             @throw YAML-RPC-CONSTRUCTOR-ERROR missing \c "name", \c "function", or \"text" key in method hash, \c "function" key not assigned to a callable value
          */
