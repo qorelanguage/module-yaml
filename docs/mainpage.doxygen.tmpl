@@ -13,7 +13,11 @@
 
     The yaml module provides <a href="http://www.yaml.org">YAML</a> functionality to Qore, allowing qore programs to read and write information in %YAML syntax.
 
-    This module is released under the <a href="http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html">LGPL 2.1</a> and is tagged as such in the module's header (meaning it can be loaded unconditionally regardless of how the Qore library was initialized).
+This module is released under a choice of two licenses:
+    - <a href="http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html">LGPL 2.1</a>
+    - MIT (see COPYING.MIT in the source distribution for more information)
+    .
+    The module is tagged as such in the module's header (meaning it can be loaded unconditionally regardless of how the %Qore library was initialized).
 
     Like all Qore components, the yaml module is thread-safe.
 
@@ -69,6 +73,7 @@ my any $data = parseYAML($yaml_str);
     <b>New Features and Bug Fixes</b>
     - fixed a problem serializing and deserializing 0-length durations; they were serialized as \c "P" and then deserialized as a string; now they are serialized as \c "P0D" and deserialized correctly as a zero-length duration
     - enhanced the YamlRpcHandler module for more flexible logging
+    - added the MIT license as a source license option
 
     @subsection yaml03 yaml Module Version 0.3
 

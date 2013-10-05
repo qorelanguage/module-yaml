@@ -8,7 +8,7 @@ noinst_HEADERS = src/yaml-module.h
 
 USER_MODULES = qlib/YamlRpcClient.qm qlib/YamlRpcHandler.qm
 
-EXTRA_DIST = COPYING ChangeLog AUTHORS README \
+EXTRA_DIST = COPYING.LGPL COPYING.MIT ChangeLog AUTHORS README \
 	RELEASE-NOTES \
 	src/ql_yaml.qpp \
 	test/yaml-test.q \
