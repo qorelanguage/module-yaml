@@ -48,7 +48,7 @@ module YamlRpcHandler {
 
 /** @mainpage YamlRpcHandler Module
 
-    @section intro Introduction
+    @section yamlrpchandlerintro Introduction
 
     This module implements server-side support for a proprietary RPC-based protocol using <a href="http://yaml.org">YAML</a> for serialization/deserialization of message data.
 
