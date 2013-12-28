@@ -31,24 +31,24 @@ QDX = qdx
 DX_CLEANFILES = ${DOXYFILES} $(QLIB_TMP_DOXYFILES)
 
 docs/qlib/Doxyfile.YamlRpcClient: docs/qlib/Doxyfile.tmpl
-	$(QDX) -M=qlib/YamlRpcClient.qm:docs/qlib/YamlRpcClient.qm.dox.h $< $@
+	$(QDX) -M=qlib/YamlRpcClient.qm:qlib/YamlRpcClient.qm.dox.h $< $@
 
 docs/qlib/YamlRpcClient.qm.dox.h: qlib/YamlRpcClient.qm
 	$(QDX) $< $@
 
 docs/YamlRpcClient/html: docs/qlib/YamlRpcClient.qm.dox.h docs/qlib/Doxyfile.YamlRpcClient
-	$(DOXYGEN_CMD) docs/qlib/Doxyfile.YamlRpcClient
+	cd docs; $(DOXYGEN_CMD) qlib/Doxyfile.YamlRpcClient
 	$(QDX) --post docs/YamlRpcClient/html/*html
 	$(QDX) --post docs/YamlRpcClient/html/search/*html
 
 docs/qlib/Doxyfile.YamlRpcHandler: docs/qlib/Doxyfile.tmpl
-	$(QDX) -M=qlib/YamlRpcHandler.qm:docs/qlib/YamlRpcHandler.qm.dox.h $< $@
+	$(QDX) -M=qlib/YamlRpcHandler.qm:qlib/YamlRpcHandler.qm.dox.h $< $@
 
 docs/qlib/YamlRpcHandler.qm.dox.h: qlib/YamlRpcHandler.qm
 	$(QDX) $< $@
 
 docs/YamlRpcHandler/html: docs/qlib/YamlRpcHandler.qm.dox.h docs/qlib/Doxyfile.YamlRpcHandler
-	$(DOXYGEN_CMD) docs/qlib/Doxyfile.YamlRpcHandler
+	cd docs; $(DOXYGEN_CMD) qlib/Doxyfile.YamlRpcHandler
 	$(QDX) --post docs/YamlRpcHandler/html/*html
 	$(QDX) --post docs/YamlRpcHandler/html/search/*html
 
