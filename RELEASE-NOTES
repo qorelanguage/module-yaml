@@ -1,4 +1,11 @@
 ***********
+version 0.5
+***********
+
+YamlRpcHandler module updates: minor error logging updates, updated minimum qore version to 0.8.7 for get_ex_pos()
+
+
+***********
 version 0.4
 ***********
 
@@ -7,7 +14,6 @@ enhanced the YamlRpcHandler module for more flexible logging
 
 
 ***********
->>>>>>> .r6054
 version 0.3
 ***********
 

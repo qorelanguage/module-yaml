@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file YamlRpcHandler.qm @brief YAML-RPC handler class definition for the HttpServer module
 
-/*  YamlRpcHandler.qm Copyright 2012 - 2013 David Nichols
+/*  YamlRpcHandler.qm Copyright (C) 2012 - 2014 David Nichols
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -23,7 +23,7 @@
 */
 
 # minimum qore version
-%requires qore >= 0.8.4
+%requires qore >= 0.8.7
 
 # requires the binary yaml module
 %requires yaml >= 0.3
@@ -35,15 +35,16 @@
 %requires HttpServer >= 0.3.3
 
 module YamlRpcHandler {
-    version = "1.1";
+    version = "1.2";
     desc = "YamlRpcHandler module for use with the HttpServer module";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
 }
 
 /*  Version History
-    * 2012-05-24 v1.0: David Nichols <david@qore.org>: updated to a user module
+    * 2014-03-05 v1.2: David Nichols <david@qore.org>: minor error logging updates, updated minimum qore version to 0.8.7 for get_ex_pos()
     * 2013-09-24 v1.1: David Nichols <david@qore.org>: added optional log closure to constructor
+    * 2012-05-24 v1.0: David Nichols <david@qore.org>: updated to a user module
 */
 
 /** @mainpage YamlRpcHandler Module
@@ -249,7 +250,7 @@ public namespace YamlRpcHandler {
                     $yamlrpc = parseYAML($body);
                 }
                 catch (hash $ex) {
-                    my string $estr = sprintf("%s: %s", $ex.err, $ex.desc);
+                    my string $estr = sprintf("%s: %s: %s", get_ex_pos($ex), $ex.err, $ex.desc);
                     return (
                         "code": 500,
                         "errlog": $estr,
@@ -269,7 +270,7 @@ public namespace YamlRpcHandler {
             catch (hash $ex) {
                 # show complete exception trace if system debug option is enabled
                 my string $str = !$.debug
-                    ? sprintf("%s: %s", $ex.err, $ex.desc)
+                    ? sprintf("%s: %s: %s", get_ex_pos($ex), $ex.err, $ex.desc)
                     : HttpServer::get_exception_string($ex);
                 return ( "code"   : 200,
                          "errlog" : $str,

@@ -1,7 +1,7 @@
 # Process this file with autoconf to produce a configure script.
 
 # AC_PREREQ(2.59)
-AC_INIT([qore-yaml-module], [0.4],
+AC_INIT([qore-yaml-module], [0.5],
         [David Nichols <david@qore.org>],
         [qore-yaml-module])
 AM_INIT_AUTOMAKE([no-dist-gzip dist-bzip2 tar-ustar])
