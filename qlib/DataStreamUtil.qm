@@ -75,7 +75,7 @@ public namespace DataStreamUtil {
     public const DataStreamAccept = "X-DataStream-Accept";
     #@}
 
-    public *code sub ds_get_content_decode_closure(string $ce) {
+    public *code sub ds_get_content_decode_closure(*string $ce) {
         switch ($ce) {
             case "deflate":
             case "x-deflate":
@@ -91,6 +91,21 @@ public namespace DataStreamUtil {
                 return;
         }
         throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize data stream request body; request includes unknown content-encoding %y", $ce);
+    }
+
+    public *code sub ds_get_content_encode_closure(*string $ce) {
+        switch ($ce) {
+            case "deflate":
+                return \compress();
+            case "gzip":
+                return \gzip();
+            case "bzip2":
+                return \bzip2();
+            case "identity":
+            case NOTHING:
+                return;
+        }
+        throw "SERIALIZATION-ERROR", sprintf("cannot serialize data stream request body with unknown content-encoding %y", $ce);
     }
 
     public code sub ds_get_send_closure(code $scb, *code $enc_func) {
