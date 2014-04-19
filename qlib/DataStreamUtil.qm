@@ -139,6 +139,9 @@ public namespace DataStreamUtil {
                     $ct = $h.hdr."content-type";
                     $ce = $h.hdr."content-encoding";
                 }
+
+                # remove any ";charset=utf-8" from the end of the content-type header
+                $ct =~ s/; ?charset=utf-?8$//i;
                 
                 if ($ct != MimeTypeYaml)
                     throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize request body; content-type is: %y; type supported: %y", $ct, MimeTypeYaml);
@@ -172,5 +175,23 @@ public namespace DataStreamUtil {
                 $rcb($h.data);
             }
         };
+    }
+
+    #! sets up HTTP headers for DataStream chunked data transfers
+    /**
+    */
+    public nothing sub ds_set_chunked_headers(reference $hdr, *string $content_encoding) {
+        if (!$hdr."Content-Type")
+            $hdr."Content-Type" = MimeTypeOctetStream;
+
+        if (!$hdr{DataStreamContentType})
+            $hdr{DataStreamContentType} = MimeTypeYaml + ";charset=utf8";
+        else if ($hdr{DataStreamContentType} !~ /; ?charset=utf-?8/i)
+            $hdr{DataStreamContentType} += ";charset=utf8";
+
+        if ($content_encoding)
+            $hdr{DataStreamContentEncoding} = $content_encoding;
+
+        $hdr."Transfer-Encoding" = "chunked";
     }
 }

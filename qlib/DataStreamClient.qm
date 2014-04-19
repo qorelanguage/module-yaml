@@ -136,15 +136,7 @@ $rest.sendRecvDataStream($recv_callback, "GET", "/orders/1");
         sendDataStream(code $scb, string $m, string $path, timeout $timeout_ms = 0, *reference $info, *hash $hdr) {
             $hdr = $.headers + $hdr;
 
-            if (!$hdr."Content-Type")
-                $hdr."Content-Type" = "application/octet-stream";
-
-            # no need to append ";charset=utf8" because the character set is implied to be UTF-8 with DataStream
-            if (!$hdr{DataStreamContentType})
-                $hdr{DataStreamContentType} = $.sih.ct;
-
-            if ($.seh)
-                $hdr{DataStreamContentEncoding} = $.seh.ce;
+            ds_set_chunked_headers(\$hdr, $.seh.ce);
 
             # prepare path
             $.preparePath(\$path);
@@ -155,15 +147,7 @@ $rest.sendRecvDataStream($recv_callback, "GET", "/orders/1");
         sendRecvDataStream(code $scb, code $rcb, string $m, string $path, timeout $timeout_ms = 0, *reference $info, *hash $hdr) {
             $hdr = $.headers + $hdr;
 
-            if (!$hdr."Content-Type")
-                $hdr."Content-Type" = "application/octet-stream";
-
-            # no need to append ";charset=utf8" because the character set is implied to be UTF-8 with DataStream
-            if (!$hdr{DataStreamContentType})
-                $hdr{DataStreamContentType} = $.sih.ct;
-
-            if ($.seh)
-                $hdr{DataStreamContentEncoding} = $.seh.ce;
+            ds_set_chunked_headers(\$hdr, $.seh.ce);
 
             # prepare path
             $.preparePath(\$path);
