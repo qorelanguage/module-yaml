@@ -7,7 +7,7 @@
     - @ref functions
     - @ref qore_to_yaml_type_mappings
     - @ref yaml_emitter_option_constants
-    - @ref releasenotes
+    - @ref yamlreleasenotes
 
     @section yamlintro Introduction
 
@@ -24,6 +24,8 @@ This module is released under a choice of two licenses:
     The underlying %YAML functionality is provided by <a href="http://pyyaml.org/wiki/LibYAML">libyaml</a>.
 
     Also included with the binary yaml module:
+    - <a href="../../DataStreamClient/html/index.html">DataStreamClient user module</a>
+    - <a href="../../DataStreamUtil/html/index.html">DataStreamUtil user module</a>
     - <a href="../../YamlRpcClient/html/index.html">YamlRpcClient user module</a>
     - <a href="../../YamlRpcHandler/html/index.html">YamlRpcHandler user module</a>
 
@@ -66,7 +68,14 @@ my any $data = parseYAML($yaml_str);
     |list|\c !!seq|\c (1, 2, "three")|\c [1, 2, "three"]|direct serialization
     |hash|\c !!map|\c ("key" : 1, "other" : 2.0, "data" : "three")|\c {key: 1, other: 2.0, data: "three"}|direct serialization, although qore will maintain key order as well even though this property is only defined for an ordered map
 
-    @section releasenotes Release Notes
+    @section yamlreleasenotes Release Notes
+
+    @subsection yaml05 yaml Module Version 0.5
+
+    <b>New Features and Bug Fixes</b>
+    - new user modules for DataStream protocol support: YAML-encoded HTTP chunked transfers where each chunk is a unique data entity
+      - <a href="../../DataStreamClient/html/index.html">DataStreamClient user module</a>
+      - <a href="../../DataStreamUtil/html/index.html">DataStreamUtil user module</a>
 
     @subsection yaml04 yaml Module Version 0.4
 

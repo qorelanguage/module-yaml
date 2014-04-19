@@ -1,0 +1,174 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# @file DataStreamClient.qm Qore user module implementing client support for the DataStream protocol: YAML-encoded HTTP chunked transfers where each chunk is a unique data entity
+
+/*  DataStreamClient.qm Copyright (C) 2014 Qore Technologies, sro
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# this module requires Qore 0.8.10 or better
+%requires qore >= 0.8.10
+
+# require type definitions everywhere
+%require-types
+
+# enable all warnings
+%enable-all-warnings
+
+%requires DataStreamUtil
+%requires RestClient
+%requires yaml
+%requires Mime
+
+module DataStreamClient {
+    version = "1.0";
+    desc = "user module implementing client support for the DataStream protocol: YAML-encoded HTTP chunked transfers where each chunk is a unique data entity";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+}
+
+/*  Version History: see docs below
+*/
+
+/** @mainpage DataStreamClient Module
+
+    @tableofcontents
+
+    @section datastreamintro Introduction to the DataStreamClient Module
+
+    The %DataStreamClient module provides client support for the DataStream protocol: YAML-encoded HTTP chunked transfers where each chunk is a unique data entity.
+
+    To use this module, use \c "%requires DataStreamClient" in your code.
+    
+    All the public symbols in the module are defined in the DataStreamClient namespace
+
+    Classes:
+    - @ref DataStreamClient::DataStreamClient "DataStreamClient"
+*/
+
+#! the DataStreamClient namespace contains all the public objects in the DataStream module
+public namespace DataStreamClient {
+    class DataStreamClient inherits RestClient::RestClient {
+        #! calls the base class RestClient constructor and optionally connects to the REST server
+        /** @par Example:
+            @code
+my DataStreamClient $ds(("url": "http://localhost:8001/rest"));
+            @endcode
+
+            @param opts valid options are:
+            - \c url: A string giving the URL to connect to
+            - \c default_port: The default port number to connect to if none is given in the URL
+            - \c http_version: Either '1.0' or '1.1' for the claimed HTTP protocol version compliancy in outgoing message headers
+            - \c default_path: The default path to use for new connections if a path is not otherwise specified in the connection URL
+            - \c max_redirects: The maximum number of redirects before throwing an exception (the default is 5)
+            - \c proxy: The proxy URL for connecting through a proxy
+            - \c timeout: The timeout value in milliseconds (also can be a relative date-time value for clarity, ex: \c 30s)
+            - \c connect_timeout: The timeout value in milliseconds for establishing a new socket connection (also can be a relative date-time value for clarity, ex: \c 20s)
+            @param do_not_connect if \c False (the default), then a connection will be immediately established to the remote server
+
+            @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
+
+            @note the \c data argument to @ref RestClient::RestClient::constructor() "RestClient::constructor()" is set to \c "yaml" automatically
+        */
+        constructor(*hash $opts, *softbool $do_not_connect) : RestClient($opts + ("data": "yaml"), $do_not_connect) {
+        }
+
+        #! sends an HTTP request to the REST server and returns the response in the given callback
+        /** @par Example:
+            @code
+$rest.sendRecvDataStream($recv_callback, "GET", "/orders/1");
+            @endcode
+
+            This method is most suitable for REST requests providing chunked responses.
+
+            @param rcb The receive callback for the data received; first this method is called with a hash of the message headers, and then with any message body; if a chunked HTTP message is received, then the callback is called once for each chunk; when the message has been received, then the receive callback is called with a hash representing any trailer data received in a chunked transfer or NOTHING if the data was received in a normal message body or if there was no trailer data in a chunked transfer. The argument to this callback is always a hash; data calls have the following keys:
+            - \c "data": the string or binary data
+            - \c "chunked": @ref Qore::True "True" if the data was received with chunked transfer encoding, @ref Qore::False "False" if not
+            .
+            Header or trailer data is placed in a hash with the following key:
+            - \c "hdr": this can be assigned to @ref nothing for the trailer hash if the data was not sent chunked or no trailers were included in a chunked message
+            @param m the HTTP method to be used; case is ignored (if not a valid method an \c HTTP-CLIENT-METHOD-ERROR exception is raised)
+            @param path the URI path to add (will be appended to any root path given in the constructor)
+            @param body an optional message body to be included in the request; if a value for this parameter is passed to the method, then the body will be serialized according to the serialization rules set in @ref RestClient::RestClient::constructor() "RestClient::constructor()"
+            @param timeout_ms the timeout in milliseconds for the socket I/O operations; 0 means use the default timeout value
+            @param info an optional reference to a hash that will be used as an output variable giving a hash of request headers and other information about the HTTP request
+            @param hdr any headers to be sent with the request; headers here will override default headers for the object as well
+
+            @throw DESERIALIZATION-ERROR the response body could not be deserialized (unknown \c Content-Type or invalid serialization)
+            @throw HTTP-CLIENT-METHOD-ERROR invalid HTTP method argument passed
+
+            @see
+            - @ref RestClient::RestClient::getSerialization() "RestClient::getSerialization()"
+            - @ref RestClient::RestClient::setSerialization() "RestClient::setSerialization()"
+         */
+        recvDataStream(code $rcb, string $m, string $path, any $body, timeout $timeout_ms = 0, *reference $info, *hash $hdr) {
+            $.prepareMsg(\$body, \$hdr);
+
+            on_exit if (exists $body) {
+                $info += (
+                    "request-body": $body,
+                    "request-serialization": $.ds,
+                    );
+            }
+
+            # prepare path
+            $.preparePath(\$path);
+
+            $.sendWithRecvCallback(ds_get_recv_closure($rcb), $body, $m, $path, $hdr, $timeout_ms, False, \$info);
+        }
+
+        sendDataStream(code $scb, string $m, string $path, timeout $timeout_ms = 0, *reference $info, *hash $hdr) {
+            $hdr = $.headers + $hdr;
+
+            if (!$hdr."Content-Type")
+                $hdr."Content-Type" = "application/octet-stream";
+
+            # no need to append ";charset=utf8" because the character set is implied to be UTF-8 with DataStream
+            if (!$hdr{DataStreamContentType})
+                $hdr{DataStreamContentType} = $.sih.ct;
+
+            if ($.seh)
+                $hdr{DataStreamContentEncoding} = $.seh.ce;
+
+            # prepare path
+            $.preparePath(\$path);
+
+            $.sendWithSendCallback(ds_get_send_closure($scb, $.seh.func), $m, $path, $hdr, $timeout_ms, False, \$info);            
+        }
+
+        sendRecvDataStream(code $scb, code $rcb, string $m, string $path, timeout $timeout_ms = 0, *reference $info, *hash $hdr) {
+            $hdr = $.headers + $hdr;
+
+            if (!$hdr."Content-Type")
+                $hdr."Content-Type" = "application/octet-stream";
+
+            # no need to append ";charset=utf8" because the character set is implied to be UTF-8 with DataStream
+            if (!$hdr{DataStreamContentType})
+                $hdr{DataStreamContentType} = $.sih.ct;
+
+            if ($.seh)
+                $hdr{DataStreamContentEncoding} = $.seh.ce;
+
+            # prepare path
+            $.preparePath(\$path);
+
+            $.sendWithCallbacks(ds_get_send_closure($scb, $.seh.func), ds_get_recv_closure($rcb), $m, $path, $hdr, $timeout_ms, False, \$info);
+        }
+    }
+}

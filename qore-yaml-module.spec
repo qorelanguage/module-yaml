@@ -69,7 +69,7 @@ yaml module.
 
 %files doc
 %defattr(-,root,root,-)
-%doc docs/yaml docs/YamlRpcClient docs/YamlRpcHandler test examples
+%doc docs/yaml docs/YamlRpcClient docs/YamlRpcHandler docs/DataStreamUtil docs/DataStreamClient test examples
 
 %prep
 %setup -q

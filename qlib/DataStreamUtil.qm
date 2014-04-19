@@ -1,0 +1,161 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# @file DataStreamUtil.qm Qore user module implementing support for the DataStream protocol: YAML-encoded HTTP chunked transfers where each chunk is a unique data entity
+
+/*  DataStreamUtil.qm Copyright (C) 2014 Qore Technologies, sro
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# this module requires Qore 0.8.10 or better
+%requires qore >= 0.8.10
+
+# require type definitions everywhere
+%require-types
+
+# enable all warnings
+%enable-all-warnings
+
+%requires yaml
+%requires Mime
+
+module DataStreamUtil {
+    version = "1.0";
+    desc = "user module supporting YAML-encoded HTTP chunked transfers where each chunk is a unique data entity";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+}
+
+/*  Version History: see docs below
+*/
+
+/** @mainpage DataStreamUtil Module
+
+    @tableofcontents
+
+    @section datastreamintro Introduction to the DataStreamUtil Module
+
+    The %DataStreamUtil module provides support for YAML-encoded HTTP chunked transfers where each chunk is a unique data entity
+
+    To use this module, use \c "%requires DataStreamUtil" in your code.
+    
+    All the public symbols in the module are defined in the DataStreamUtil namespace
+
+    Classes:
+*/
+
+#! the DataStreamUtil namespace contains all the public objects in the DataStream module
+public namespace DataStreamUtil {
+    #! @defgroup DataStramHeaders Data Stream Headers
+    /** These are the data stream header values for HTTP chunked transfers where each chunk is encoded separately
+    */
+    #@{
+    #! HTTP header for the data stream content type where each HTTP chunk is encoded/decoded separately
+    public const DataStreamContentType = "X-DataStream-Content-Type";
+
+    #! HTTP header for the data stream content encoding where each HTTP chunk is encoded/decoded separately
+    public const DataStreamContentEncoding = "X-DataStream-Content-Encoding";
+
+    #! HTTP header for the data stream Accept header where each HTTP chunk is encoded/decoded separately
+    public const DataStreamAccept = "X-DataStream-Accept";
+    #@}
+
+    public *code sub ds_get_content_decode_closure(string $ce) {
+        switch ($ce) {
+            case "deflate":
+            case "x-deflate":
+                return \uncompress_to_string();
+            case "gzip":
+            case "x-gzip":
+                return \gunzip_to_string();
+            case "bzip2":
+            case "x-bzip2":
+                return \bunzip2_to_string();
+            case "identity":
+            case NOTHING:
+                return;
+        }
+        throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize data stream request body; request includes unknown content-encoding %y", $ce);
+    }
+
+    public code sub ds_get_send_closure(code $scb, *code $enc_func) {
+        return data sub () {
+            my *any $data = $scb();
+
+            # encode data for sending
+            if (exists $data) {
+                $data = makeYAML($data);
+                if ($enc_func)
+                    $data = $enc_func($data);
+            }
+
+            return $data;
+        };
+    }
+
+    public code sub ds_get_recv_closure(code $rcb) {
+        # decode content encoding closure
+        my *code $dce;
+
+        return sub (hash $h) {
+            # decode data received
+            if ($h.hdr) {
+                # data stream never sends message trailers, so this must be the header
+                # parse content type and optionally any content encoding
+                # we have to handle both chunked and non-chunked messages
+                my *string $ct = $h.hdr{DataStreamContentType.lwr()};
+                my *string $ce = $ct ? $h.hdr{DataStreamContentEncoding.lwr()} : NOTHING;
+                if (!$ct) {
+                    $ct = $h.hdr."content-type";
+                    $ce = $h.hdr."content-encoding";
+                }
+                
+                if ($ct != MimeTypeYaml)
+                    throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize request body; content-type is: %y; type supported: %y", $ct, MimeTypeYaml);
+                
+                $dce = ds_get_content_decode_closure($ce);                        
+                break;
+            }
+            if ($h.data) {
+                switch ($h.data.typeCode()) {
+                    # can be a string if sent in a regular body without content-encoding
+                    case NT_STRING: {
+                        if ($dce)
+                            $h.data = $dce(binary($h.data), "utf8");
+                        $h.data = parseYAML($h.data);
+                        break;
+                    }
+                    # is a binary if sent in a regular body without content-encoding or sent chunked
+                    case NT_BINARY: {
+                        if ($dce)
+                            $h.data = $dce($h.data, "utf8");
+                        else
+                            $h.data = binary_to_string($h.data, "utf8");
+                        $h.data = parseYAML($h.data);
+                        break;
+                    }
+                    default:
+                        throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize request body; body type is %y", $h.data.type());
+                }
+
+                # call data callback
+                $rcb($h.data);
+            }
+        };
+    }
+}
