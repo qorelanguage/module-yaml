@@ -64,7 +64,7 @@ module DataStreamClient {
 
 #! the DataStreamClient namespace contains all the public objects in the DataStream module
 public namespace DataStreamClient {
-    class DataStreamClient inherits RestClient::RestClient {
+    public class DataStreamClient inherits RestClient::RestClient {
         #! calls the base class RestClient constructor and optionally connects to the REST server
         /** @par Example:
             @code
@@ -86,7 +86,7 @@ my DataStreamClient $ds(("url": "http://localhost:8001/rest"));
 
             @note the \c data argument to @ref RestClient::RestClient::constructor() "RestClient::constructor()" is set to \c "yaml" automatically
         */
-        constructor(*hash $opts, *softbool $do_not_connect) : RestClient($opts + ("data": "yaml"), $do_not_connect) {
+        constructor(*hash $opts, *softbool $do_not_connect) : RestClient(("send_encoding": "bzip2") + $opts + ("data": "yaml"), $do_not_connect) {
         }
 
         #! sends an HTTP request to the REST server and returns the response in the given callback
