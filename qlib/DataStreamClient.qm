@@ -50,7 +50,7 @@ module DataStreamClient {
 
     @tableofcontents
 
-    @section datastreamintro Introduction to the DataStreamClient Module
+    @section datastreamclientintro Introduction to the DataStreamClient Module
 
     The %DataStreamClient module provides client support for the @ref datastreamprotocol "DataStream protocol": YAML-encoded HTTP chunked transfers where each chunk is a unique data entity.
 
@@ -60,12 +60,32 @@ module DataStreamClient {
 
     Classes:
     - @ref DataStreamClient::DataStreamClient "DataStreamClient"
+
+    @note Most of the underlying functionality is provided by the @ref datastreamutilintro "DataStreamUtil" module
+
+    @section datastreamclientrelnotes Release Notes
+
+    @subsection datastreamclient_v1_0 DataStreamClient v1.0
+    - initial release of the module
 */
 
-#! the DataStreamClient namespace contains all the public objects in the DataStream module
+#! the DataStreamClient namespace contains all the public objects in the DataStreamClient module
 public namespace DataStreamClient {
     #! this class extends @ref RestClient::RestClient "RestClient" with support for the @ref datastreamprotocol "DataStream protocol" 
     public class DataStreamClient inherits RestClient::RestClient {
+        public {
+            #! DataStreamClient Version
+            const Version = "1.0";
+
+            #! DataStreamClient Version String
+            const VersionString = sprintf("Qore-DataStreamClient/%s", DataStreamClient::Version);
+
+            #! default HTTP headers
+            const DefaultHeaders = RestClient::DefaultHeaders + (
+                "User-Agent": DataStreamClient::VersionString,
+                );
+        }
+
         #! calls the base class RestClient constructor and optionally connects to the REST server
         /** @par Example:
             @code
@@ -88,6 +108,7 @@ my DataStreamClient $ds(("url": "http://localhost:8001/rest"));
             @note the \c data argument to @ref RestClient::RestClient::constructor() "RestClient::constructor()" is set to \c "yaml" automatically
         */
         constructor(*hash $opts, *softbool $do_not_connect) : RestClient(("send_encoding": "bzip2") + $opts + ("data": "yaml"), $do_not_connect) {
+            $.headers = DefaultHeaders + $opts.headers;
         }
 
         #! sends an HTTP request to an HTTP REST server supporting the @ref datastreamprotocol "DataStream protocol" and returns the decoded and deserialized response in the given callback as each HTTP chunk is received
@@ -142,7 +163,7 @@ $rest.recvDataStream($recv_callback, "GET", "/orders/1", $body);
 
             @par Example:
             @code
-my any $response = $rest.sendDataStream($callback, "POST", "/path");
+my hash $h = $rest.sendDataStream($callback, "POST", "/path");
             @endcode
 
             @param scb The callback giving the chunked HTTP data to send; the data returned by this callback will be serialized to YAML and send via the @ref datastreamprotocol "DataStream protocol" to the remote HTTP REST server in HTTP chunked format; when all data has been send then this callback should return @ref nothing, which will close the chunked message and terminate the request
@@ -152,7 +173,7 @@ my any $response = $rest.sendDataStream($callback, "POST", "/path");
             @param info An optional reference to an lvalue that will be used as an output variable giving a hash of request headers and other information about the HTTP request
             @param hdr any headers to be sent with the request; headers here will override default headers for the object as well
 
-            @return The headers received from the HTTP server with all key names converted to lower-case. The message body (if any) will be decoded and deserialized and assigned to the value of the \c "body" key, and the HTTP status will be assigned to the \c "status_code" key.
+            @return The headers received from the HTTP server with all key names converted to lower-case. The message body (if any) will be decoded and deserialized and assigned to the value of the \c "body" key, and the HTTP status will be assigned to the \c "status_code" key.  In the case of a chunked DataStream response, the \c "body" key will be assigned a list where each list element is the data value of the respective DataStream chunk
 
             @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed
             @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote
@@ -169,8 +190,10 @@ my any $response = $rest.sendDataStream($callback, "POST", "/path");
             @note
             - The \c "Transfer-Encoding: chunked" header is automatically set with this method if no \c "Transfer-Encoding" header is already present
             - For possible exceptions when implicitly establishing a connection, see the Socket::connect() method (or Socket::connectSSL() for secure connections)
+            - this method can also be used when the server returns chunked @ref datastreamprotocol "DataStream protocol" data; in this case the chunked response is received in its entirity and returns in the return value's \c "body" key as a list where each list element is the data value of the respective DataStream chunk
+            - the value of the return value's \c "body" key will be decoded and deserialized data
         */
-        any sendDataStream(code $scb, string $method, string $path, timeout $timeout_ms = 0, *reference $info, *hash $hdr) {
+        hash sendDataStream(code $scb, string $method, string $path, timeout $timeout_ms = 0, *reference $info, *hash $hdr) {
             $hdr = $.headers + $hdr;
 
             ds_set_chunked_headers(\$hdr, $.seh.ce, True);
@@ -178,13 +201,46 @@ my any $response = $rest.sendDataStream($callback, "POST", "/path");
             # prepare path
             $.preparePath(\$path);
 
-            my hash $h = $.sendWithSendCallback(ds_get_send($scb, $.seh.func), $method, $path, $hdr, $timeout_ms, False, \$info);
+            /* we cannot just receive standard HTTP chunk data here since any Content-Encoding will not be respected,
+             * and any DataStream content encoding can only be applied to each chunk separately.  Therefore we have
+             * to intercept the chunked messages here to build the respose data and also capture the headers
+             * returned
+             */
 
-            # decode any response body
-            if (exists $h.body)
-                $.decodeResponse(\$h, \$info);
+            # received data
+            my any $rmd;
+            # chunked response flag (determines if $rmd is a list or not)
+            my bool $chunked;
+            # define data callback to build response msg data
+            my code $dcb = sub (any $d) {
+                if (exists $d) {
+                    if ($chunked) {
+                        if (!$rmd)
+                            $rmd = ();
+                        $rmd += $d;
+                    }
+                    else
+                        $rmd = $d;
+                }
+            };
+            # get DataStream receive callback using our local data callback closure
+            my code $dsrcb = ds_get_recv($dcb);
+            # save response header
+            my hash $rhdr;
+            # our top-level receive callback to save the header and set the chunked flag
+            my code $rcb = sub (hash $h) {
+                if ($h.hdr) {
+                    $rhdr = $h.hdr;
+                    if ($h.hdr."transfer-encoding" == "chunked")
+                        $chunked = True;
+                }
+                # call DataStream callback
+                $dsrcb($h);
+            };
 
-            return $h;
+            $.sendWithCallbacks(ds_get_send($scb, $.seh.func), $rcb, $method, $path, $hdr, $timeout_ms, False, \$info);
+
+            return $rhdr + ("body": $rmd);
         }
 
         #! Sends an HTTP request an HTTP REST server supporting the @ref datastreamprotocol "DataStream protocol" with the specified method and serialized and encoded chunked message body as given by a send callback; decoded and deserialized data received from the HTTP server are returned through a receive callback

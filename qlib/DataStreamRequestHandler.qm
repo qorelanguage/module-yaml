@@ -1,0 +1,128 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# @file DataStreamRequestHandler.qm Qore user module implementing client support for the DataStream protocol: YAML-encoded HTTP chunked transfers where each chunk is a unique data entity
+
+/*  DataStreamRequestHandler.qm Copyright (C) 2014 Qore Technologies, sro
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# this module requires Qore 0.8.10 or better
+%requires qore >= 0.8.10
+
+# require type definitions everywhere
+%require-types
+
+# enable all warnings
+%enable-all-warnings
+
+%requires DataStreamUtil
+%requires RestHandler
+%requires yaml
+%requires Mime
+
+module DataStreamRequestHandler {
+    version = "1.0";
+    desc = "user module implementing server support for the DataStream protocol: YAML-encoded HTTP chunked transfers where each chunk is a unique data entity";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+}
+
+/*  Version History: see docs below
+*/
+
+/** @mainpage DataStreamRequestHandler Module
+
+    @tableofcontents
+
+    @section datastreamrequesthandlerintro Introduction to the DataStreamRequestHandler Module
+
+    The %DataStreamRequestHandler module provides server support for the @ref datastreamprotocol "DataStream protocol": YAML-encoded HTTP chunked transfers where each chunk is a unique data entity.
+
+    To use this module, use \c "%requires DataStreamRequestHandler" in your code.
+    
+    All the public symbols in the module are defined in the DataStreamRequestHandler namespace
+
+    Classes:
+    - @ref DataStreamRequestHandler::AbstractDataStreamRequestHandler "AbstractDataStreamRequestHandler"
+
+    @note Most of the underlying functionality is provided by the @ref datastreamutilintro "DataStreamUtil" module
+
+    @section datastreamrequesthandlerrelnotes Release Notes
+
+    @subsection datastreamrequesthandler_v1_0 DataStreamRequestHandler v1.0
+    - initial release of the module
+*/
+
+#! the DataStreamRequestHandler namespace contains all the public objects in the DataStreamRequestHandler module
+public namespace DataStreamRequestHandler {
+    #! this class implements a chunked request handler supporting the @ref datastreamprotocol "DataStream protocol"
+    /** this class must be subclassed and then the @ref recvDataImpl() and @ref sendDataImpl() methods reimplemented
+	to provide data receiving and sending support, respectively.
+     */
+    public class AbstractDataStreamRequestHandler inherits AbstractRestStreamRequestHandler {
+	public {
+	    #! the receive callback as returned by the @ref datastreamutilintro "DataStreamUtil" module
+	    code $.rcb;
+
+	    #! the send callback as returned by the @ref datastreamutilintro "DataStreamUtil" module
+	    code $.scb;
+	}
+
+	#! creates the chunked request handler according to the arguments
+	constructor(hash $cx, *hash $ah) : AbstractRestStreamRequestHandler($cx, $ah) {
+	    $.rcb = ds_get_recv(\$.recvDataImpl());
+	    $.scb = ds_get_send(\$.sendDataImpl(), ds_get_content_encode($.cx.encoding));
+
+	    # setup data stream with header
+	    call_function($.rcb, ("hdr": $cx.hdr, "obj": $cx.socketobject));
+	}
+
+	#! returns the response header to the request
+	hash getResponseHeaderMessageImpl() {
+	    my hash $hdr = (
+		"Content-Type": MimeTypeOctetStream,
+		"Transfer-Encoding": "chunked",
+	        DataStreamContentType: MimeTypeYaml + ";charset=utf8",
+		);
+	    if ($.cx.encoding)
+		$hdr{DataStreamContentEncoding} = $.cx.encoding;
+	    return (
+		"code": 200,
+		"hdr": $hdr,
+		);
+	}
+
+	#! calls the receive callback as returned by the @ref datastreamutilintro "DataStreamUtil" module, which in turn calls @ref recvDataImpl() to deliver deserialized data
+	private nothing recvImpl(hash $v) {
+	    call_function($.rcb, $v);
+	}
+
+	#! calls the send callback as returned by the @ref datastreamutilintro "DataStreamUtil" module, which in turn calls @ref sendDataImpl() to get the data to serialize and encode and send as a response
+	private any sendImpl() {
+	    return call_function($.scb);
+	}
+
+	#! reimplement this method in subclasses to receive decoded and deserialized data; when this method is call with no arguments, it signifies the end of the streamed data transfer
+	abstract nothing recvDataImpl(any $data);
+
+	#! reimplement this method in subclasses to support streamed data transfers; when this method returns no value, it signifies the end of the streamed data transfer
+	abstract any sendDataImpl();
+    }
+}
+
