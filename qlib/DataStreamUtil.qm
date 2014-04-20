@@ -50,13 +50,117 @@ module DataStreamUtil {
 
     @section datastreamintro Introduction to the DataStreamUtil Module
 
-    The %DataStreamUtil module provides support for YAML-encoded HTTP chunked transfers where each chunk is a unique data entity
+    The %DataStreamUtil module provides client and server support for YAML-encoded HTTP chunked transfers where each chunk is a unique data entity; allowing data to be streamed from remote servers and used as soon as it is received.  This module provides client and server support to allow %Qore code to deal with data on the sending and receiving ends by taking care of the encoding and serialization issues to allow the serialized data to be sent with optional data compression over standard HTTP chunked transfers and be usable immediately on receipt on the remote end.
 
     To use this module, use \c "%requires DataStreamUtil" in your code.
     
     All the public symbols in the module are defined in the DataStreamUtil namespace
 
-    Classes:
+    Functions:
+    - @ref DataStreamUtil::ds_get_content_decode() "ds_get_content_decode()": returns a @ref call_reference "call reference" (or @ref nothing) for decoding content encoded data
+    - @ref DataStreamUtil::ds_get_content_encode() "ds_get_content_encode()": returns a @ref call_reference "call reference" (or @ref nothing) for encoding content encoded data
+    - @ref DataStreamUtil::ds_get_send() "ds_get_send()": returns a @ref call_reference "call reference" for serializing and encoding data for sending DataStream chunked data
+    - @ref DataStreamUtil::ds_get_recv() "ds_get_recv()": returns a @ref call_reference "call reference" for decoding and deserializing data for receiving DataStream chunked data
+    - @ref DataStreamUtil::ds_set_chunked_headers() "ds_set_chunked_headers()": sets up HTTP headers for DataStream chunked data transfers
+    - @ref DataStreamUtil::ds_set_non_chunked_headers() "ds_set_non_chunked_headers()": sets up HTTP headers for DataStream non-chunked data transfers
+
+    @section datastreamprotocol DataStream Protocol
+
+    The DataStream protocol is based on HTTP chunked transfers where each chunk contains YAML-serialized data with optional compression and where each chunk is an independently decodable and parsable entity.  This differs from standard HTTP chunked transfers in that content encoding and semantic completeness of a message are defined over the entire message body.  By using DataStream instead of standard HTTP chunked transfer, data can be streamed from one server to another and be usable immediately on receipt on the remote end.
+
+    A DataStream transfer involves at least one chunked transfer; either the request or the reply must be sent with chunked transfer encoding to have the DataStream protocol applied.  Non-chunked, monolithic requests and responses are also supported, but in these cases standard HTTP encoding and decoding rules are applied.
+
+    DataStream runs over HTTP and uses standard HTTP features such as custom headers to identify the data serialization, character encoding, and content encoding applied to each chunk.  DataStream is currently defined using YAML for data serialization, but was designed to be extensible for future use with other data serialization methods
+
+    @subsection datastreamprocotolrequests DataStream Request Headers
+
+    @subsubsection datastreamprocotolrequests DataStream Chunked Request Headers
+
+    The following headers are set with DataStream chunked requests:\n
+    <b>DataStream Chunked Request Headers</b>
+    |!Header|!Value|!Description
+    |\c Content-Type|\c application/octet-stream|This is to make the chunked data opaque to the standard HTTP protocol since the semantic completeness of the message body is not defined over the entire body but rather over each chunk 
+    |\c Accept|<tt>text/x-yaml,application/octet-stream</tt>|other media types may be acceptible, but at least these should be included:\n - \c "text/x-yaml": this must be included in case a non-chunked response is returned\n - \c "application/octet-stream": this must be included in case of a DataStream chunked response
+    |\c Accept-Encoding|<tt>bzip2,gzip,deflate</tt>|declares the content encoding methods supported by the sender
+    |\c X-DataStream-Content-Type|<tt>text/x-yaml;charset=utf8</tt>|identifies the content type of each chunk as YAML-encoded data
+    |\c X-DataStream-Accept|\c text/x-yaml|indicates that the requestor can accept DataStream responses
+    |\c X-DataStream-Accept-Encoding|<tt>bzip2,gzip,deflate</tt>|declares the DataStream content encoding methods supported by the sender
+    |[\c X-DataStream-Content-Encoding]|one of <tt>bzip2, gzip, or deflate</tt>|this header is optional; only included if DataStream data compression is used in the request body
+    |\c Transfer-Encoding|\c chunked|required for HTTP chunked transfers
+
+    @note \c "Content-Encoding" and \c "Content-Length" headers MUST NOT be included in DataStream chunked transfers
+
+    The following headers are set with DataStream non-chunked requests:\n
+    <b>DataStream Non-Chunked Request Headers</b>
+    |!Header|!Value|!Description
+    |\c Accept|<tt>text/x-yaml,application/octet-stream</tt>|other media types may be acceptible, but at least these should be included:\n - \c "text/x-yaml": this must be included in case a non-chunked response is returned\n - \c "application/octet-stream": this must be included in case of a DataStream chunked response
+    |\c Accept-Encoding|<tt>bzip2,gzip,deflate</tt>|declares the content encoding methods supported by the sender
+    |\c X-DataStream-Accept|\c text/x-yaml|indicates that the requestor can accept DataStream responses; the server may still reply with a non-chunked response
+    |\c X-DataStream-Accept-Encoding|<tt>bzip2,gzip,deflate</tt>|declares the DataStream content encoding methods supported by the sender
+    |[\c Content-Type]|<tt>text/x-yaml;charset=utf8</tt>|Required only in requests with a message body; this reflects the content type of the body as YAML encoded data
+    |[\c Content-Encoding]|one of <tt>bzip2, gzip, or deflate</tt>|this header is optional; only included if data compression is used in the request body
+    |[\c Content-Length]|number|This header is required in non-chunked requests with a message body
+
+    @subsection datastreamprocotolresponses DataStream Response Headers
+
+    The following headers are set with DataStream chunked responses:\n
+    <b>DataStream Chunked Response Headers</b>
+    |\c Content-Type|\c application/octet-stream|This is to make the chunked data opaque to the standard HTTP protocol since the semantic completeness of the message body is not defined over the entire body but rather over each chunk
+    |\c X-DataStream-Content-Type|\c text/x-yaml;charset=utf8|identifies the content type of each chunk as YAML-encoded data
+    |\c X-DataStream-Content-Encoding|one of <tt>bzip2, gzip, or deflate</tt>|this header is optional; only included if DataStream data compression is used in the response
+    |\c Transfer-Encoding|\c chunked|required for HTTP chunked transfers
+
+    @note \c "Content-Encoding" and \c "Content-Length" headers MUST NOT be included in DataStream chunked transfers
+
+    The following headers are set with DataStream non-chunked responses:\n
+    <b>DataStream Non-Chunked Response Headers</b>
+    |\c Content-Type|<tt>text/x-yaml;charset=utf8</tt>|Required in responses with a message body; this reflects the content type of the body as YAML encoded data
+    |\c Content-Length|number|this header is included in non-chunked responses with a message body
+    |[\c Content-Encoding]|one of <tt>bzip2, gzip, or deflate</tt>|this header is optional; only included if data compression is used in the response body
+
+    @subsection datastreamprotocolcompression DataStream Compression
+
+    Compression is supported by compressing each chunk individually before sending and decompressing each chunk immediately after reception; this differs from standard HTTP content encoding which is applied to the message body as a whole.
+
+    Data compression is identified in a DataStream transfer by the following header:
+    - \c "X-DataStream-Content-Encoding": set to one of \c "bzip2", \c "gzip", or \c "deflate" if data compression is used
+
+    DataStream server implementations must support at least the above content encoding methods.
+
+    @see <a href="http://tools.ietf.org/html/rfc2616">RFC-2616</a>
+
+    @subsection datastreamrequestexample Example DataStream Request
+    @verbatim
+PUT /api/system?action=dataStream HTTP/1.1
+Accept: text/x-yaml,application/x-yaml,text/xml,application/xml,application/json,application/octet-stream
+User-Agent: Qore-RestClient/1.2
+Content-Type: application/octet-stream
+X-DataStream-Content-Type: text/x-yaml;charset=utf8
+X-DataStream-Accept: text/x-yaml
+X-DataStream-Accept-Encoding: bzip2,gzip,deflate
+X-DataStream-Content-Encoding: bzip2
+Transfer-Encoding: chunked
+Accept-Encoding: bzip2,gzip,deflate
+Connection: Keep-Alive
+Host: localhost:8001
+    @endverbatim
+
+    @subsection datastreamresponseexample Example DataStream Response
+    @verbatim
+HTTP/1.1 200 OK
+Content-Type: application/octet-stream
+Transfer-Encoding: chunked
+X-Datastream-Content-Type: text/x-yaml;charset=utf8
+X-Datastream-Content-Encoding: bzip2
+Connection: Keep-Alive
+Date: Sun, 20 Apr 2014 07:49:51 GMT
+Server: Qorus-HTTP-Server/0.3.7
+    @endverbatim
+
+    @section datastreamutilrelnotes Release Notes
+
+    @subsection datastreamutil_v1_0 DataStreamUtil v1.0
+    - initial release of the module
 */
 
 #! the DataStreamUtil namespace contains all the public objects in the DataStream module
@@ -65,17 +169,38 @@ public namespace DataStreamUtil {
     /** These are the data stream header values for HTTP chunked transfers where each chunk is encoded separately
     */
     #@{
-    #! HTTP header for the data stream content type where each HTTP chunk is encoded/decoded separately
+    #! HTTP header for the data stream Content-Type header equivalent where each HTTP chunk is encoded/decoded separately
     public const DataStreamContentType = "X-DataStream-Content-Type";
 
-    #! HTTP header for the data stream content encoding where each HTTP chunk is encoded/decoded separately
+    #! HTTP header for the data stream Content-Encoding header equivalent where each HTTP chunk is encoded/decoded separately
     public const DataStreamContentEncoding = "X-DataStream-Content-Encoding";
 
-    #! HTTP header for the data stream Accept header where each HTTP chunk is encoded/decoded separately
+    #! HTTP header for the data stream Accept header equivalent where each HTTP chunk is encoded/decoded separately
     public const DataStreamAccept = "X-DataStream-Accept";
+
+    #! HTTP header for the data stream Accept-Encoding header equivalent where each HTTP chunk is encoded/decoded separately
+    public const DataStreamAcceptEncoding = "X-DataStream-Accept-Encoding";
     #@}
 
-    public *code sub ds_get_content_decode_closure(*string $ce) {
+    #! returns a @ref call_reference "call reference" (or @ref nothing) based on an optional \c "Content-Encoding" header value for decoding HTTP encoded data
+    /** @par Example:
+        @code
+my *code $decode = ds_get_content_decode($hdr."content-encoding");
+        @endcode
+
+        The following \c "Content-Encoding" values are recognized:
+        - \c "deflate", \c "x-deflate": returns a call reference to @ref Qore::uncompress_to_string() "uncompress_to_string()"
+        - \c "gzip", \c "x-gzip": returns a call reference to @ref Qore::gunzip_to_string() "gunzip_to_string()"
+        - \c "bzip2", \c "x-bzip2": returns a call reference to @ref Qore::bunzip2_to_string() "bunzip2_to_string()"
+        - \c "identity", @ref nothing: returns @ref nothing
+
+        @return a @ref call_reference "call reference" (or @ref nothing) based on an optional \c "Content-Encoding" header value for decoding HTTP encoded data
+
+        @throw DESERIALIZATION-ERROR this exception is thrown if the content encoding is not recognized
+
+        @note HTTP headers in requests are converted to lower-case only on receipt
+    */
+    public *code sub ds_get_content_decode(*string $ce) {
         switch ($ce) {
             case "deflate":
             case "x-deflate":
@@ -93,7 +218,23 @@ public namespace DataStreamUtil {
         throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize data stream request body; request includes unknown content-encoding %y", $ce);
     }
 
-    public *code sub ds_get_content_encode_closure(*string $ce) {
+    #! returns a @ref call_reference "call reference" (or @ref nothing) based on an optional \c "Content-Encoding" header value for encoding HTTP encoded data
+    /** @par Example:
+        @code
+my *code $decode = ds_get_content_encode("bzip2");
+        @endcode
+
+        The following \c "Content-Encoding" values are recognized:
+        - \c "deflate": returns a call reference to @ref Qore::compress() "compress()"
+        - \c "gzip": returns a call reference to @ref Qore::gzip() "gzip()"
+        - \c "bzip2": returns a call reference to @ref Qore::bzip2() "bzip2()"
+        - \c "identity", @ref nothing: returns @ref nothing
+
+        @return a @ref call_reference "call reference" (or @ref nothing) based on an optional \c "Content-Encoding" header value for encoding HTTP encoded data
+
+        @throw SERIALIZATION-ERROR this exception is thrown if the content encoding is not recognized
+    */
+    public *code sub ds_get_content_encode(*string $ce) {
         switch ($ce) {
             case "deflate":
                 return \compress();
@@ -108,7 +249,24 @@ public namespace DataStreamUtil {
         throw "SERIALIZATION-ERROR", sprintf("cannot serialize data stream request body with unknown content-encoding %y", $ce);
     }
 
-    public code sub ds_get_send_closure(code $scb, *code $enc_func) {
+    #! returns a @ref call_reference "call reference" useful for sending HTTP chunked data with %Qore methods taking send callbacks; data is encoded with YAML and optionally a @ref ds_get_content_encode "content encoding" @ref call_reference "call reference" or @ref closure "closure"
+    /** @par Example:
+        @code
+$httpclient.sendWithSendCallback(ds_get_send($scb, $enc_func), $method, $path, $hdr, $timeout_ms, False, \$info);            
+        @endcode
+
+        @param scb the send data callback that should return data for sending
+        @param enc_func an optional @ref call_reference "call reference" or @ref closure "closure" for performing content encoding after YAML serialization; see @ref ds_get_content_encode()
+
+        @return a @ref call_reference "call reference" useful for sending HTTP chunked data with %Qore methods taking send callbacks; data is encoded with YAML and optionally a @ref ds_get_content_encode "content encoding" @ref call_reference "call reference" or @ref closure "closure"; the return value of this function is design to be used as the send callback parameter \a scb in the following methods:
+        - @ref Qore::HTTPClient::sendWithSendCallback() "HTTPClient::sendWithSendCallback()"
+        - @ref Qore::HTTPClient::sendWithCallbacks() "HTTPClient::sendWithCallbacks()"
+        - @ref Qore::Socket::sendHTTPMessageWithCallback() "Socket::sendHTTPMessageWithCallback()"
+        - @ref Qore::Socket::sendHTTPResponseWithCallback() "Socket::sendHTTPResponseWithCallback()"
+
+        @note if using content encoding; the appropriate \c "X-DataStream-Content-Encoding" header will be added by @ref ds_set_chunked_headers() if the \a content_encoding argument is used
+    */
+    public code sub ds_get_send(code $scb, *code $enc_func) {
         return *data sub () {
             my *any $data = $scb();
 
@@ -123,8 +281,24 @@ public namespace DataStreamUtil {
         };
     }
 
-    public code sub ds_get_recv_closure(code $rcb) {
-        # decode content encoding closure
+    #! returns a @ref call_reference "call reference" useful for receiving HTTP chunked data with %Qore methods taking receive callbacks; YAML data is deserialized and passed as %Qore data to the given callback argument
+    /** @par Example:
+        @code
+$httpclient.sendWithRecvCallback(ds_get_recv($rcb), $body, $method, $path, $hdr, $timeout_ms, False, \$info);
+        @endcode
+
+        @param rcb the data callback; this is called once for each deserialized chunked transfer from the remote end with the deserialized data, and then once with @ref nothing when all data has been received
+
+        @return a @ref call_reference "call reference" useful for receiving HTTP chunked data with %Qore methods taking receive callbacks; when HTTP headers are received, the closure sets up content decoding by calling @ref ds_get_content_decode() on the \c "Content-Encoding" or "X-DataStream-Content-Encoding" header values; when raw chunked data is received, first the chunked body is decoded (if content encoding was indicated in the message headers), then YAML data is deserialized and passed as %Qore data to the given callback argument; the return value of this function is design to be used as the receive callback parameter \a rcb in the following methods:
+      - @ref Qore::HTTPClient::sendWithRecvCallback() "HTTPClient::sendWithRecvCallback()"
+      - @ref Qore::HTTPClient::sendWithCallbacks() "HTTPClient::sendWithCallbacks()"
+      - @ref Qore::Socket::readHTTPChunkedBodyBinaryWithCallback() "Socket::readHTTPChunkedBodyBinaryWithCallback()"
+      - @ref Qore::Socket::readHTTPChunkedBodyWithCallback() "Socket::readHTTPChunkedBodyWithCallback()"
+
+        @note the callback returned here can throw a \c "DESERIALIZATION-ERROR" if the header's \c "Content-Type" or "X-DataStream-Content-Type" is not \c "text/yaml" or the \c "Content-Encoding" or \c "X-DataStream-Content-Encoding" headers give unrecognized content encodings.
+    */
+    public code sub ds_get_recv(code $rcb) {
+        # decode content encoding call reference
         my *code $dce;
 
         return sub (hash $h) {
@@ -148,31 +322,33 @@ public namespace DataStreamUtil {
 
                 $h.obj.setEncoding("utf8");
                 
-                $dce = ds_get_content_decode_closure($ce);                        
+                $dce = ds_get_content_decode($ce);                        
                 break;
             }
-            if ($h.data) {
-                switch ($h.data.typeCode()) {
-                    # can be a string if sent in a regular body without content-encoding
-                    case NT_STRING: {
-                        if ($dce)
-                            $h.data = $dce(binary($h.data), "utf8");
-                        else if ($h.data.encoding() != "UTF-8")
-                            $h.data = force_encoding($h.data, "utf8").
-                        $h.data = parseYAML($h.data);
-                        break;
+            if (exists $h.data) {
+                if (!$h.deserialized) {
+                    switch ($h.data.typeCode()) {
+                        # can be a string if sent in a regular body without content-encoding
+                        case NT_STRING: {
+                            if ($dce)
+                                $h.data = $dce(binary($h.data), "utf8");
+                            else if ($h.data.encoding() != "UTF-8")
+                                $h.data = force_encoding($h.data, "utf8"); # XXX FIXME: change ";" to "." and debug module dep issues
+                            $h.data = parseYAML($h.data);
+                            break;
+                        }
+                        # is a binary if sent in a regular body without content-encoding or sent chunked
+                        case NT_BINARY: {
+                            if ($dce)
+                                $h.data = $dce($h.data, "utf8");
+                            else
+                                $h.data = binary_to_string($h.data, "utf8");
+                            $h.data = parseYAML($h.data);
+                            break;
+                        }
+                        default:
+                            throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize request body; body type is %y", $h.data.type());
                     }
-                    # is a binary if sent in a regular body without content-encoding or sent chunked
-                    case NT_BINARY: {
-                        if ($dce)
-                            $h.data = $dce($h.data, "utf8");
-                        else
-                            $h.data = binary_to_string($h.data, "utf8");
-                        $h.data = parseYAML($h.data);
-                        break;
-                    }
-                    default:
-                        throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize request body; body type is %y", $h.data.type());
                 }
 
                 # call data callback
@@ -182,9 +358,24 @@ public namespace DataStreamUtil {
     }
 
     #! sets up HTTP headers for DataStream chunked data transfers
-    /**
+    /** @par Example:
+        @code
+ds_set_chunked_headers(\$hdr, "bzip");
+        @endcode
+
+        @param hdr a reference to a hash of message headers when sending chunked DataStream data; the following headers are set:
+        - \c "Content-Type: application/octet-stream" (set if header not already present in hash)
+        - \c "X-DataStream-Content-Type: text/x-yaml;charset=utf8" (set if header not already present in hash)
+        - \c "X-DataStream-Content-Encoding": set to the \c content_encoding argument, if present
+        - \c "Transfer-Encoding: chunked"
+        .
+        For requests, the following headers are processed:
+        - \c "Accept: text/x-yaml,application/octet-stream" (set if header not already present in hash)
+        - \c "X-DataStream-Accept: text/x-yaml" (set if header not already present in hash)
+        @param content_encoding an optional string giving the \c "X-DataStream-Content-Encoding" header to set (must be a recognized content encoding as recognized by @ref ds_get_content_encode())
+        @param req set to @ref Qore::True "True" if the headers are required for a request
     */
-    public nothing sub ds_set_chunked_headers(reference $hdr, *string $content_encoding) {
+    public nothing sub ds_set_chunked_headers(reference $hdr, *string $content_encoding, *softbool $req) {
         if (!$hdr."Content-Type")
             $hdr."Content-Type" = MimeTypeOctetStream;
 
@@ -193,9 +384,79 @@ public namespace DataStreamUtil {
         else if ($hdr{DataStreamContentType} !~ /; ?charset=utf-?8/i)
             $hdr{DataStreamContentType} += ";charset=utf8";
 
+        if ($req)
+            ds_do_request_headers(\$hdr);
+
         if ($content_encoding)
             $hdr{DataStreamContentEncoding} = $content_encoding;
 
         $hdr."Transfer-Encoding" = "chunked";
+    }
+
+    #! sets up HTTP headers for DataStream non-chunked data transfers
+    /** @par Example:
+        @code
+ds_set_non_chunked_headers(\$hdr, "bzip");
+        @endcode
+
+        @param hdr a reference to a hash of message headers when sending chunked DataStream data; the following headers are set:
+        - \c "Content-Type: text/x-yaml" (set if header not already present in hash)
+        .
+        For requests, the following headers are processed:
+        - \c "Accept: text/x-yaml,application/octet-stream" (set if header not already present in hash)
+        - \c "X-DataStream-Accept: text/x-yaml" (set if header not already present in hash)
+        @param content_encoding an optional string giving the \c "Content-Encoding" header to set (must be a recognized content encoding as recognized by @ref ds_get_content_encode())
+        @param req set to @ref Qore::True "True" if the headers are required for a request
+    */
+    public nothing sub ds_set_non_chunked_headers(reference $hdr, *string $content_encoding, *softbool $req) {
+        if (!$hdr."Content-Type")
+            $hdr."Content-Type" = MimeTypeYaml + ";charset=utf8";
+        else if ($hdr."Content-Type" !~ /; ?charset=utf-?8/i)
+            $hdr."Content-Type" += ";charset=utf8";
+
+        if ($req)
+            ds_do_request_headers(\$hdr);
+
+        if ($content_encoding)
+            $hdr."Content-Encoding" = $content_encoding;
+    }
+}
+
+# private namespace for non-exported definitions
+namespace DataStreamUtilPrivate {
+    # private function
+    sub ds_do_request_headers(reference $hdr) {
+        if ($hdr.Accept) {
+            if ($hdr.Accept !~ /text\/x-yaml/)
+                $hdr.Accept += "," + MimeTypeYaml;
+            if ($hdr.Accept !~ /application\/octet-stream/)
+                $hdr.Accept += "," + MimeTypeOctetStream;
+        }
+        else
+            $hdr.Accept = MimeTypeYaml + "," + MimeTypeOctetStream;
+
+        if ($hdr."Accept-Encoding") {
+            if ($hdr."Accept-Encoding" !~ /bzip2/)
+                $hdr."Accept-Encoding" += ",bzip2";
+            if ($hdr."Accept-Encoding" !~ /gzip/)
+                $hdr."Accept-Encoding" += ",gzip";
+            if ($hdr."Accept-Encoding" !~ /deflate/)
+                $hdr."Accept-Encoding" += ",deflate";
+        }
+        else
+            $hdr."Accept-Encoding" = "bzip2,gzip,deflate";
+
+        if (!$hdr{DataStreamAccept})
+            $hdr{DataStreamAccept} = MimeTypeYaml;
+        if ($hdr{DataStreamAcceptEncoding}) {
+            if ($hdr{DataStreamAcceptEncoding} !~ /bzip2/)
+                $hdr{DataStreamAcceptEncoding} += ",bzip2";
+            if ($hdr{DataStreamAcceptEncoding} !~ /gzip/)
+                $hdr{DataStreamAcceptEncoding} += ",gzip";
+            if ($hdr{DataStreamAcceptEncoding} !~ /deflate/)
+                $hdr{DataStreamAcceptEncoding} += ",deflate";
+        }
+        else
+            $hdr{DataStreamAcceptEncoding} = "bzip2,gzip,deflate";
     }
 }
