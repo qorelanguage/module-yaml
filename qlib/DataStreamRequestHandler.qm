@@ -95,13 +95,8 @@ public namespace DataStreamRequestHandler {
 
 	#! returns the response header to the request
 	hash getResponseHeaderMessageImpl() {
-	    my hash $hdr = (
-		"Content-Type": MimeTypeOctetStream,
-		"Transfer-Encoding": "chunked",
-	        DataStreamContentType: MimeTypeYaml + ";charset=utf8",
-		);
-	    if ($.cx.encoding)
-		$hdr{DataStreamContentEncoding} = $.cx.encoding;
+	    my hash $hdr;
+	    ds_set_chunked_headers(\$hdr, $.cx.encoding);
 	    return (
 		"code": 200,
 		"hdr": $hdr,
@@ -119,9 +114,13 @@ public namespace DataStreamRequestHandler {
 	}
 
 	#! reimplement this method in subclasses to receive decoded and deserialized data; when this method is call with no arguments, it signifies the end of the streamed data transfer
+	/** @param data the argument passed to this callback is the decoded and deserialized data in the message or, when the chunked transfer has completed; a call is made to this callback with no arguments to signal the end of the chunked data
+	*/
 	private abstract nothing recvDataImpl(any $data);
 
 	#! reimplement this method in subclasses to support streamed data transfers; when this method returns no value, it signifies the end of the streamed data transfer
+	/** @return the data returned by this callback will be serialized to YAML and send via the @ref datastreamprotocol "DataStream protocol" to the remote HTTP REST server in HTTP chunked format; when all data has been send then this callback should return @ref nothing, which will close the chunked message and terminate the request
+	*/
 	private abstract any sendDataImpl();
     }
 }
