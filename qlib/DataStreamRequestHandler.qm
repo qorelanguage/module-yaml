@@ -109,20 +109,20 @@ public namespace DataStreamRequestHandler {
 	}
 
 	#! calls the receive callback as returned by the @ref datastreamutilintro "DataStreamUtil" module, which in turn calls @ref recvDataImpl() to deliver deserialized data
-	private nothing recvImpl(hash $v) {
+	nothing recvImpl(hash $v) {
 	    call_function($.rcb, $v);
 	}
 
 	#! calls the send callback as returned by the @ref datastreamutilintro "DataStreamUtil" module, which in turn calls @ref sendDataImpl() to get the data to serialize and encode and send as a response
-	private any sendImpl() {
+	any sendImpl() {
 	    return call_function($.scb);
 	}
 
 	#! reimplement this method in subclasses to receive decoded and deserialized data; when this method is call with no arguments, it signifies the end of the streamed data transfer
-	abstract nothing recvDataImpl(any $data);
+	private abstract nothing recvDataImpl(any $data);
 
 	#! reimplement this method in subclasses to support streamed data transfers; when this method returns no value, it signifies the end of the streamed data transfer
-	abstract any sendDataImpl();
+	private abstract any sendDataImpl();
     }
 }
 
