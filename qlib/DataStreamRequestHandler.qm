@@ -95,6 +95,13 @@ public namespace DataStreamRequestHandler {
 
 	#! returns the response header to the request
 	hash getResponseHeaderMessageImpl() {
+            if ($.cx.hdr{DataStreamAccept.lwr()} != MimeTypeYaml)
+                return (
+                    "code": 406,
+                    "body": sprintf("cannot accept DataStream request with header %s: %y; expecting %y", DataStreamAccept, $.cx.hdr{DataStreamAccept}, MimeTypeYaml),
+                    "hdr": ("Content-Type": MimeTypeText),
+                    );
+
 	    my hash $hdr;
 	    ds_set_chunked_headers(\$hdr, $.cx.encoding);
 	    return (

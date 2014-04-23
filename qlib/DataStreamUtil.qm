@@ -89,11 +89,11 @@ module DataStreamUtil {
     |!Header|!Value|!Description
     |\c Content-Type|\c application/octet-stream|<b>MUST</b> be present to make the chunked data opaque to the standard HTTP protocol since the semantic completeness of the message body is not defined over the entire body but rather over each chunk 
     |\c Accept|<tt>text/x-yaml,application/octet-stream</tt>|other media types <b>MAY</b> be included, but at least the following <b>MUST</b> be included:\n - \c text/x-yaml: <b>MUST</b> be included in case a non-chunked response is returned\n - \c application/octet-stream: <b>MUST</b> be included in case of a DataStream chunked response
-    |[\c Accept-Encoding]|<tt>bzip2,gzip,deflate</tt>|optional header declaring the content encoding methods supported by the sender (<b>SHOULD</b> be the same value as set in the \c X-DataStream-Accept-Encoding header)
+    |[\c Accept-Encoding]|<tt>bzip2,gzip,deflate</tt>|optional header declaring the content encoding methods supported by the sender (if present, clients <b>MUST</b> set this to the same value as the \c X-DataStream-Accept-Encoding header)
     |\c X-DataStream-Content-Type|<tt>text/x-yaml;charset=utf8</tt>|<b>MUST</b> be present to identify the content type of each chunk as YAML-encoded data (\c "utf8" is case-insensitive and may contain a hyphen before the 8)
-    |\c X-DataStream-Accept|\c text/x-yaml|<b>MUST</b> be present to indicate that the requestor can accept DataStream responses; the server <b>MAY</b> still reply with a non-chunked response
-    |[\c X-DataStream-Accept-Encoding]|<tt>bzip2,gzip,deflate</tt>|optional header declaring the DataStream content encoding methods supported by the sender (<b>SHOULD</b> be the same value as set in the \c Accept-Encoding header)
-    |[\c X-DataStream-Content-Encoding]|one of <tt>bzip2, gzip, or deflate</tt>|this header is optional; <b>MUST</b> included if DataStream data compression is used in the request body
+    |\c X-DataStream-Accept|\c text/x-yaml|clients <b>MUST</b> include this header with this value to indicate that the requestor can accept DataStream responses; the server <b>MAY</b> still reply with a non-chunked response; if a DataStream server receives a request without this header, then no DataStream reply can be returned; either a monolithic HTTP reply must be returned or a 406 \c "Not Acceptable" error must be returned
+    |[\c X-DataStream-Accept-Encoding]|<tt>bzip2,gzip,deflate</tt>|optional header declaring the DataStream content encoding methods supported by the sender (if present, clients <b>MUST</b> set this to the same value as the \c Accept-Encoding header)
+    |[\c X-DataStream-Content-Encoding]|one of <tt>bzip2, gzip, or deflate</tt>|this header is optional; <b>MUST</b> included if DataStream data compression is used in the request body.  This header <b>MUST NOT</b> contain more than one value, if present
     |\c Transfer-Encoding|\c chunked|<b>MUST</b> be included for HTTP chunked transfers: <a href="http://tools.ietf.org/html/rfc2616#section-3.6.1">RFC-2616 3.6.1 Chunked Transfer Encoding</a>
 
     @note \c "Content-Encoding" and \c "Content-Length" headers <b>MUST NOT</b> be included in DataStream chunked transfers
@@ -104,9 +104,9 @@ module DataStreamUtil {
     <b>DataStream Non-Chunked Request Headers</b>
     |!Header|!Value|!Description
     |\c Accept|<tt>text/x-yaml,application/octet-stream</tt>|other media types <b>MAY</b> be included, but at least the following <b>MUST</b> be included:\n - \c text/x-yaml: <b>MUST</b> be included in case a non-chunked response is returned\n - \c application/octet-stream: <b>MUST</b> be included in case of a DataStream chunked response
-    |\c Accept-Encoding|<tt>bzip2,gzip,deflate</tt>|optional header declaring the content encoding methods supported by the sender (<b>SHOULD</b> be the same value as set in the \c X-DataStream-Accept-Encoding header)
-    |\c X-DataStream-Accept|\c text/x-yaml|<b>MUST</b> be present to indicate that the requestor can accept DataStream responses; the server <b>MAY</b> still reply with a non-chunked response
-    |\c X-DataStream-Accept-Encoding|<tt>bzip2,gzip,deflate</tt>|optional header declaring the DataStream content encoding methods supported by the sender (<b>SHOULD</b> be the same value as set in the \c Accept-Encoding header)
+    |[\c Accept-Encoding]|<tt>bzip2,gzip,deflate</tt>|optional header declaring the content encoding methods supported by the sender (if present, clients <b>MUST</b> set this to the same value as the \c X-DataStream-Accept-Encoding header)
+    |\c X-DataStream-Accept|\c text/x-yaml|clients <b>MUST</b> include this header with this value to indicate that the requestor can accept DataStream responses; the server <b>MAY</b> still reply with a non-chunked response; if a DataStream server receives a request without this header, then no DataStream reply can be returned; either a monolithic HTTP reply must be returned or a 406 \c "Not Acceptable" error must be returned
+    |[\c X-DataStream-Accept-Encoding]|<tt>bzip2,gzip,deflate</tt>|optional header declaring the DataStream content encoding methods supported by the sender (if present, clients <b>MUST</b> set this to the same value as the \c Accept-Encoding header)
     |[\c Content-Type]|<tt>text/x-yaml;charset=utf8</tt>|<b>MUST</b> be included in requests with a message body; this reflects the content type of the body as YAML encoded data; <b>MAY</b> be included in requests without a message body in which case it <b>MUST</b> be ignored by the server (\c "utf8" is case-insensitive and may contain a hyphen before the 8)
     |[\c Content-Encoding]|one of <tt>bzip2, gzip, or deflate</tt>|this header is optional; <b>MUST</b> included if data compression is used in the request body
     |[\c Content-Length]|number|This header is required in non-chunked requests with a message body
@@ -117,7 +117,7 @@ module DataStreamUtil {
     <b>DataStream Chunked Response Headers</b>
     |\c Content-Type|\c application/octet-stream|<b>MUST</b> be present to make the chunked data opaque to the standard HTTP protocol since the semantic completeness of the message body is not defined over the entire body but rather over each chunk
     |\c X-DataStream-Content-Type|\c text/x-yaml;charset=utf8|<b>MUST</b> be present to identify the content type of each chunk as YAML-encoded data (\c "utf8" is case-insensitive and may contain a hyphen before the 8)
-    |[\c X-DataStream-Content-Encoding]|one of <tt>bzip2, gzip, or deflate</tt>|this header is optional; <b>MUST</b> included if DataStream data compression is used in the request body
+    |[\c X-DataStream-Content-Encoding]|one of <tt>bzip2, gzip, or deflate</tt>|this header is optional; <b>MUST</b> included if DataStream data compression is used in the request body.  This header <b>MUST NOT</b> contain more than one value, if present
     |\c Transfer-Encoding|\c chunked|<b>MUST</b> be included for HTTP chunked transfers: <a href="http://tools.ietf.org/html/rfc2616#section-3.6.1">RFC-2616 3.6.1 Chunked Transfer Encoding</a>
 
     @note \c "Content-Encoding" and \c "Content-Length" headers <b>MUST NOT</b> be included in DataStream chunked transfers
@@ -137,9 +137,9 @@ module DataStreamUtil {
     Data compression is identified in a DataStream transfer by the following header:
     - \c "X-DataStream-Content-Encoding": set to one of \c "bzip2", \c "gzip", or \c "deflate" if data compression is used
 
-    DataStream server implementations <b>MUST</b> support at least the above content encoding methods.
+    DataStream server implementations <b>MUST</b> support at least the above content encoding methods.  This allows clients to include DataStream compression with the first request in case of streaming data to the server.
 
-    DataStream clients claim support for these content encoding methods by including them in the \c Accept-Encoding and \c X-DataStream-Accept-Encoding headers in the request; both of these headers should contain the same values.
+    DataStream clients claim support for these content encoding methods by including them in the \c Accept-Encoding and \c X-DataStream-Accept-Encoding headers in the request; both of these headers must contain the same values in client requests.
 
     @see <a href="http://tools.ietf.org/html/rfc2616">RFC-2616</a>
 
@@ -282,7 +282,7 @@ $httpclient.sendWithSendCallback(ds_get_send($scb, $enc_func), $method, $path, $
     */
     public code sub ds_get_send(code $scb, *code $enc_func) {
         return *data sub () {
-            my *any $data = $scb();
+            my any $data = $scb();
 
             # encode data for sending
             if (exists $data) {
@@ -314,16 +314,28 @@ $httpclient.sendWithRecvCallback(ds_get_recv($rcb), $body, $method, $path, $hdr,
     public code sub ds_get_recv(code $rcb) {
         # decode content encoding call reference
         my *code $dce;
+        # "header parsed" flag
+        my bool $hp;
 
         return sub (hash $h) {
             # decode data received
             if ($h.hdr) {
-                # data stream never sends message trailers, so this must be the header
+                # ignore message trailers
+                if ($hp) 
+                    return;
+
+                # set "header parsed" flag to True
+                $hp = True;
+
                 # parse content type and optionally any content encoding
+                my (*string $ct, *string $ce);
+
                 # we have to handle both chunked and non-chunked messages
-                my *string $ct = $h.hdr{DataStreamContentType.lwr()};
-                my *string $ce = $ct ? $h.hdr{DataStreamContentEncoding.lwr()} : NOTHING;
-                if (!$ct) {
+                if ($h.hdr."transfer-encoding" == "chunked") {
+                    $ct = $h.hdr{DataStreamContentType.lwr()};
+                    $ce = $h.hdr{DataStreamContentEncoding.lwr()};
+                }
+                else {
                     $ct = $h.hdr."content-type";
                     $ce = $h.hdr."content-encoding";
                 }
@@ -334,10 +346,11 @@ $httpclient.sendWithRecvCallback(ds_get_recv($rcb), $body, $method, $path, $hdr,
                 if ($ct != MimeTypeYaml)
                     throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize request body; content-type is: %y; type supported: %y", $ct, MimeTypeYaml);
 
+                # data is always transferred in UTF-8 encoding with DataStream
                 $h.obj.setEncoding("utf8");
                 
                 $dce = ds_get_content_decode($ce);                        
-                break;
+                return;
             }
             if (exists $h.data) {
                 if (!$h.deserialized) {
