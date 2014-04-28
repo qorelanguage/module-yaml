@@ -117,7 +117,8 @@ my DataStreamClient $ds(("url": "http://localhost:8001/rest"));
 $rest.recvDataStream($recv_callback, "GET", "/orders/1", $body);
             @endcode
 
-            @param rcb The receive callback for the data received; the argument passed to this callback is the decoded and deserialized data in the message or, when the chunked transfer has completed; a call is made to this callback with no arguments to signal the end of the chunked data
+            @param rcb The receive callback for the data received; the argument passed to this callback is the decoded and deserialized data in the message
+            @param ecb When the chunked transfer has completed; a call is made to this callback with no arguments to signal the end of the chunked data
             @param method the HTTP method to be used; case is ignored (if not a valid method an \c HTTP-CLIENT-METHOD-ERROR exception is raised)
             @param path the URI path to add (will be appended to any root path given in the constructor)
             @param body an optional message body to be included in the request; if a value for this parameter is passed to the method, then the body will be serialized with YAML serialization
@@ -140,7 +141,7 @@ $rest.recvDataStream($recv_callback, "GET", "/orders/1", $body);
 
             @note this method can also be used if the server returns a non-chunked response; the response body will be decoded, deserialized, and passed to the receive callback as if a chunked body were received, additionally the terminating call with no arguments is also made to signal the end of the chunked data
          */
-        recvDataStream(code $rcb, string $method, string $path, any $body, timeout $timeout_ms = 0, *reference $info, *hash $hdr) {
+        recvDataStream(code $rcb, code $ecb, string $method, string $path, any $body, timeout $timeout_ms = 0, *reference $info, *hash $hdr) {
             $.prepareMsg(\$body, \$hdr);
 
             ds_set_non_chunked_headers(\$hdr, $.seh.ce, True);
@@ -155,7 +156,7 @@ $rest.recvDataStream($recv_callback, "GET", "/orders/1", $body);
             # prepare path
             $.preparePath(\$path);
 
-            $.sendWithRecvCallback(ds_get_recv($rcb), $body, $method, $path, $hdr, $timeout_ms, False, \$info);
+            $.sendWithRecvCallback(ds_get_recv($rcb, $ecb), $body, $method, $path, $hdr, $timeout_ms, False, \$info);
         }
 
         #! Sends an HTTP request to an HTTP REST server supporting the @ref datastreamprotocol "DataStream protocol" with the specified method and chunked message body as given by a send callback and returns the deserialized body and response headers received as a response
@@ -223,8 +224,9 @@ my hash $h = $rest.sendDataStream($callback, "POST", "/path");
                         $rmd = $d;
                 }
             };
+            my code $ecb = sub () {};
             # get DataStream receive callback using our local data callback closure
-            my code $dsrcb = ds_get_recv($dcb);
+            my code $dsrcb = ds_get_recv($dcb, $ecb);
             # save response header
             my hash $rhdr;
             # our top-level receive callback to save the header and set the chunked flag
@@ -240,6 +242,9 @@ my hash $h = $rest.sendDataStream($callback, "POST", "/path");
 
             $.sendWithCallbacks(ds_get_send($scb, $.seh.func), $rcb, $method, $path, $hdr, $timeout_ms, False, \$info);
 
+            if ($rhdr.status_code == 409 && $rmd.err && $rmd.desc)
+                throw $rmd.err, $rmd.desc;
+
             return $rhdr + ("body": $rmd);
         }
 
@@ -254,7 +259,8 @@ $rest.sendRecvDataStream($send_callback, $recv_callback, "POST", "/path");
             @endcode
 
             @param scb The callback giving the chunked HTTP data to send; the data returned by this callback will be serialized to YAML and send via the @ref datastreamprotocol "DataStream protocol" to the remote HTTP REST server in HTTP chunked format; when all data has been send then this callback should return @ref nothing, which will close the chunked message and terminate the request
-            @param rcb The receive callback for the data received; the argument passed to this callback is the decoded and deserialized data in the message or, when the chunked transfer has completed; a call is made to this callback with no arguments to signal the end of the chunked data
+            @param rcb The receive callback for the data received; the argument passed to this callback is the decoded and deserialized data in the message
+            @param ecb When the chunked transfer has completed; a call is made to this callback with no arguments to signal the end of the chunked data
             @param method The name of the HTTP method (\c "GET", \c "POST", \c "HEAD", \c "OPTIONS", \c "PUT", \c "DELETE", \c "TRACE", or \c "CONNECT").
             @param path The path for the message (i.e. \c "/path/resource?method&param=value")
             @param timeout_ms the timeout in milliseconds for the socket I/O operations; 0 means use the default timeout value
@@ -279,7 +285,7 @@ $rest.sendRecvDataStream($send_callback, $recv_callback, "POST", "/path");
 
             @note this method can also be used if the server returns a non-chunked response; the response body will be decoded, deserialized, and passed to the receive callback as if a chunked body were received, additionally the terminating call with no arguments is also made to signal the end of the chunked data
         */
-        sendRecvDataStream(code $scb, code $rcb, string $method, string $path, timeout $timeout_ms = 0, *reference $info, *hash $hdr) {
+        sendRecvDataStream(code $scb, code $rcb, code $ecb, string $method, string $path, timeout $timeout_ms = 0, *reference $info, *hash $hdr) {
             $hdr = $.headers + $hdr;
 
             ds_set_chunked_headers(\$hdr, $.seh.ce, True);
@@ -287,7 +293,7 @@ $rest.sendRecvDataStream($send_callback, $recv_callback, "POST", "/path");
             # prepare path
             $.preparePath(\$path);
 
-            $.sendWithCallbacks(ds_get_send($scb, $.seh.func), ds_get_recv($rcb), $method, $path, $hdr, $timeout_ms, False, \$info);
+            $.sendWithCallbacks(ds_get_send($scb, $.seh.func), ds_get_recv($rcb, $ecb), $method, $path, $hdr, $timeout_ms, False, \$info);
         }
     }
 }
