@@ -54,9 +54,11 @@ module DataStreamRequestHandler {
 
     The %DataStreamRequestHandler module provides server support for the @ref datastreamprotocol "DataStream protocol": YAML-encoded HTTP chunked transfers where each chunk is a unique data entity.
 
+    In %Qore, DataStream support is implemented on top of the REST infrastructure provided by the %Qore library, for this reason the @ref DataStreamRequestHandler::AbstractDataStreamRequestHandler "AbstractDataStreamRequestHandler" inherits and extends AbstractRestStreamRequestHandler provided by the RestHandler module.
+
     To use this module, use \c "%requires DataStreamRequestHandler" in your code.
     
-    All the public symbols in the module are defined in the DataStreamRequestHandler namespace
+    All the public symbols in the module are defined in the DataStreamRequestHandler namespace.
 
     Classes:
     - @ref DataStreamRequestHandler::AbstractDataStreamRequestHandler "AbstractDataStreamRequestHandler"
@@ -75,7 +77,7 @@ public namespace DataStreamRequestHandler {
     /** this class must be subclassed and then the @ref recvDataImpl() and @ref sendDataImpl() methods reimplemented
 	to provide data receiving and sending support, respectively.
      */
-    public class AbstractDataStreamRequestHandler inherits AbstractRestStreamRequestHandler {
+    public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRestStreamRequestHandler {
 	public {
 	    #! the receive callback as returned by the @ref datastreamutilintro "DataStreamUtil" module
 	    code $.rcb;

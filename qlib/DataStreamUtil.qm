@@ -52,7 +52,9 @@ module DataStreamUtil {
 
     The %DataStreamUtil module provides client and server support for <a href="http://www.yaml.org/">YAML</a>-encoded <a href="http://tools.ietf.org/html/rfc2616">HTTP 1.1</a> (<a href="http://tools.ietf.org/html/rfc2616">RFC-2616</a>) chunked transfers where each chunk is a unique data entity; allowing data to be streamed from remote servers and used as soon as it is received.  This module provides client and server support to allow %Qore code to deal with data on the sending and receiving ends by taking care of the encoding and serialization issues to allow the serialized data to be sent with optional data compression over standard HTTP chunked transfers and be usable immediately on receipt on the remote end.
 
-    To use this module, use \c "%requires DataStreamUtil" in your code.
+    In %Qore, DataStream support is implemented on top of and is designed to extend the REST infrastructure provided by the %Qore library.
+
+    This module is used automatically by the <a href="../../DataStreamClient/html/index.html">DataStreamClient</a> and <a href="../../DataStreamRequestHandler/html/index.html">DataStreamRequestHandler</a> user modules; to use this module directly for low-level DataStream protocol support, use \c "%requires DataStreamUtil" in your code.
     
     All the public symbols in the module are defined in the DataStreamUtil namespace
 

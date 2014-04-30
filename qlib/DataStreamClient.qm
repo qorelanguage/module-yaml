@@ -54,6 +54,8 @@ module DataStreamClient {
 
     The %DataStreamClient module provides client support for the @ref datastreamprotocol "DataStream protocol": YAML-encoded HTTP chunked transfers where each chunk is a unique data entity.
 
+    In %Qore, DataStream support is implemented on top of the REST infrastructure provided by the %Qore library; in this module, the @ref DataStreamClient::DataStreamClient "DataStreamClient" class inherits and extends RestClient for this reason.
+
     To use this module, use \c "%requires DataStreamClient" in your code.
     
     All the public symbols in the module are defined in the DataStreamClient namespace
