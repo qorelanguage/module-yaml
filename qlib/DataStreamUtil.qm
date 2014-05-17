@@ -177,6 +177,7 @@ Content-Type: application/octet-stream
 Transfer-Encoding: chunked
 Datastream-Content-Type: text/x-yaml;charset=utf8
 Datastream-Content-Encoding: bzip2
+Trailer: DataStream-Error
 Connection: Keep-Alive
 Date: Sun, 20 Apr 2014 07:49:51 GMT
 Server: Qorus-HTTP-Server/0.3.7
