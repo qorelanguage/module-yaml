@@ -36,6 +36,7 @@ module YamlRpcClient {
     desc = "YamlRpcClient module";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
+    license = "MIT";
 }
 
 /*  Version History

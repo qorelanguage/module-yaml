@@ -41,6 +41,7 @@ module DataStreamRequestHandler {
     desc = "user module implementing server support for the DataStream protocol: YAML-encoded HTTP chunked transfers where each chunk is a unique data entity";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
+    license = "MIT";
 }
 
 /*  Version History: see docs below

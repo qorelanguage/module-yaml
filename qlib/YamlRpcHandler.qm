@@ -39,6 +39,7 @@ module YamlRpcHandler {
     desc = "YamlRpcHandler module for use with the HttpServer module";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
+    license = "MIT";
 }
 
 /*  Version History

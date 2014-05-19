@@ -3,6 +3,10 @@ version 0.5
 ***********
 
 YamlRpcHandler module updates: minor error logging updates, updated minimum qore version to 0.8.7 for get_ex_pos()
+added the following user modules implementing DataStream protocol support:
+- DataStreamUtil
+- DataStreamClient
+- DataStreamRequestHandler
 
 
 ***********
