@@ -309,10 +309,11 @@ $httpclient.sendWithSendCallback(ds_get_send($scb, $enc_func), $method, $path, $
                         $data = $enc_func($data);
                 }
 
+                #printf("DBG ds_get_send() returning: %y\n", $data);
                 return $data;
             }
             catch (hash $ex) {
-                printf("ds_get_send() closure: %s: %s\n", $ex.err, $ex.desc);
+                #printf("DBG ds_get_send() closure: %s: %s\n", $ex.err, $ex.desc);
                 my string $str = sprintf("%s: %s", $ex.err, $ex.desc);
                 # make sure there are no newlines in the string
                 $str =~ s/[\r\n]/ /g;
@@ -349,6 +350,8 @@ $httpclient.sendWithRecvCallback(ds_get_recv($rcb), $body, $method, $path, $hdr,
         my bool $chunked;
 
         return sub (hash $h) {
+            #printf("DBG ds_get_recv() h: %y\n", $h);
+
             # decode data received
             if ($h.hasKey("hdr")) {
                 #printf("hp: %y hdr: %y\n", $hp, $h.hdr);
