@@ -15,6 +15,16 @@ Qore objects are currently not serialized, and NULL is serialized as YAML 'null'
 see README and docs for more information
 
 
+LICENSE
+-------
+The source code is released under the LGPL 2.1 and MIT licenses; either license
+may be used at the user's discretion.  Note that both licenses are treated
+equally by the Qore library in the sense that both licenses allow the module
+to be loaded without restrictions by the Qore library (even when the Qore
+library is initialized in GPL mode).
+See COPYING.MIT and COPYING.LGPL for details on the open-source licenses.
+
+
 BUILDING
 --------
 Requires qore 0.8.5+ and libyaml 0.1.3+ to build and run
