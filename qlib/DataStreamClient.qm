@@ -63,6 +63,9 @@ module DataStreamClient {
 
     Classes:
     - @ref DataStreamClient::DataStreamClient "DataStreamClient"
+    - @ref DataStreamClient::DataStreamRecvMessage "DataStreamRecvMessage"
+    - @ref DataStreamClient::DataStreamSendMessage "DataStreamSendMessage"
+    - @ref DataStreamClient::DataStreamMessage "DataStreamRecvMessage"
 
     @note Most of the underlying functionality is provided by the @ref datastreamutilintro "DataStreamUtil" module
 
@@ -74,6 +77,60 @@ module DataStreamClient {
 
 #! the DataStreamClient namespace contains all the public objects in the DataStreamClient module
 public namespace DataStreamClient {
+    #! this class can be used to send and receive data using the @ref datastreamprotocol "DataStream protocol"
+    public class DataStreamSendMessage {
+        public {}
+
+	#! this method returns data to be returned to the server; when this method returns no value, it signifies the end of the streamed data transfer; this method calls sendDataImpl() to return the data
+	/** @return the data returned by this callback will be serialized to YAML and send via the @ref datastreamprotocol "DataStream protocol" to the remote HTTP REST server in HTTP chunked format; when all data has been send then this callback should return @ref nothing, which will close the chunked message and terminate the request
+	*/
+	any sendData() {
+            return $.sendDataImpl();
+        }
+
+	#! reimplement this method in subclasses to support streamed data transfers; when this method returns no value, it signifies the end of the streamed data transfer
+	/** @return the data returned by this callback will be serialized to YAML and send via the @ref datastreamprotocol "DataStream protocol" to the remote HTTP REST server in HTTP chunked format; when all data has been send then this callback should return @ref nothing, which will close the chunked message and terminate the request
+	*/
+	private abstract any sendDataImpl();
+    }
+
+    #! this class can be used to send and receive data using the @ref datastreamprotocol "DataStream protocol"
+    public class DataStreamRecvMessage {
+        public {
+            # any datastream error received from the remote end
+            string $.err;
+        }
+
+	#! receives decoded data from the remote end and calls recvDataImpl()
+	/** @param data the argument passed to this callback is the decoded and deserialized data in the message
+	*/
+	nothing recvData(any $data) {
+            $.recvDataImpl($data);
+        }
+
+        #! this method is called when all data has been received; this method calls recvDataDoneImpl()
+        /** @param err this argument is @ref nothing the sender does not report a send error, otherwise it's a single string giving the send error reported by the sending side in the \c DataStream-Error trailer record
+        */
+        nothing recvDataDone(*string $err) {
+            $.recvDataDoneImpl($err);
+        }
+
+        #! this method is called when all data has been received
+        /** @param err this argument is @ref nothing the sender does not report a send error, otherwise it's a single string giving the send error reported by the sending side in the \c DataStream-Error trailer record
+        */
+        private nothing recvDataDoneImpl(*string $err) {
+        }
+
+	#! reimplement this method in subclasses to receive decoded and deserialized data
+	/** @param data the argument passed to this callback is the decoded and deserialized data in the message
+	*/
+	private abstract nothing recvDataImpl(any $data);
+    }
+
+    #! this class can be used to send and receive data using the @ref datastreamprotocol "DataStream protocol"
+    public class DataStreamMessage inherits DataStreamSendMessage, DataStreamRecvMessage {
+    }
+
     #! this class extends @ref RestClient::RestClient "RestClient" with support for the @ref datastreamprotocol "DataStream protocol" 
     public class DataStreamClient inherits RestClient::RestClient {
         public {
@@ -160,6 +217,39 @@ $rest.recvDataStream($recv_callback, "GET", "/orders/1", $body);
             $.preparePath(\$path);
 
             $.sendWithRecvCallback(ds_get_recv($rcb, $ecb), $body, $method, $path, $hdr, $timeout_ms, False, \$info);
+        }
+
+        #! sends an HTTP request to an HTTP REST server supporting the @ref datastreamprotocol "DataStream protocol" and returns the decoded and deserialized response in the given callback as each HTTP chunk is received
+        /** @par Example:
+            @code
+$rest.recvDataStream($recv_callback, "GET", "/orders/1", $body);
+            @endcode
+
+            @param dsm the @ref DataStreamRecvMessage object providing the DataStreamRecvMessage::recvData() and DataStreamRecvMessage::recvDataDone() methods to be used as callbacks
+            @param method the HTTP method to be used; case is ignored (if not a valid method an \c HTTP-CLIENT-METHOD-ERROR exception is raised)
+            @param path the URI path to add (will be appended to any root path given in the constructor)
+            @param body an optional message body to be included in the request; if a value for this parameter is passed to the method, then the body will be serialized with YAML serialization
+            @param timeout_ms the timeout in milliseconds for the socket I/O operations; 0 means use the default timeout value
+            @param info an optional reference to a hash that will be used as an output variable giving a hash of request headers and other information about the HTTP request
+            @param hdr any headers to be sent with the request; headers here will override default headers for the object as well
+
+            @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed
+            @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote
+            @throw HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED maximum redirect count exceeded
+            @throw HTTP-CLIENT-RECEIVE-ERROR unknown content encoding received or status error communicating with HTTP server (status code < 100 or > 299); in case of a status error the \c "arg" key of the exception hash will be set to a hash equal to the normal return value of this method including a \c "status_code" key (giving the status code) and a \c "body" key (giving the message body returned by the server)
+            @throw ENCODING-CONVERSION-ERROR the given string could not be converted to the socket's character encoding
+            @throw SOCKET-SEND-ERROR There was an error sending the data
+            @throw SOCKET-CLOSED The remote end closed the connection
+            @throw SOCKET-RECV-ERROR There was an error receiving the data
+            @throw SOCKET-TIMEOUT Data transmission or reception for a single send() or recv() action exceeded the timeout period
+            @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
+            @throw SOCKET-HTTP-ERROR Invalid HTTP data was received
+            @throw DESERIALIZATION-ERROR the response body could not be deserialized (unknown \c Content-Type or invalid serialization)
+
+            @note this method can also be used if the server returns a non-chunked response; the response body will be decoded, deserialized, and passed to the receive callback as if a chunked body were received, additionally the terminating call with no arguments is also made to signal the end of the chunked data
+         */
+        recvDataStream(DataStreamRecvMessage $dsm, string $method, string $path, any $body, timeout $timeout_ms = 0, *reference $info, *hash $hdr) {
+            $.recvDataStream(\$dsm.recvData(), \$dsm.recvDataDone(), $method, $path, $body, $timeout_ms, \$info, $hdr);
         }
 
         #! Sends an HTTP request to an HTTP REST server supporting the @ref datastreamprotocol "DataStream protocol" with the specified method and chunked message body as given by a send callback and returns the deserialized body and response headers received as a response
@@ -251,6 +341,45 @@ my hash $h = $rest.sendDataStream($callback, "POST", "/path");
             return $rhdr + ("body": $rmd);
         }
 
+        #! Sends an HTTP request to an HTTP REST server supporting the @ref datastreamprotocol "DataStream protocol" with the specified method and chunked message body as given by a send callback and returns the deserialized body and response headers received as a response
+        /** If a connection has not already been established, an internal call to HTTPClient::connect() will be made before sending the message
+
+            @par Example:
+            @code
+my hash $h = $rest.sendDataStream($callback, "POST", "/path");
+            @endcode
+
+            @param dsm the @ref DataStreamSendMessage object providing the DataStreamSendMessage::sendData() method to be used as a callback
+            @param method The name of the HTTP method (\c "GET", \c "POST", \c "HEAD", \c "OPTIONS", \c "PUT", \c "DELETE", \c "TRACE", or \c "CONNECT").
+            @param path the URI path to add (will be appended to any root path given in the constructor)
+            @param timeout_ms the timeout in milliseconds for the socket I/O operations; 0 means use the default timeout value
+            @param info An optional reference to an lvalue that will be used as an output variable giving a hash of request headers and other information about the HTTP request
+            @param hdr any headers to be sent with the request; headers here will override default headers for the object as well
+
+            @return The headers received from the HTTP server with all key names converted to lower-case. The message body (if any) will be decoded and deserialized and assigned to the value of the \c "body" key, and the HTTP status will be assigned to the \c "status_code" key.  In the case of a chunked DataStream response, the \c "body" key will be assigned a list where each list element is the data value of the respective DataStream chunk
+
+            @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed
+            @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote
+            @throw HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED maximum redirect count exceeded
+            @throw HTTP-CLIENT-RECEIVE-ERROR unknown content encoding received or status error communicating with HTTP server (status code < 100 or > 299); in case of a status error the \c "arg" key of the exception hash will be set to a hash equal to the normal return value of this method including a \c "status_code" key (giving the status code) and a \c "body" key (giving the message body returned by the server)
+            @throw ENCODING-CONVERSION-ERROR the given string could not be converted to the socket's character encoding
+            @throw SOCKET-SEND-ERROR There was an error sending the data
+            @throw SOCKET-CLOSED The remote end closed the connection
+            @throw SOCKET-RECV-ERROR There was an error receiving the data
+            @throw SOCKET-TIMEOUT Data transmission or reception for a single send() or recv() action exceeded the timeout period
+            @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
+            @throw SOCKET-HTTP-ERROR Invalid HTTP data was received
+
+            @note
+            - The \c "Transfer-Encoding: chunked" header is automatically set with this method if no \c "Transfer-Encoding" header is already present
+            - For possible exceptions when implicitly establishing a connection, see the Socket::connect() method (or Socket::connectSSL() for secure connections)
+            - this method can also be used when the server returns chunked @ref datastreamprotocol "DataStream protocol" data; in this case the chunked response is received in its entirity and returns in the return value's \c "body" key as a list where each list element is the data value of the respective DataStream chunk
+            - the value of the return value's \c "body" key will be decoded and deserialized data
+        */
+        hash sendDataStream(DataStreamSendMessage $dsm, string $method, string $path, timeout $timeout_ms = 0, *reference $info, *hash $hdr) {
+            return $.sendDataStream(\$dsm.sendData(), $method, $path, $timeout_ms, \$info, $hdr);
+        }
+
         #! Sends an HTTP request an HTTP REST server supporting the @ref datastreamprotocol "DataStream protocol" with the specified method and serialized and encoded chunked message body as given by a send callback; decoded and deserialized data received from the HTTP server are returned through a receive callback
         /** This method is useful for sending streaming data in the request and where streaming data is also expected in the response.
 
@@ -297,6 +426,45 @@ $rest.sendRecvDataStream($send_callback, $recv_callback, "POST", "/path");
             $.preparePath(\$path);
 
             $.sendWithCallbacks(ds_get_send($scb, $.seh.func), ds_get_recv($rcb, $ecb), $method, $path, $hdr, $timeout_ms, False, \$info);
+        }
+
+        #! Sends an HTTP request an HTTP REST server supporting the @ref datastreamprotocol "DataStream protocol" with the specified method and serialized and encoded chunked message body as given by a send callback; decoded and deserialized data received from the HTTP server are returned through a receive callback
+        /** This method is useful for sending streaming data in the request and where streaming data is also expected in the response.
+
+            If a connection has not already been established, an internal call to HTTPClient::connect() will be made before sending the message
+
+            @par Example:
+            @code
+$rest.sendRecvDataStream($send_callback, $recv_callback, "POST", "/path");
+            @endcode
+
+            @param dsm the @ref DataStreamMessage object providing the DataStreamMessage::sendData(), DataStreamMessage::recvData(), and DataStreamMessage::recvDataDone() methods method to be used as callbacks
+            @param method The name of the HTTP method (\c "GET", \c "POST", \c "HEAD", \c "OPTIONS", \c "PUT", \c "DELETE", \c "TRACE", or \c "CONNECT").
+            @param path The path for the message (i.e. \c "/path/resource?method&param=value")
+            @param timeout_ms the timeout in milliseconds for the socket I/O operations; 0 means use the default timeout value
+            @param info An optional reference to an lvalue that will be used as an output variable giving a hash of request headers and other information about the HTTP request.
+            @param hdr any headers to be sent with the request; headers here will override default headers for the object as well
+
+            @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed
+            @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote
+            @throw HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED maximum redirect count exceeded
+            @throw HTTP-CLIENT-RECEIVE-ERROR unknown content encoding received or status error communicating with HTTP server (status code < 100 or > 299); in case of a status error the \c "arg" key of the exception hash will be set to a hash equal to the normal return value of this method including a \c "status_code" key (giving the status code) and a \c "body" key (giving the message body returned by the server)
+            @throw ENCODING-CONVERSION-ERROR the given string could not be converted to the socket's character encoding
+            @throw SOCKET-SEND-ERROR There was an error sending the data
+            @throw SOCKET-CLOSED The remote end closed the connection
+            @throw SOCKET-RECV-ERROR There was an error receiving the data
+            @throw SOCKET-TIMEOUT Data transmission or reception for a single send() or recv() action exceeded the timeout period
+            @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
+            @throw SOCKET-HTTP-ERROR Invalid HTTP data was received
+
+            @note
+            - The \c "Transfer-Encoding: chunked" header is automatically set with this method if no \c "Transfer-Encoding" header is already present
+            - For possible exceptions when implicitly establishing a connection, see the Socket::connect() method (or Socket::connectSSL() for secure connections)
+
+            @note this method can also be used if the server returns a non-chunked response; the response body will be decoded, deserialized, and passed to the receive callback as if a chunked body were received, additionally the terminating call with no arguments is also made to signal the end of the chunked data
+        */
+        sendRecvDataStream(DataStreamMessage $dsm, string $method, string $path, timeout $timeout_ms = 0, *reference $info, *hash $hdr) {
+            $.sendRecvDataStream(\$dsm.sendData(), \$dsm.recvData(), \$dsm.recvDataDone(), $method, $path, $timeout_ms, \$info, $hdr);
         }
     }
 }
