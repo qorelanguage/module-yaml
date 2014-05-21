@@ -348,6 +348,8 @@ $httpclient.sendWithRecvCallback(ds_get_recv($rcb), $body, $method, $path, $hdr,
         my bool $hp;
         # chunked flag
         my bool $chunked;
+        # HTTP status code received
+        my int $status_code;
 
         return sub (hash $h) {
             #printf("DBG ds_get_recv() h: %y\n", $h);
@@ -363,6 +365,9 @@ $httpclient.sendWithRecvCallback(ds_get_recv($rcb), $body, $method, $path, $hdr,
 
                 # set "header parsed" flag to True
                 $hp = True;
+
+                # save status code
+                $status_code = $h.hdr.status_code;
 
                 # parse content type and optionally any content encoding
                 my (*string $ct, *string $ce);
@@ -389,7 +394,8 @@ $httpclient.sendWithRecvCallback(ds_get_recv($rcb), $body, $method, $path, $hdr,
                 # data is always transferred in UTF-8 encoding with DataStream
                 $h.obj.setEncoding("utf8");
                 
-                $dce = ds_get_content_decode($ce);                        
+                $dce = ds_get_content_decode($ce);
+
                 return;
             }
             if (exists $h.data) {
@@ -418,6 +424,10 @@ $httpclient.sendWithRecvCallback(ds_get_recv($rcb), $body, $method, $path, $hdr,
                             throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize request body; body type is %y", $h.data.type());
                     }
                 }
+
+                # if the server has returned an error status code, then handle as an exception on the remote side                
+                if (!$chunked && $status_code >= 300 && $h.data.err && $h.data.desc)
+                    throw $h.data.err, $h.data.desc, $h.data.arg;
 
                 # call data callback
                 $rcb($h.data);
