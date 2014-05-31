@@ -23,6 +23,10 @@ This module is released under a choice of two licenses:
 
     The underlying %YAML functionality is provided by <a href="http://pyyaml.org/wiki/LibYAML">libyaml</a>.
 
+    User modules implementing the following HTTP-based protocols using YAML for data serialization are included:
+    - YAML-RPC: similar to JSON-RPC but using YAML-serialized data (<a href="../../YamlRpcClient/html/index.html">YamlRpcClient</a>, <a href="../../YamlRpcHandler/html/index.html">YamlRpcHandler</a>)
+    - DataStream: allows for data streaming with HTTP 1.1 chunked data transfers where each chunk is a unique data entity (<a href="../../DataStreamUtil/html/index.html">DataStreamUtil</a>, <a href="../../DataStreamClient/html/index.html">DataStreamClient</a>, <a href="../../DataStreamRequestHandler/html/index.html">DataStreamRequestHandler</a>)
+
     Also included with the binary yaml module:
     - <a href="../../DataStreamUtil/html/index.html">DataStreamUtil user module</a>
     - <a href="../../DataStreamClient/html/index.html">DataStreamClient user module</a>
