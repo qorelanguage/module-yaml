@@ -1,3 +1,189 @@
+2014-05-26 08:40  david_nichols
+
+	* Makefile.am, RELEASE-NOTES, docs/mainpage.doxygen.tmpl: user
+	  modules moved to top-level qore module directory from
+	  version-specific module directory since they are valid for
+	  multiple versions of qore
+
+2014-05-26 08:07  david_nichols
+
+	* qlib/YamlRpcClient.qm, qlib/YamlRpcHandler.qm: added %requires
+	  qore >= 0.8.10 to user modules that have the license user module
+	  key because it is not accepted by previous versions of Qore
+
+2014-05-21 09:40  david_nichols
+
+	* qlib/DataStreamUtil.qm: propagate source exceptions back to the
+	  caller when an HTTP error response is received to a DataStream
+	  request
+
+2014-05-20 15:49  david_nichols
+
+	* qlib/DataStreamClient.qm: added new message clients for easier
+	  data stream message sending and receiving
+
+2014-05-19 15:46  david_nichols
+
+	* qlib/DataStreamUtil.qm: removed debugging output
+
+2014-05-19 10:59  david_nichols
+
+	* README: updated module sources to reflect MIT licenses; added
+	  license string to binary module's exported symbols for use with
+	  Qore >= 0.8.10
+
+2014-05-19 10:33  david_nichols
+
+	* RELEASE-NOTES, qlib/DataStreamClient.qm,
+	  qlib/DataStreamRequestHandler.qm, qlib/DataStreamUtil.qm,
+	  qlib/YamlRpcClient.qm, qlib/YamlRpcHandler.qm,
+	  src/yaml-module.cpp: added module license info to binary and user
+	  modules
+	  doc updates
+
+2014-05-17 15:55  david_nichols
+
+	* configure.ac: changes for compiling on Mavericks with XCode 5.1,
+	  cannot use -Wl,-x in link anymore since Apple LLVM 5.1 will fail
+	  with optimizations enabled
+
+2014-05-17 15:55  david_nichols
+
+	* qlib/DataStreamUtil.qm: added Trailer header to example
+
+2014-05-14 12:29  david_nichols
+
+	* qlib/DataStreamClient.qm, qlib/DataStreamRequestHandler.qm,
+	  qlib/DataStreamUtil.qm: removed X- prefix from DataStream headers
+	  as per RFC 6648
+	  added support for the DataStream-Error trailer to signal errors
+	  on the sending side
+	  updated internal APIs to accommodate the DataStream-Error trailer
+
+2014-04-30 16:17  david_nichols
+
+	* docs/mainpage.doxygen.tmpl, qlib/DataStreamClient.qm,
+	  qlib/DataStreamRequestHandler.qm, qlib/DataStreamUtil.qm: doc
+	  updates
+
+2014-04-30 13:00  david_nichols
+
+	* qlib/DataStreamRequestHandler.qm: updated to new callback changes
+	  in RestHandler and HttpServer
+
+2014-04-28 17:53  david_nichols
+
+	* qlib/DataStreamClient.qm, qlib/DataStreamRequestHandler.qm,
+	  qlib/DataStreamUtil.qm: DataStream fixes
+
+2014-04-23 14:49  david_nichols
+
+	* qlib/DataStreamRequestHandler.qm, qlib/DataStreamUtil.qm: minor
+	  DataStream updates
+
+2014-04-20 15:00  david_nichols
+
+	* qlib/DataStreamRequestHandler.qm: use DataStreamUtil to set
+	  response headers instead of setting manually
+
+2014-04-20 14:50  david_nichols
+
+	* qlib/DataStreamRequestHandler.qm: minor API fix
+
+2014-04-20 14:41  david_nichols
+
+	* Makefile.am, docs/mainpage.doxygen.tmpl,
+	  qlib/DataStreamClient.qm, qlib/DataStreamRequestHandler.qm,
+	  qlib/DataStreamUtil.qm, qore-yaml-module.spec: added
+	  DataStreamRequestHandler module
+	  doc updates
+
+2014-04-20 11:33  david_nichols
+
+	* qlib/DataStreamClient.qm, qlib/DataStreamUtil.qm: datastream
+	  updates, protocol and module docs
+
+2014-04-19 20:20  david_nichols
+
+	* qlib/DataStreamUtil.qm: data stream fixes set socket encoding to
+	  utf-8 when DataStream headers are received
+
+2014-04-19 14:57  david_nichols
+
+	* qlib/DataStreamClient.qm, qlib/DataStreamUtil.qm: datastream
+	  updates
+
+2014-04-19 12:08  david_nichols
+
+	* qlib/DataStreamClient.qm: data stream updates
+
+2014-04-19 07:30  david_nichols
+
+	* qlib/DataStreamUtil.qm: datastream updates
+
+2014-04-19 07:16  david_nichols
+
+	* Makefile.am, docs/mainpage.doxygen.tmpl,
+	  qlib/DataStreamClient.qm, qlib/DataStreamUtil.qm,
+	  qore-yaml-module.spec: added initial DataStreamUtil and
+	  DataStreamClient user modules
+
+2014-03-05 18:36  david_nichols
+
+	* RELEASE-NOTES, configure.ac, qlib/YamlRpcHandler.qm,
+	  qore-yaml-module.spec: minor logging updates to YamlRpcHandler
+	  updated module version to 0.5
+
+2014-02-19 13:14  nros
+
+	* src/Makefile.am: Changed so that $(MNAME).a is not installed.
+
+2013-12-29 13:59  david_nichols
+
+	* docs/mainpage.doxygen.tmpl: doc updates for better external doc
+	  integration
+
+2013-12-28 19:09  david_nichols
+
+	* qlib/YamlRpcClient.qm, qlib/YamlRpcHandler.qm: renamed intro
+	  sections for incorporation in external docs
+
+2013-12-28 16:48  david_nichols
+
+	* docs/mainpage.doxygen.tmpl: renamed intro doc section
+
+2013-12-28 16:15  david_nichols
+
+	* Makefile.am, docs/doxyfile.tmpl, docs/qlib/Doxyfile.tmpl: updated
+	  to generate tag files in the docs subdirectory
+
+2013-10-05 10:50  david_nichols
+
+	* COPYING, COPYING.LGPL, COPYING.MIT, Makefile.am,
+	  docs/mainpage.doxygen.tmpl, qore-yaml-module.spec: added the MIT
+	  license as a license option
+
+2013-09-24 14:56  david_nichols
+
+	* qlib/YamlRpcHandler.qm: cosmetic/doc updates
+
+2013-09-18 15:25  david_nichols
+
+	* RELEASE-NOTES, docs/mainpage.doxygen.tmpl,
+	  qlib/YamlRpcHandler.qm: updated the YamlRpcHandler class for
+	  enhanced logging
+
+2013-09-16 13:23  david_nichols
+
+	* RELEASE-NOTES, configure.ac, docs/mainpage.doxygen.tmpl,
+	  qore-yaml-module.spec, src/QoreYamlEmitter.cpp: updated to
+	  version 0.4 and corrected a bug serializing and deserializing
+	  zero-length durations
+
+2013-07-29 18:07  david_nichols
+
+	* ChangeLog: dox updates
+
 2013-07-11 08:55  david_nichols
 
 	* ChangeLog: updated SqlUtil in 0.8.8-snapshot
