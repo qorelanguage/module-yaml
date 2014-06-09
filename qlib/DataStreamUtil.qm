@@ -348,6 +348,8 @@ $httpclient.sendWithRecvCallback(ds_get_recv($rcb), $body, $method, $path, $hdr,
         my bool $hp;
         # chunked flag
         my bool $chunked;
+        # send aborted flag
+        my bool $send_aborted;
         # HTTP status code received
         my int $status_code;
 
@@ -361,7 +363,7 @@ $httpclient.sendWithRecvCallback(ds_get_recv($rcb), $body, $method, $path, $hdr,
                     # call "end of data" callback with any error message reported by the sender
                     $ecb($h.hdr{DataStreamError.lwr()});
                     return;
-                }
+                }                
 
                 # set "header parsed" flag to True
                 $hp = True;
@@ -396,6 +398,9 @@ $httpclient.sendWithRecvCallback(ds_get_recv($rcb), $body, $method, $path, $hdr,
                 
                 $dce = ds_get_content_decode($ce);
 
+                if ($h.send_aborted)
+                    $send_aborted = True;
+
                 return;
             }
             if (exists $h.data) {
@@ -426,8 +431,12 @@ $httpclient.sendWithRecvCallback(ds_get_recv($rcb), $body, $method, $path, $hdr,
                 }
 
                 # if the server has returned an error status code, then handle as an exception on the remote side                
-                if (!$chunked && $status_code >= 300 && $h.data.err && $h.data.desc)
-                    throw $h.data.err, $h.data.desc, $h.data.arg;
+                if (!$chunked) {
+                    if (($send_aborted || $status_code >= 300) && $h.data.err && $h.data.desc)
+                        throw $h.data.err, $h.data.desc, $h.data.arg;
+                    if ($send_aborted)
+                        throw "SEND-ABORTED", sprintf("sender sent status code %d before chunked send was complete", $status_code), $h.data;
+                }
 
                 # call data callback
                 $rcb($h.data);

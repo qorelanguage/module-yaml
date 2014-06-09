@@ -322,12 +322,16 @@ my hash $h = $rest.sendDataStream($callback, "POST", "/path");
             my code $dsrcb = ds_get_recv($dcb, $ecb);
             # save response header
             my hash $rhdr;
+            # send aborted flag
+            my bool $send_aborted;
             # our top-level receive callback to save the header and set the chunked flag
             my code $rcb = sub (hash $h) {
                 if ($h.hdr) {
                     $rhdr = $h.hdr;
                     if ($h.hdr."transfer-encoding" == "chunked")
                         $chunked = True;
+                    else if ($h.send_aborted)
+                        $send_aborted = True;
                 }
                 # call DataStream callback
                 $dsrcb($h);
@@ -335,8 +339,12 @@ my hash $h = $rest.sendDataStream($callback, "POST", "/path");
 
             $.sendWithCallbacks(ds_get_send($scb, $.seh.func), $rcb, $method, $path, $hdr, $timeout_ms, False, \$info);
 
-            if ($rhdr.status_code == 409 && $rmd.err && $rmd.desc)
-                throw $rmd.err, $rmd.desc;
+            # rethrow exceptions returned from the sender
+            if ($rhdr.status_code >= 300 && $rmd.err && $rmd.desc)
+                throw $rmd.err, $rmd.desc, $rmd.arg;
+
+            if ($send_aborted)
+                throw "SEND-ABORTED", sprintf("receiver returned status code %d while sending chunked data; send was aborted", $rhdr.status_code), ("hdr": $rhdr, "data": $rmd);
 
             return $rhdr + ("body": $rmd);
         }

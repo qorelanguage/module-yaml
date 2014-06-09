@@ -108,6 +108,9 @@ public namespace DataStreamRequestHandler {
 	    call_function($.rcb, ("hdr": $cx.hdr, "obj": $cx.socketobject));
 	}
 
+        #! if an error occurred, then return a hash giving an error response, otherwise return @ref nothing
+        /** this method is meant to be called by getResponseHeaderMessageImpl()
+        */
         *hash getErrorResponse() {
             if ($.cx.hdr{DataStreamAccept.lwr()} != MimeTypeYaml)
                 return (
@@ -127,7 +130,8 @@ public namespace DataStreamRequestHandler {
                 return (
                     "code": ($.err = 409),
                     "body": makeYAML($.ex),
-                    "hdr": ("Content-Type": MimeTypeYaml),                    
+                    "hdr": ("Content-Type": MimeTypeYaml),
+                    "close": True,
                 );
         }
 
