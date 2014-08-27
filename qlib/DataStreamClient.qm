@@ -143,6 +143,8 @@ public namespace DataStreamClient {
             #! default HTTP headers
             const DefaultHeaders = RestClient::DefaultHeaders + (
                 "User-Agent": DataStreamClient::VersionString,
+                DataStreamAccept: MimeTypeYaml,
+                DataStreamAcceptEncoding: "bzip2,gzip,deflate",
                 );
         }
 
