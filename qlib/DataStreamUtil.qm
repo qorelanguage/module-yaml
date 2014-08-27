@@ -352,6 +352,8 @@ $httpclient.sendWithRecvCallback(ds_get_recv($rcb), $body, $method, $path, $hdr,
         my bool $send_aborted;
         # HTTP status code received
         my int $status_code;
+        # content type received
+        my *string $ct;
 
         return sub (hash $h) {
             #printf("DBG ds_get_recv() h: %y\n", $h);
@@ -372,7 +374,7 @@ $httpclient.sendWithRecvCallback(ds_get_recv($rcb), $body, $method, $path, $hdr,
                 $status_code = $h.hdr.status_code;
 
                 # parse content type and optionally any content encoding
-                my (*string $ct, *string $ce);
+                my *string $ce;
 
                 # set chunked flag
                 $chunked = ($h.hdr."transfer-encoding" == "chunked");
@@ -390,9 +392,6 @@ $httpclient.sendWithRecvCallback(ds_get_recv($rcb), $body, $method, $path, $hdr,
                 # remove any ";charset=utf-8" from the end of the content-type header
                 $ct =~ s/; ?charset=utf-?8$//i;
                 
-                if ($ct != MimeTypeYaml)
-                    throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize request body; content-type is: %y; type supported: %y", $ct, MimeTypeYaml);
-
                 # data is always transferred in UTF-8 encoding with DataStream
                 $h.obj.setEncoding("utf8");
                 
@@ -404,6 +403,9 @@ $httpclient.sendWithRecvCallback(ds_get_recv($rcb), $body, $method, $path, $hdr,
                 return;
             }
             if (exists $h.data) {
+                if ($ct != MimeTypeYaml)
+                    throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize request body; content-type is: %y; type supported: %y", $ct, MimeTypeYaml);
+
                 if (!$h.deserialized) {
                     switch ($h.data.typeCode()) {
                         # can be a string if sent in a regular body without content-encoding
