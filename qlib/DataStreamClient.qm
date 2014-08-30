@@ -144,7 +144,6 @@ public namespace DataStreamClient {
             const DefaultHeaders = RestClient::DefaultHeaders + (
                 "User-Agent": DataStreamClient::VersionString,
                 DataStreamAccept: MimeTypeYaml,
-                DataStreamAcceptEncoding: "bzip2,gzip,deflate",
                 );
         }
 
@@ -155,14 +154,15 @@ my DataStreamClient $ds(("url": "http://localhost:8001/rest"));
             @endcode
 
             @param opts valid options are:
-            - \c url: A string giving the URL to connect to
-            - \c default_port: The default port number to connect to if none is given in the URL
-            - \c http_version: Either '1.0' or '1.1' for the claimed HTTP protocol version compliancy in outgoing message headers
+            - \c connect_timeout: The timeout value in milliseconds for establishing a new socket connection (also can be a relative date-time value for clarity, ex: \c 20s)
             - \c default_path: The default path to use for new connections if a path is not otherwise specified in the connection URL
+            - \c default_port: The default port number to connect to if none is given in the URL
+            - \c headers: an optional hash of headers to send with every request, these can also be overridden in request method calls
+            - \c http_version: Either '1.0' or '1.1' for the claimed HTTP protocol version compliancy in outgoing message headers
             - \c max_redirects: The maximum number of redirects before throwing an exception (the default is 5)
             - \c proxy: The proxy URL for connecting through a proxy
             - \c timeout: The timeout value in milliseconds (also can be a relative date-time value for clarity, ex: \c 30s)
-            - \c connect_timeout: The timeout value in milliseconds for establishing a new socket connection (also can be a relative date-time value for clarity, ex: \c 20s)
+            - \c url: A string giving the URL to connect to
             @param do_not_connect if \c False (the default), then a connection will be immediately established to the remote server
 
             @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
@@ -170,7 +170,16 @@ my DataStreamClient $ds(("url": "http://localhost:8001/rest"));
             @note the \c data argument to @ref RestClient::RestClient::constructor() "RestClient::constructor()" is set to \c "yaml" automatically
         */
         constructor(*hash $opts, *softbool $do_not_connect) : RestClient(("send_encoding": "bzip2") + $opts + ("data": "yaml"), $do_not_connect) {
-            $.headers = DefaultHeaders + $opts.headers;
+            # build default DataStream-Accept-Encoding header from Accept-Encoding header if present
+            my hash $dh = DefaultHeaders;
+            if ($opts.headers."Accept-Encoding") {
+                my *string $dae = ds_get_ds_accept_enc_header($opts.headers."Accept-Encoding");
+                if ($dae)
+                    $dh{DataStreamAcceptEncoding} = $dae;
+            }
+            else
+                $dh{DataStreamAcceptEncoding} = "bzip2,gzip,deflate";            
+            $.headers = $dh + $opts.headers;
         }
 
         #! sends an HTTP request to an HTTP REST server supporting the @ref datastreamprotocol "DataStream protocol" and returns the decoded and deserialized response in the given callback as each HTTP chunk is received
@@ -475,6 +484,30 @@ $rest.sendRecvDataStream($send_callback, $recv_callback, "POST", "/path");
         */
         sendRecvDataStream(DataStreamMessage $dsm, string $method, string $path, timeout $timeout_ms = 0, *reference $info, *hash $hdr) {
             $.sendRecvDataStream(\$dsm.sendData(), \$dsm.recvData(), \$dsm.recvDataDone(), $method, $path, $timeout_ms, \$info, $hdr);
+        }
+
+        #! adds default headers to each request; these headers will be sent in all requests but can be overridden in requests as well
+        /** @par Example:
+            @code
+# disable gzip and bzip encoding in responses
+$rest.addDefaultHeaders(("Accept-Encoding": "compress"));
+            @endcode
+
+            @param h a hash of headers to add to the default headers to send on each request
+            
+            @note default headers can also be set in the constructor
+
+            @see @ref RestClient::RestClient::getDefaultHeaders() "RestClient::getDefaultHeaders()"
+        */
+        addDefaultHeaders(hash $h) {
+            $.headers += $h;
+            if ($h."Accept-Encoding") {
+                my *string $dae = ds_get_ds_accept_enc_header($h."Accept-Encoding");
+                if ($dae)
+                    $.headers{DataStreamAcceptEncoding} = $dae;
+                else
+                    delete $.headers{DataStreamAcceptEncoding};
+            }
         }
     }
 }
