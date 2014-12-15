@@ -215,8 +215,6 @@ $rest.recvDataStream($recv_callback, "GET", "/orders/1", $body);
         recvDataStream(code $rcb, code $ecb, string $method, string $path, any $body, timeout $timeout_ms = 0, *reference $info, *hash $hdr) {
             $.prepareMsg(\$body, \$hdr);
 
-            ds_set_non_chunked_headers(\$hdr, $.seh.ce, True);
-
             on_exit if (exists $body) {
                 $info += (
                     "request-body": $body,
@@ -518,6 +516,31 @@ $rest.setContentEncoding("gzip");
         setContentEncoding(string $enc = "auto") {
             RestClient::$.setContentEncoding($enc);
             $.headers{DataStreamAcceptEncoding} = $.headers."Accept-Encoding";
+        }
+
+        #! sets up headers and encodes any body for sending
+        private nothing prepareMsg(reference $body, reference $hdr, string $ct = "Content-Type") {
+            RestClient::$.prepareMsg(\$body, \$hdr, $ct);
+            ds_set_non_chunked_headers(\$hdr, $.seh.ce, True);
+        }
+
+        #! decodes the response for the RestClient
+        decodeResponse(reference $h, *reference $info) {
+            # fix content-type for datastream messages
+            if ($h."content-type" == MimeTypeOctetStream && $h.(DataStreamContentType.lwr())) {
+                $h."content-type" = $h."datastream-content-type";
+                # remove any charset declaration in the content-type
+                $h."content-type" =~ s/;charset=.*//;#/;
+                # DataStream content decoding must be executed immediately before calling RestClient::decodeResponse()
+                my *string $ce = $h.(DataStreamContentEncoding.lwr());
+                if ($ce) {
+                    my *code $decode = ds_get_content_decode($ce);
+                    if ($decode)
+                        $h.body = $decode(binary($h.body));
+                }
+                $h."content-encoding" = $h.(DataStreamContentEncoding.lwr());
+            }
+            RestClient::$.decodeResponse(\$h, \$info);
         }
     }
 }
