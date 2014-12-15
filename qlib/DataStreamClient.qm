@@ -524,23 +524,75 @@ $rest.setContentEncoding("gzip");
             ds_set_non_chunked_headers(\$hdr, $.seh.ce, True);
         }
 
-        #! decodes the response for the RestClient
-        decodeResponse(reference $h, *reference $info) {
-            # fix content-type for datastream messages
-            if ($h."content-type" == MimeTypeOctetStream && $h.(DataStreamContentType.lwr())) {
-                $h."content-type" = $h."datastream-content-type";
-                # remove any charset declaration in the content-type
-                $h."content-type" =~ s/;charset=.*//;#/;
-                # DataStream content decoding must be executed immediately before calling RestClient::decodeResponse()
-                my *string $ce = $h.(DataStreamContentEncoding.lwr());
-                if ($ce) {
-                    my *code $decode = ds_get_content_decode($ce);
-                    if ($decode)
-                        $h.body = $decode(binary($h.body));
+        #! sends the outgoing HTTP message and recodes the response to data
+        hash sendAndDecodeResponse(*data $body, string $m, string $path, hash $hdr, *reference $info, *softbool $decode_errors) {
+            /* we cannot just receive standard HTTP chunk data here since any Content-Encoding will not be respected,
+             * and any DataStream content encoding can only be applied to each chunk separately.  Therefore we have
+             * to intercept the chunked messages here to build the respose data and also capture the headers
+             * returned
+             */
+
+            # received data
+            my any $rmd;
+            # chunked response flag (determines if $rmd is a list or not)
+            my bool $chunked;
+            # define data callback to build response msg data
+            my code $dcb = sub (any $d) {
+                if (exists $d) {
+                    if ($chunked) {
+                        if (!$rmd)
+                            $rmd = ();
+                        $rmd += $d;
+                    }
+                    else
+                        $rmd = $d;
                 }
-                $h."content-encoding" = $h.(DataStreamContentEncoding.lwr());
+            };
+            my code $ecb = sub () {};
+            # response serialization
+            my string $rs;
+            # raw response
+            my string $rrs = "";
+            on_exit $info += (
+                "response-body": $rrs,
+                "response-serialization": $rs,
+                );
+            my code $bcb = sub (string $b, string $code) {
+                $rrs += $b;
+                $rs = $code;
+            };
+            # get DataStream receive callback using our local data callback closure
+            my code $dsrcb = ds_get_recv($dcb, $ecb, $bcb);
+            # save response header
+            my hash $rhdr;
+            # send aborted flag
+            my bool $send_aborted;
+            # our top-level receive callback to save the header and set the chunked flag
+            my code $rcb = sub (hash $h) {
+                if ($h.hdr) {
+                    $rhdr = $h.hdr;
+                    if ($h.hdr."transfer-encoding" == "chunked")
+                        $chunked = True;
+                    else if ($h.send_aborted)
+                        $send_aborted = True;
+                }
+                # call DataStream callback
+                $dsrcb($h);
+            };
+
+            $.sendWithRecvCallback($rcb, $body, $m, $path, $hdr, 60s, False, \$info);
+
+            # rethrow exceptions returned from the sender
+            if ($rhdr.status_code >= 300 && $rmd.err && $rmd.desc) {
+                if ($decode_errors && $rmd.arg.body)
+                    $.decodeError($rmd.arg, \$info);
+                throw $rmd.err, $rmd.desc, $rmd.arg;
             }
-            RestClient::$.decodeResponse(\$h, \$info);
+
+            if ($send_aborted)
+                throw "SEND-ABORTED", sprintf("receiver returned status code %d while sending chunked data; send was aborted", $rhdr.status_code), ("hdr": $rhdr, "data": $rmd);
+
+            return $rhdr + ("body": $rmd);
         }
     }
 }
