@@ -34,6 +34,14 @@
 %requires yaml
 %requires Mime
 
+%try-module xml
+%define NoXml
+%endtry
+
+%try-module json
+%define NoJson
+%endtry
+
 module DataStreamUtil {
     version = "1.0";
     desc = "user module supporting YAML-encoded HTTP chunked transfers where each chunk is a unique data entity";
@@ -220,6 +228,33 @@ public namespace DataStreamUtil {
         );
     #@}
 
+    public const DataStreamDeserializeYaml = (
+        "code": "yaml",
+        "in": \parseYAML(),
+        );
+
+%ifndef NoXml
+    const DataStreamDeserializeXmlRpc = (
+        "code": "xml",
+        "in": \parseXMLRPCValue(),
+        );
+%endif
+
+    public const DataStreamDeserializationSupport = (
+        MimeTypeYamlRpc: DataStreamDeserializeYaml,
+        MimeTypeYaml: DataStreamDeserializeYaml,
+%ifndef NoJson
+        MimeTypeJson: (
+            "code": "json",
+            "in": \parseJSON(),
+        ),
+%endif
+%ifndef NoXml
+        MimeTypeXml: DataStreamDeserializeXmlRpc,
+        MimeTypeXmlApp: DataStreamDeserializeXmlRpc,
+%endif
+        );
+
     #! returns a @ref call_reference "call reference" (or @ref nothing) based on an optional \c "Content-Encoding" header value for decoding HTTP encoded data
     /** @par Example:
         @code
@@ -340,6 +375,7 @@ $httpclient.sendWithRecvCallback(ds_get_recv($rcb), $body, $method, $path, $hdr,
 
         @param rcb the data callback; this is called once for each deserialized chunked transfer from the remote end with the deserialized data, and then once with @ref nothing when all data has been received
         @param ecb the "end of data" callback; this must accept a @ref string_or_nothing "*string" argument; this is called with no arguments once all data has been received if the sender does not report a send error, otherwise it's called with a single string giving the send error reported by the sending side in the \c DataStream-Error trailer record
+        @param $bcb an optional "body callback"; if this argument is passed, it must take a string argument which will be the content-decoded raw message body before any data deserialization and a second string argument giving the content-type of the body
 
         @return a @ref call_reference "call reference" useful for receiving HTTP chunked data with %Qore methods taking receive callbacks; when HTTP headers are received, the closure sets up content decoding by calling @ref ds_get_content_decode() on the \c "Content-Encoding" or "DataStream-Content-Encoding" header values; when raw chunked data is received, first the chunked body is decoded (if content encoding was indicated in the message headers), then YAML data is deserialized and passed as %Qore data to the given callback argument; the return value of this function is design to be used as the receive callback parameter \a rcb in the following methods:
       - @ref Qore::HTTPClient::sendWithRecvCallback() "HTTPClient::sendWithRecvCallback()"
@@ -349,7 +385,7 @@ $httpclient.sendWithRecvCallback(ds_get_recv($rcb), $body, $method, $path, $hdr,
 
         @note the callback returned here can throw a \c "DESERIALIZATION-ERROR" if the header's \c "Content-Type" or "DataStream-Content-Type" is not \c "text/yaml" or the \c "Content-Encoding" or \c "DataStream-Content-Encoding" headers give unrecognized content encodings.
     */
-    public code sub ds_get_recv(code $rcb, code $ecb) {
+    public code sub ds_get_recv(code $rcb, code $ecb, *code $bcb) {
         # decode content encoding call reference
         my *code $dce;
         # "header parsed" flag
@@ -411,8 +447,9 @@ $httpclient.sendWithRecvCallback(ds_get_recv($rcb), $body, $method, $path, $hdr,
                 return;
             }
             if (exists $h.data) {
-                if ($ct != MimeTypeYaml)
-                    throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize request body; content-type is: %y; type supported: %y", $ct, MimeTypeYaml);
+                my *hash $ddc = DataStreamDeserializationSupport.$ct;
+                if (!$ddc)
+                    throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize request body; content-type is: %y; types supported: %y", $ct, DataStreamDeserializationSupport.keys());
 
                 if (!$h.deserialized) {
                     switch ($h.data.typeCode()) {
@@ -423,7 +460,6 @@ $httpclient.sendWithRecvCallback(ds_get_recv($rcb), $body, $method, $path, $hdr,
                                 $h.data = $dce(binary($h.data), "utf8");
                             else if ($h.data.encoding() != "UTF-8")
                                 $h.data = force_encoding($h.data, "utf8");
-                            $h.data = parseYAML($h.data);
                             break;
                         }
                         # is a binary if sent in a regular body without content-encoding or sent chunked
@@ -432,12 +468,15 @@ $httpclient.sendWithRecvCallback(ds_get_recv($rcb), $body, $method, $path, $hdr,
                                 $h.data = $dce($h.data, "utf8");
                             else
                                 $h.data = binary_to_string($h.data, "utf8");
-                            $h.data = parseYAML($h.data);
                             break;
                         }
                         default:
                             throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize request body; body type is %y", $h.data.type());
                     }
+                    # pass the content-decoded body to any "body callback" before deserialization
+                    if ($bcb)
+                        $bcb($h.data, $ddc.code);
+                    $h.data = $ddc.in($h.data);
                 }
 
                 # if the server has returned an error status code, then handle as an exception on the remote side                
