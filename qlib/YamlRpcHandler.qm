@@ -31,8 +31,13 @@
 # need mime definitions
 %requires Mime >= 1.0
 
-# need HttpServer definitions
+# need Util module
+%requires Util
+    
+# for Qore 0.8.12+, we need HttpServerUtil also, ignore errors for earlier versions
+%try-module HttpServerUtil
 %requires HttpServer >= 0.3.3
+%endtry
 
 module YamlRpcHandler {
     version = "1.2";
@@ -272,7 +277,7 @@ public namespace YamlRpcHandler {
                 # show complete exception trace if system debug option is enabled
                 my string $str = !$.debug
                     ? sprintf("%s: %s: %s", get_ex_pos($ex), $ex.err, $ex.desc)
-                    : HttpServer::get_exception_string($ex);
+                    : get_exception_string($ex);
                 return ( "code"   : 200,
                          "errlog" : $str,
                          "hdr"    : ( "Content-Type" : MimeTypeYamlRpc ),
