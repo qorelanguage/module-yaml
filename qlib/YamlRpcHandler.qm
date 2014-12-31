@@ -23,7 +23,7 @@
 */
 
 # minimum qore version
-%requires qore >= 0.8.10
+%requires qore >= 0.8.11.1
 
 # requires the binary yaml module
 %requires yaml >= 0.3
@@ -33,11 +33,9 @@
 
 # need Util module
 %requires Util
-    
-# for Qore 0.8.12+, we need HttpServerUtil also, ignore errors for earlier versions
-%try-module HttpServerUtil
-%requires HttpServer >= 0.3.3
-%endtry
+
+# need HttpServerUtil module at a minimum in this module
+%requires HttpServerUtil
 
 module YamlRpcHandler {
     version = "1.2";
