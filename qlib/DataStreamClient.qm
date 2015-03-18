@@ -36,6 +36,9 @@
 %requires yaml
 %requires Mime
 
+# do not use $ signs in declarations
+%new-style
+
 module DataStreamClient {
     version = "1.0";
     desc = "user module implementing client support for the DataStream protocol: YAML-encoded HTTP chunked transfers where each chunk is a unique data entity";
@@ -85,7 +88,7 @@ public namespace DataStreamClient {
 	/** @return the data returned by this callback will be serialized to YAML and send via the @ref datastreamprotocol "DataStream protocol" to the remote HTTP REST server in HTTP chunked format; when all data has been send then this callback should return @ref nothing, which will close the chunked message and terminate the request
 	*/
 	any sendData() {
-            return $.sendDataImpl();
+            return sendDataImpl();
         }
 
 	#! reimplement this method in subclasses to support streamed data transfers; when this method returns no value, it signifies the end of the streamed data transfer
@@ -98,33 +101,33 @@ public namespace DataStreamClient {
     public class DataStreamRecvMessage {
         public {
             # any datastream error received from the remote end
-            string $.err;
+            string err;
         }
 
 	#! receives decoded data from the remote end and calls recvDataImpl()
 	/** @param data the argument passed to this callback is the decoded and deserialized data in the message
 	*/
-	nothing recvData(any $data) {
-            $.recvDataImpl($data);
+	nothing recvData(any data) {
+            recvDataImpl(data);
         }
 
         #! this method is called when all data has been received; this method calls recvDataDoneImpl()
         /** @param err this argument is @ref nothing the sender does not report a send error, otherwise it's a single string giving the send error reported by the sending side in the \c DataStream-Error trailer record
         */
-        nothing recvDataDone(*string $err) {
-            $.recvDataDoneImpl($err);
+        nothing recvDataDone(*string err) {
+            recvDataDoneImpl(err);
         }
 
         #! this method is called when all data has been received
         /** @param err this argument is @ref nothing the sender does not report a send error, otherwise it's a single string giving the send error reported by the sending side in the \c DataStream-Error trailer record
         */
-        private nothing recvDataDoneImpl(*string $err) {
+        private nothing recvDataDoneImpl(*string err) {
         }
 
 	#! reimplement this method in subclasses to receive decoded and deserialized data
 	/** @param data the argument passed to this callback is the decoded and deserialized data in the message
 	*/
-	private abstract nothing recvDataImpl(any $data);
+	private abstract nothing recvDataImpl(any data);
     }
 
     #! this class can be used to send and receive data using the @ref datastreamprotocol "DataStream protocol"
@@ -150,7 +153,7 @@ public namespace DataStreamClient {
         #! calls the base class RestClient constructor and optionally connects to the REST server
         /** @par Example:
             @code
-my DataStreamClient $ds(("url": "http://localhost:8001/rest"));
+DataStreamClient ds(("url": "http://localhost:8001/rest"));
             @endcode
 
             @param opts valid options are:
@@ -169,23 +172,23 @@ my DataStreamClient $ds(("url": "http://localhost:8001/rest"));
 
             @note the \c data argument to @ref RestClient::RestClient::constructor() "RestClient::constructor()" is set to \c "yaml" automatically
         */
-        constructor(*hash $opts, *softbool $do_not_connect) : RestClient($opts + ("data": "yaml"), $do_not_connect) {
+        constructor(*hash opts, *softbool do_not_connect) : RestClient(opts + ("data": "yaml"), do_not_connect) {
             # build default DataStream-Accept-Encoding header from Accept-Encoding header if present
-            my hash $dh = DefaultHeaders;
-            if ($.headers."Accept-Encoding") {
-                my *string $dae = ds_get_ds_accept_enc_header($.headers."Accept-Encoding");
-                if ($dae)
-                    $dh{DataStreamAcceptEncoding} = $dae;
+            hash dh = DefaultHeaders;
+            if (headers."Accept-Encoding") {
+                *string dae = ds_get_ds_accept_enc_header(headers."Accept-Encoding");
+                if (dae)
+                    dh{DataStreamAcceptEncoding} = dae;
             }
             else
-                $dh{DataStreamAcceptEncoding} = "gzip,bzip2,deflate";            
-            $.headers = $dh + $opts.headers;
+                dh{DataStreamAcceptEncoding} = "gzip,bzip2,deflate";            
+            headers = dh + opts.headers;
         }
 
         #! sends an HTTP request to an HTTP REST server supporting the @ref datastreamprotocol "DataStream protocol" and returns the decoded and deserialized response in the given callback as each HTTP chunk is received
         /** @par Example:
             @code
-$rest.recvDataStream($recv_callback, "GET", "/orders/1", $body);
+rest.recvDataStream(reccallback, "GET", "/orders/1", body);
             @endcode
 
             @param rcb The receive callback for the data received; the argument passed to this callback is the decoded and deserialized data in the message
@@ -212,26 +215,26 @@ $rest.recvDataStream($recv_callback, "GET", "/orders/1", $body);
 
             @note this method can also be used if the server returns a non-chunked response; the response body will be decoded, deserialized, and passed to the receive callback as if a chunked body were received, additionally the terminating call with no arguments is also made to signal the end of the chunked data
          */
-        recvDataStream(code $rcb, code $ecb, string $method, string $path, any $body, timeout $timeout_ms = 0, *reference $info, *hash $hdr) {
-            $.prepareMsg(\$body, \$hdr);
+        recvDataStream(code rcb, code ecb, string method, string path, any body, timeout timeout_ms = 0, *reference info, *hash hdr) {
+            prepareMsg(\body, \hdr);
 
-            on_exit if (exists $body) {
-                $info += (
-                    "request-body": $body,
-                    "request-serialization": $.ds,
+            on_exit if (exists body) {
+                info += (
+                    "request-body": body,
+                    "request-serialization": ds,
                     );
             }
 
             # prepare path
-            $.preparePath(\$path);
+            preparePath(\path);
 
-            $.sendWithRecvCallback(ds_get_recv($rcb, $ecb), $body, $method, $path, $hdr, $timeout_ms, False, \$info);
+            sendWithRecvCallback(ds_get_recv(rcb, ecb), body, method, path, hdr, timeout_ms, False, \info);
         }
 
         #! sends an HTTP request to an HTTP REST server supporting the @ref datastreamprotocol "DataStream protocol" and returns the decoded and deserialized response in the given callback as each HTTP chunk is received
         /** @par Example:
             @code
-$rest.recvDataStream($recv_callback, "GET", "/orders/1", $body);
+rest.recvDataStream(reccallback, "GET", "/orders/1", body);
             @endcode
 
             @param dsm the @ref DataStreamRecvMessage object providing the DataStreamRecvMessage::recvData() and DataStreamRecvMessage::recvDataDone() methods to be used as callbacks
@@ -257,8 +260,8 @@ $rest.recvDataStream($recv_callback, "GET", "/orders/1", $body);
 
             @note this method can also be used if the server returns a non-chunked response; the response body will be decoded, deserialized, and passed to the receive callback as if a chunked body were received, additionally the terminating call with no arguments is also made to signal the end of the chunked data
          */
-        recvDataStream(DataStreamRecvMessage $dsm, string $method, string $path, any $body, timeout $timeout_ms = 0, *reference $info, *hash $hdr) {
-            $.recvDataStream(\$dsm.recvData(), \$dsm.recvDataDone(), $method, $path, $body, $timeout_ms, \$info, $hdr);
+        recvDataStream(DataStreamRecvMessage dsm, string method, string path, any body, timeout timeout_ms = 0, *reference info, *hash hdr) {
+            recvDataStream(\dsm.recvData(), \dsm.recvDataDone(), method, path, body, timeout_ms, \info, hdr);
         }
 
         #! Sends an HTTP request to an HTTP REST server supporting the @ref datastreamprotocol "DataStream protocol" with the specified method and chunked message body as given by a send callback and returns the deserialized body and response headers received as a response
@@ -266,7 +269,7 @@ $rest.recvDataStream($recv_callback, "GET", "/orders/1", $body);
 
             @par Example:
             @code
-my hash $h = $rest.sendDataStream($callback, "POST", "/path");
+hash h = rest.sendDataStream(callback, "POST", "/path");
             @endcode
 
             @param scb The callback giving the chunked HTTP data to send; the data returned by this callback will be serialized to YAML and send via the @ref datastreamprotocol "DataStream protocol" to the remote HTTP REST server in HTTP chunked format; when all data has been send then this callback should return @ref nothing, which will close the chunked message and terminate the request
@@ -296,13 +299,13 @@ my hash $h = $rest.sendDataStream($callback, "POST", "/path");
             - this method can also be used when the server returns chunked @ref datastreamprotocol "DataStream protocol" data; in this case the chunked response is received in its entirity and returns in the return value's \c "body" key as a list where each list element is the data value of the respective DataStream chunk
             - the value of the return value's \c "body" key will be decoded and deserialized data
         */
-        hash sendDataStream(code $scb, string $method, string $path, timeout $timeout_ms = 0, *reference $info, *hash $hdr) {
-            $hdr = $.headers + $hdr;
+        hash sendDataStream(code scb, string method, string path, timeout timeout_ms = 0, *reference info, *hash hdr) {
+            hdr = headers + hdr;
 
-            ds_set_chunked_headers(\$hdr, $.seh.ce, True);
+            ds_set_chunked_headers(\hdr, seh.ce, True);
 
             # prepare path
-            $.preparePath(\$path);
+            preparePath(\path);
 
             /* we cannot just receive standard HTTP chunk data here since any Content-Encoding will not be respected,
              * and any DataStream content encoding can only be applied to each chunk separately.  Therefore we have
@@ -311,51 +314,51 @@ my hash $h = $rest.sendDataStream($callback, "POST", "/path");
              */
 
             # received data
-            my any $rmd;
-            # chunked response flag (determines if $rmd is a list or not)
-            my bool $chunked;
+            any rmd;
+            # chunked response flag (determines if rmd is a list or not)
+            bool chunked;
             # define data callback to build response msg data
-            my code $dcb = sub (any $d) {
-                if (exists $d) {
-                    if ($chunked) {
-                        if (!$rmd)
-                            $rmd = ();
-                        $rmd += $d;
+            code dcb = sub (any d) {
+                if (exists d) {
+                    if (chunked) {
+                        if (!rmd)
+                            rmd = ();
+                        rmd += d;
                     }
                     else
-                        $rmd = $d;
+                        rmd = d;
                 }
             };
-            my code $ecb = sub () {};
+            code ecb = sub () {};
             # get DataStream receive callback using our local data callback closure
-            my code $dsrcb = ds_get_recv($dcb, $ecb);
+            code dsrcb = ds_get_recv(dcb, ecb);
             # save response header
-            my hash $rhdr;
+            hash rhdr;
             # send aborted flag
-            my bool $send_aborted;
+            bool send_aborted;
             # our top-level receive callback to save the header and set the chunked flag
-            my code $rcb = sub (hash $h) {
-                if ($h.hdr) {
-                    $rhdr = $h.hdr;
-                    if ($h.hdr."transfer-encoding" == "chunked")
-                        $chunked = True;
-                    else if ($h.send_aborted)
-                        $send_aborted = True;
+            code rcb = sub (hash h) {
+                if (h.hdr) {
+                    rhdr = h.hdr;
+                    if (h.hdr."transfer-encoding" == "chunked")
+                        chunked = True;
+                    else if (h.send_aborted)
+                        send_aborted = True;
                 }
                 # call DataStream callback
-                $dsrcb($h);
+                dsrcb(h);
             };
 
-            $.sendWithCallbacks(ds_get_send($scb, $.seh.func), $rcb, $method, $path, $hdr, $timeout_ms, False, \$info);
+            sendWithCallbacks(ds_get_send(scb, seh.func), rcb, method, path, hdr, timeout_ms, False, \info);
 
             # rethrow exceptions returned from the sender
-            if ($rhdr.status_code >= 300 && $rmd.err && $rmd.desc)
-                throw $rmd.err, $rmd.desc, $rmd.arg;
+            if (rhdr.status_code >= 300 && rmd.err && rmd.desc)
+                throw rmd.err, rmd.desc, rmd.arg;
 
-            if ($send_aborted)
-                throw "SEND-ABORTED", sprintf("receiver returned status code %d while sending chunked data; send was aborted", $rhdr.status_code), ("hdr": $rhdr, "data": $rmd);
+            if (send_aborted)
+                throw "SEND-ABORTED", sprintf("receiver returned status code %d while sending chunked data; send was aborted", rhdr.status_code), ("hdr": rhdr, "data": rmd);
 
-            return $rhdr + ("body": $rmd);
+            return rhdr + ("body": rmd);
         }
 
         #! Sends an HTTP request to an HTTP REST server supporting the @ref datastreamprotocol "DataStream protocol" with the specified method and chunked message body as given by a send callback and returns the deserialized body and response headers received as a response
@@ -363,7 +366,7 @@ my hash $h = $rest.sendDataStream($callback, "POST", "/path");
 
             @par Example:
             @code
-my hash $h = $rest.sendDataStream($callback, "POST", "/path");
+hash h = rest.sendDataStream(callback, "POST", "/path");
             @endcode
 
             @param dsm the @ref DataStreamSendMessage object providing the DataStreamSendMessage::sendData() method to be used as a callback
@@ -393,8 +396,8 @@ my hash $h = $rest.sendDataStream($callback, "POST", "/path");
             - this method can also be used when the server returns chunked @ref datastreamprotocol "DataStream protocol" data; in this case the chunked response is received in its entirity and returns in the return value's \c "body" key as a list where each list element is the data value of the respective DataStream chunk
             - the value of the return value's \c "body" key will be decoded and deserialized data
         */
-        hash sendDataStream(DataStreamSendMessage $dsm, string $method, string $path, timeout $timeout_ms = 0, *reference $info, *hash $hdr) {
-            return $.sendDataStream(\$dsm.sendData(), $method, $path, $timeout_ms, \$info, $hdr);
+        hash sendDataStream(DataStreamSendMessage dsm, string method, string path, timeout timeout_ms = 0, *reference info, *hash hdr) {
+            return sendDataStream(\dsm.sendData(), method, path, timeout_ms, \info, hdr);
         }
 
         #! Sends an HTTP request an HTTP REST server supporting the @ref datastreamprotocol "DataStream protocol" with the specified method and serialized and encoded chunked message body as given by a send callback; decoded and deserialized data received from the HTTP server are returned through a receive callback
@@ -404,7 +407,7 @@ my hash $h = $rest.sendDataStream($callback, "POST", "/path");
 
             @par Example:
             @code
-$rest.sendRecvDataStream($send_callback, $recv_callback, "POST", "/path");
+rest.sendRecvDataStream(send_callback, reccallback, "POST", "/path");
             @endcode
 
             @param scb The callback giving the chunked HTTP data to send; the data returned by this callback will be serialized to YAML and send via the @ref datastreamprotocol "DataStream protocol" to the remote HTTP REST server in HTTP chunked format; when all data has been send then this callback should return @ref nothing, which will close the chunked message and terminate the request
@@ -434,15 +437,15 @@ $rest.sendRecvDataStream($send_callback, $recv_callback, "POST", "/path");
 
             @note this method can also be used if the server returns a non-chunked response; the response body will be decoded, deserialized, and passed to the receive callback as if a chunked body were received, additionally the terminating call with no arguments is also made to signal the end of the chunked data
         */
-        sendRecvDataStream(code $scb, code $rcb, code $ecb, string $method, string $path, timeout $timeout_ms = 0, *reference $info, *hash $hdr) {
-            $hdr = $.headers + $hdr;
+        sendRecvDataStream(code scb, code rcb, code ecb, string method, string path, timeout timeout_ms = 0, *reference info, *hash hdr) {
+            hdr = headers + hdr;
 
-            ds_set_chunked_headers(\$hdr, $.seh.ce, True);
+            ds_set_chunked_headers(\hdr, seh.ce, True);
 
             # prepare path
-            $.preparePath(\$path);
+            preparePath(\path);
 
-            $.sendWithCallbacks(ds_get_send($scb, $.seh.func), ds_get_recv($rcb, $ecb), $method, $path, $hdr, $timeout_ms, False, \$info);
+            sendWithCallbacks(ds_get_send(scb, seh.func), ds_get_recv(rcb, ecb), method, path, hdr, timeout_ms, False, \info);
         }
 
         #! Sends an HTTP request an HTTP REST server supporting the @ref datastreamprotocol "DataStream protocol" with the specified method and serialized and encoded chunked message body as given by a send callback; decoded and deserialized data received from the HTTP server are returned through a receive callback
@@ -452,7 +455,7 @@ $rest.sendRecvDataStream($send_callback, $recv_callback, "POST", "/path");
 
             @par Example:
             @code
-$rest.sendRecvDataStream($send_callback, $recv_callback, "POST", "/path");
+rest.sendRecvDataStream(send_callback, reccallback, "POST", "/path");
             @endcode
 
             @param dsm the @ref DataStreamMessage object providing the DataStreamMessage::sendData(), DataStreamMessage::recvData(), and DataStreamMessage::recvDataDone() methods method to be used as callbacks
@@ -480,14 +483,14 @@ $rest.sendRecvDataStream($send_callback, $recv_callback, "POST", "/path");
 
             @note this method can also be used if the server returns a non-chunked response; the response body will be decoded, deserialized, and passed to the receive callback as if a chunked body were received, additionally the terminating call with no arguments is also made to signal the end of the chunked data
         */
-        sendRecvDataStream(DataStreamMessage $dsm, string $method, string $path, timeout $timeout_ms = 0, *reference $info, *hash $hdr) {
-            $.sendRecvDataStream(\$dsm.sendData(), \$dsm.recvData(), \$dsm.recvDataDone(), $method, $path, $timeout_ms, \$info, $hdr);
+        sendRecvDataStream(DataStreamMessage dsm, string method, string path, timeout timeout_ms = 0, *reference info, *hash hdr) {
+            sendRecvDataStream(\dsm.sendData(), \dsm.recvData(), \dsm.recvDataDone(), method, path, timeout_ms, \info, hdr);
         }
 
         #! send raw chunked data to the client and expect a YAML-formatted response
         /** @par Example:
             @code
-my hash $h = $rest.sendRawStream($sender, "POST", $uri_path, 20s);
+hash h = rest.sendRawStream(sender, "POST", uri_path, 20s);
             @endcode
                 
             The request will be made with the \c "Accept" header set to \c "application/x-yaml"; replies are expected to be YAML-serialized data.  Note that the \c "body" key in the return value will contain the deserialized YAML payload as Qore data.
@@ -513,19 +516,19 @@ my hash $h = $rest.sendRawStream($sender, "POST", $uri_path, 20s);
             @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
             @throw SOCKET-HTTP-ERROR Invalid HTTP data was received
         */
-        hash sendRawStream(code $scb, string $method, *string $path, timeout $timeout_ms = 0, *reference $info, *hash $hdr) {
-            if (!$hdr.Accept)
-                $hdr.Accept = MimeTypeYaml;
-            my hash $h = $.sendWithSendCallback($scb, $method, $path, $hdr, $timeout_ms, False, \$info);
-            if ($h."content-type" == MimeTypeYaml && $h.body)
-                $h.body = parseYAML($h.body);
-            return $h;
+        hash sendRawStream(code scb, string method, *string path, timeout timeout_ms = 0, *reference info, *hash hdr) {
+            if (!hdr.Accept)
+                hdr.Accept = MimeTypeYaml;
+            hash h = sendWithSendCallback(scb, method, path, hdr, timeout_ms, False, \info);
+            if (h."content-type" == MimeTypeYaml && h.body)
+                h.body = parseYAML(h.body);
+            return h;
         }
 
         #! receives raw chunked data using the given closure and returns any headers received
         /** @par Example: 
             @code
-my hash $h = $rest.getRawStream($recv, "GET", $uri_path, 20s);
+hash h = rest.getRawStream(recv, "GET", uri_path, 20s);
             @endcode
 
             Any message body will be serialized as YAML and the \c "Content-Type" header will be set to \c "application/x-yaml".
@@ -560,26 +563,26 @@ my hash $h = $rest.getRawStream($recv, "GET", $uri_path, 20s);
             
             @note For possible exceptions when implicitly establishing a connection, see the Socket::connect() method (or Socket::connectSSL() for secure connections)
         */
-        hash getRawStream(code $rcb, string $method, *string $path, any $body, timeout $timeout_ms = 0, *reference $info, *hash $hdr) {
-            my hash $rvhdr;
-            my code $mrcb = sub (hash $h) {
-                if ($h.hdr && !$rvhdr)
-                    $rvhdr = $h.hdr;
-                $rcb($h);
+        hash getRawStream(code rcb, string method, *string path, any body, timeout timeout_ms = 0, *reference info, *hash hdr) {
+            hash rvhdr;
+            code mrcb = sub (hash h) {
+                if (h.hdr && !rvhdr)
+                    rvhdr = h.hdr;
+                rcb(h);
             };
-            if (exists $body) {
-                $body = makeYAML($body);
-                $hdr."Content-Type" = MimeTypeYaml;
+            if (exists body) {
+                body = makeYAML(body);
+                hdr."Content-Type" = MimeTypeYaml;
             }
-            $.sendWithRecvCallback($mrcb, $body, $method, $path, $hdr, $timeout_ms, False, \$info);
-            return $rvhdr;
+            sendWithRecvCallback(mrcb, body, method, path, hdr, timeout_ms, False, \info);
+            return rvhdr;
         }
         
         #! adds default headers to each request; these headers will be sent in all requests but can be overridden in requests as well
         /** @par Example:
             @code
 # disable gzip and bzip encoding in responses
-$rest.addDefaultHeaders(("Accept-Encoding": "compress"));
+rest.addDefaultHeaders(("Accept-Encoding": "compress"));
             @endcode
 
             @param h a hash of headers to add to the default headers to send on each request
@@ -588,35 +591,35 @@ $rest.addDefaultHeaders(("Accept-Encoding": "compress"));
 
             @see @ref RestClient::RestClient::getDefaultHeaders() "RestClient::getDefaultHeaders()"
         */
-        addDefaultHeaders(hash $h) {
-            $.headers += $h;
-            if ($h."Accept-Encoding")
-                $.headers{DataStreamAcceptEncoding} = ds_get_ds_accept_enc_header($h."Accept-Encoding");
+        addDefaultHeaders(hash h) {
+            headers += h;
+            if (h."Accept-Encoding")
+                headers{DataStreamAcceptEncoding} = ds_get_ds_accept_enc_header(h."Accept-Encoding");
         }
 
         #! sets the request and desired response encoding for the object; see @ref EncodingSupport for valid options
         /** @par Example:
             @code
-$rest.setContentEncoding("gzip");
+rest.setContentEncoding("gzip");
             @endcode
 
             @param enc the data content encoding (compression) option for requests and the desired response content encoding for the object; see @ref EncodingSupport for valid options; if the value \c "auto" is passed then \c "gzip" encoding is used for outgoing requests and requested for responses
 
             @throw RESTCLIENT-ERROR invalid or unsupported data content encoding / compression option
         */
-        setContentEncoding(string $enc = "auto") {
-            RestClient::$.setContentEncoding($enc);
-            $.headers{DataStreamAcceptEncoding} = $.headers."Accept-Encoding";
+        setContentEncoding(string enc = "auto") {
+            RestClient::setContentEncoding(enc);
+            headers{DataStreamAcceptEncoding} = headers."Accept-Encoding";
         }
         
         #! sets up headers and encodes any body for sending
-        private nothing prepareMsg(reference $body, reference $hdr, string $ct = "Content-Type") {
-            RestClient::$.prepareMsg(\$body, \$hdr, $ct);
-            ds_set_non_chunked_headers(\$hdr, $.seh.ce, True);
+        private nothing prepareMsg(reference body, reference hdr, string ct = "Content-Type") {
+            RestClient::prepareMsg(\body, \hdr, ct);
+            ds_set_non_chunked_headers(\hdr, seh.ce, True);
         }
 
         #! sends the outgoing HTTP message and recodes the response to data
-        hash sendAndDecodeResponse(*data $body, string $m, string $path, hash $hdr, *reference $info, *softbool $decode_errors) {
+        hash sendAndDecodeResponse(*data body, string m, string path, hash hdr, *reference info, *softbool decode_errors) {
             /* we cannot just receive standard HTTP chunk data here since any Content-Encoding will not be respected,
              * and any DataStream content encoding can only be applied to each chunk separately.  Therefore we have
              * to intercept the chunked messages here to build the respose data and also capture the headers
@@ -624,66 +627,66 @@ $rest.setContentEncoding("gzip");
              */
 
             # received data
-            my any $rmd;
-            # chunked response flag (determines if $rmd is a list or not)
-            my bool $chunked;
+            any rmd;
+            # chunked response flag (determines if rmd is a list or not)
+            bool chunked;
             # define data callback to build response msg data
-            my code $dcb = sub (any $d) {
-                if (exists $d) {
-                    if ($chunked) {
-                        if (!$rmd)
-                            $rmd = ();
-                        $rmd += $d;
+            code dcb = sub (any d) {
+                if (exists d) {
+                    if (chunked) {
+                        if (!rmd)
+                            rmd = ();
+                        rmd += d;
                     }
                     else
-                        $rmd = $d;
+                        rmd = d;
                 }
             };
-            my code $ecb = sub () {};
+            code ecb = sub () {};
             # response serialization
-            my string $rs;
+            string rs;
             # raw response
-            my string $rrs = "";
-            on_exit $info += (
-                "response-body": $rrs,
-                "response-serialization": $rs,
+            string rrs = "";
+            on_exit info += (
+                "response-body": rrs,
+                "response-serialization": rs,
                 );
-            my code $bcb = sub (string $b, string $code) {
-                $rrs += $b;
-                $rs = $code;
+            code bcb = sub (string b, string code) {
+                rrs += b;
+                rs = code;
             };
             # get DataStream receive callback using our local data callback closure
-            my code $dsrcb = ds_get_recv($dcb, $ecb, $bcb);
+            code dsrcb = ds_get_recv(dcb, ecb, bcb);
             # save response header
-            my hash $rhdr;
+            hash rhdr;
             # send aborted flag
-            my bool $send_aborted;
+            bool send_aborted;
             # our top-level receive callback to save the header and set the chunked flag
-            my code $rcb = sub (hash $h) {
-                if ($h.hdr) {
-                    $rhdr = $h.hdr;
-                    if ($h.hdr."transfer-encoding" == "chunked")
-                        $chunked = True;
-                    else if ($h.send_aborted)
-                        $send_aborted = True;
+            code rcb = sub (hash h) {
+                if (h.hdr) {
+                    rhdr = h.hdr;
+                    if (h.hdr."transfer-encoding" == "chunked")
+                        chunked = True;
+                    else if (h.send_aborted)
+                        send_aborted = True;
                 }
                 # call DataStream callback
-                $dsrcb($h);
+                dsrcb(h);
             };
 
-            $.sendWithRecvCallback($rcb, $body, $m, $path, $hdr, 60s, False, \$info);
+            sendWithRecvCallback(rcb, body, m, path, hdr, 60s, False, \info);
 
             # rethrow exceptions returned from the sender
-            if ($rhdr.status_code >= 300 && $rmd.err && $rmd.desc) {
-                if ($decode_errors && $rmd.arg.body)
-                    $.decodeError($rmd.arg, \$info);
-                throw $rmd.err, $rmd.desc, $rmd.arg;
+            if (rhdr.status_code >= 300 && rmd.err && rmd.desc) {
+                if (decode_errors && rmd.arg.body)
+                    decodeError(rmd.arg, \info);
+                throw rmd.err, rmd.desc, rmd.arg;
             }
 
-            if ($send_aborted)
-                throw "SEND-ABORTED", sprintf("receiver returned status code %d while sending chunked data; send was aborted", $rhdr.status_code), ("hdr": $rhdr, "data": $rmd);
+            if (send_aborted)
+                throw "SEND-ABORTED", sprintf("receiver returned status code %d while sending chunked data; send was aborted", rhdr.status_code), ("hdr": rhdr, "data": rmd);
 
-            return $rhdr + ("body": $rmd);
+            return rhdr + ("body": rmd);
         }
     }
 }
