@@ -22,8 +22,8 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-# this module requires Qore 0.8.10 or better
-%requires qore >= 0.8.10
+# this module requires Qore 0.8.12 or better
+%requires qore >= 0.8.12
 
 # require type definitions everywhere
 %require-types
@@ -474,8 +474,8 @@ httpclient.sendWithRecvCallback(ds_get_recv(rcb), body, method, path, hdr, timeo
                     }
                     *hash ddc = DataStreamDeserializationSupport{ct};
                     if (!ddc) {
-                        #if (bcb)
-                        #    bcb(h.data, ct);
+                        if (bcb)
+                            bcb(h.data, ct);
                         throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize request body; content-type is: %y; types supported: %y", ct, DataStreamDeserializationSupport.keys());
                     }
                     
