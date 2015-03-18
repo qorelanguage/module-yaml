@@ -139,36 +139,36 @@ public namespace YamlRpcHandler {
             *code getLogMessage;
 
             # a closure/call reference for logging (when set this is used instead of the HTTP server's logfunc for logging)
-            *code log;
+            *code clog;
         }
         #! @endcond
 
         #! creates the handler with the given method list
-        /** @param auth an authentication object (use new AbstractAuthenticator() for no authentication)
-            @param methods a list of hashes with the following keys:
+        /** @param v_auth an authentication object (use new AbstractAuthenticator() for no authentication)
+            @param v_methods a list of hashes with the following keys:
             - \c name: a regular expression to use for matching the method name
             - \c function: a string (giving a function name to call), a call reference, or a closure to call with the deserialized arguments to the method; the return value will be serialized to YAML-RPC and sent back to the caller
             - \c help: help text for the method
             - \c text: the human-readable name of the method
             - \c logopt: (optional - by convention) log options which can be used by a custom logger (see the getLogMessage parameter)
-            @param getLogMessage an optional closure or call reference to be called when an incoming request is received; if this is set then it will be called with the following arguments: a context hash (see HttpServer::AbstractHttpRequestHandler::handleRequest() for a description of the context hash), the method definition as passed in the methods argument to this constructor, and a reference to the arguments in this call
-            @param dbg this parameter is set to @ref Qore::True "True", then additional information will be logged when errors occur
-            @param get_prefix prefix to add to derived methods with GET requests if no "." characters are in the path
-            @param log an optional closure or call reference to be called when logging
+            @param v_get_log_msg an optional closure or call reference to be called when an incoming request is received; if this is set then it will be called with the following arguments: a context hash (see HttpServer::AbstractHttpRequestHandler::handleRequest() for a description of the context hash), the method definition as passed in the methods argument to this constructor, and a reference to the arguments in this call
+            @param v_dbg this parameter is set to @ref Qore::True "True", then additional information will be logged when errors occur
+            @param v_get_prefix prefix to add to derived methods with GET requests if no "." characters are in the path
+            @param v_log an optional closure or call reference to be called when logging
 
             @throw YAML-RPC-CONSTRUCTOR-ERROR missing \c "name", \c "function", or \"text" key in method hash, \c "function" key not assigned to a callable value
          */
-        constructor(HttpServer::AbstractAuthenticator auth, list methods, *code getLogMessage, bool dbg = False, *string get_prefix, *code log) : HttpServer::AbstractHttpRequestHandler(auth) {
-            getLogMessage = getLogMessage;
-            debug = dbg;
-            get_prefix = get_prefix;
-            log = log;
+        constructor(HttpServer::AbstractAuthenticator v_auth, list v_methods, *code v_get_log_msg, bool v_dbg = False, *string v_get_prefix, *code v_log) : HttpServer::AbstractHttpRequestHandler(v_auth) {
+            getLogMessage = v_get_log_msg;
+            debug = v_dbg;
+            get_prefix = v_get_prefix;
+            clog = v_log;
 
             # add internal methods
             foreach hash im in (YamlRpcHandler::InternalMethods)
                 addMethodInternal(im + ( "internal" : True ));
             
-            foreach hash m in (methods) {
+            foreach hash m in (v_methods) {
                 if (!exists m.name)
                     throw "YAML-RPC-CONSTRUCTOR-ERROR", sprintf("expecting 'name' key in method hash: %y", m);
                 if (m.function.typeCode() != NT_CLOSURE && m.function.typeCode() != NT_CALLREF)
@@ -344,7 +344,7 @@ public namespace YamlRpcHandler {
             msg += sprintf("from %s: ", cx."peer-info".address_desc);
             msg += vsprintf(str, argv);
 
-            call_function_args(log ? log : cx.logfunc, msg);
+            call_function_args(clog ? clog : cx.logfunc, msg);
         }
 
         # don't reimplement this method; fix/enhance it in the module
@@ -364,11 +364,11 @@ public namespace YamlRpcHandler {
                 cx.cmark = found.cmark;
                 cx.function = found.function;
 
-                *string msg = exists getLogMessage ? call_function(getLogMessage, cx, found, \params) : NOTHING;
-                if (exists msg)
+                *string msg = getLogMessage ? getLogMessage(cx, found, \params) : NOTHING;
+                if (msg)
                     log(cx, msg);
                 
-                #printf("found: %y (method=%s params=%y)\n", found.text, method, params);
+                #printf("found: %y (getLogMessage: %y method: %s params: %y)\n", getLogMessage, found.text, method, params);
                 any rv = found.internal ? call_object_method_args(self, found.function, params) : call_function_args(found.function, params);
                 hash h.body = YamlRpcHandler::makeResponse(rv);
                 return h;
