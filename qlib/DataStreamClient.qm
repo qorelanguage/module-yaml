@@ -540,14 +540,12 @@ hash h = rest.getRawStream(recv, "GET", uri_path, 20s);
             Header or trailer data is placed in a hash with the following keys:
             - \c "hdr": this can be assigned to @ref nothing for the trailer hash if the data was not sent chunked or no trailers were included in a chunked message
             - \c "obj": this is the owning object (so socket parameters can be changed based on headers received, such as, for example, socket character encoding)
-            @param body The message body to send; pass @ref nothing (no value) to send no body
             @param method The name of the HTTP method (\c "GET", \c "POST", \c "HEAD", \c "OPTIONS", \c "PUT", \c "DELETE", \c "TRACE", or \c "CONNECT"). Additional methods can be added in the constructor as a \c additional_methods option.
             @param path The path for the message (i.e. \c "/path/resource?method&param=value")
-            @param headers An optional hash of headers to include in the message.
+            @param body an optional message body to be included in the request; if a value for this parameter is passed to the method, then the body will be serialized with YAML serialization
             @param timeout_ms the timeout in milliseconds for the socket I/O operations; 0 means use the default timeout value
-            @param getbody If this argument is @ref True, then the object will try to receive a message body even if no \c "Content-Length" header is present in the response. Use this only with broken servers that 
-            send message bodies without a \c "Content-Length" header.
             @param info An optional reference to an lvalue that will be used as an output variable giving a hash of request headers and other information about the HTTP request.
+            @param hdr An optional hash of headers to include in the message.
 
             @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed
             @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote

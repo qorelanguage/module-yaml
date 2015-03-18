@@ -90,7 +90,7 @@ public namespace DataStreamRequestHandler {
 	    code scb;
 
             #! flag for when all data has been received
-            bool recdone = False;
+            bool recv_done = False;
 
             #! flag for when all data has been sent
             bool send_done = False;
@@ -163,18 +163,18 @@ public namespace DataStreamRequestHandler {
 
 	#! calls the receive callback as returned by the @ref datastreamutilintro "DataStreamUtil" module, which in turn calls @ref recvDataImpl() to deliver deserialized data
 	nothing recvImpl(hash v) {
-	    call_function(rcb, v);
+	    rcb(v);
 	}
 
 	#! calls the send callback as returned by the @ref datastreamutilintro "DataStreamUtil" module, which in turn calls @ref sendDataImpl() to get the data to serialize and encode and send as a response
 	any sendImpl() {
-	    return call_function(scb);
+	    return scb();
 	}
 
         #! this method is called when all data has been received
         private nothing recvDataDone(*string err) {
             send_error = err;
-            recdone = err ? False : True;
+            recv_done = err ? False : True;
             recvDataDoneImpl(err);
         }
 

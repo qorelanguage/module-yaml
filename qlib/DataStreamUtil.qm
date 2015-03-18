@@ -449,11 +449,7 @@ httpclient.sendWithRecvCallback(ds_get_recv(rcb), body, method, path, hdr, timeo
 
                 return;
             }
-            if (exists h.data) {
-                *hash ddc = DataStreamDeserializationSupport{ct};
-                if (!ddc)
-                    throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize request body; content-type is: %y; types supported: %y", ct, DataStreamDeserializationSupport.keys());
-
+            if (exists h.data) {                
                 if (!h.deserialized) {
                     switch (h.data.typeCode()) {
                         # can be a string if sent in a regular body without content-encoding
@@ -476,6 +472,13 @@ httpclient.sendWithRecvCallback(ds_get_recv(rcb), body, method, path, hdr, timeo
                         default:
                             throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize request body; body type is %y", h.data.type());
                     }
+                    *hash ddc = DataStreamDeserializationSupport{ct};
+                    if (!ddc) {
+                        #if (bcb)
+                        #    bcb(h.data, ct);
+                        throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize request body; content-type is: %y; types supported: %y", ct, DataStreamDeserializationSupport.keys());
+                    }
+                    
                     # pass the content-decoded body to any "body callback" before deserialization
                     if (bcb)
                         bcb(h.data, ddc.code);

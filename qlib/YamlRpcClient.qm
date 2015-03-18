@@ -200,9 +200,9 @@ public class YamlRpcClient::YamlRpcClient inherits Qore::HTTPClient {
 	flags |= opts.flags;
 	
 	# set path
-	any path = parse_url(getURL()).path;
-	if (exists path)
-	    path = path;
+	any v_path = parse_url(getURL()).path;
+	if (exists v_path)
+	    path = v_path;
 	else
 	    path = exists opts.default_path ? opts.default_path : DefaultOptions.default_path;
     }
