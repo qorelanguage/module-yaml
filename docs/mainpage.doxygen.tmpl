@@ -83,6 +83,7 @@ my any $data = parseYAML($yaml_str);
       - <a href="../../DataStreamRequestHandler/html/index.html">DataStreamRequestHandler user module</a>
       - <a href="../../DataStreamUtil/html/index.html">DataStreamUtil user module</a>
     - user modules moved to top-level qore module directory from version-specific module directory since they are valid for multiple versions of qore
+    - date/time values (yaml !!timestamp type) are now always returned in the current time zone locale so that time zone rules can be applied to deserialized dates; previously time zone information was always lost which could cause errors when performing date arithmetic on deserialized yaml dates
 
     @subsection yaml04 yaml Module Version 0.4
 
