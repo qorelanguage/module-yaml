@@ -362,6 +362,24 @@ QoreBoolNode *QoreYamlParser::parseBool() {
    return 0;
 }
 
+// always create the date/time value in the current timezone
+static DateTimeNode* yaml_return_date(DateTimeNode* d, int offset = 0) {
+   SimpleRefHolder<DateTimeNode> rv(d);
+
+   bool is_dst = false;
+   const char* zone_name;
+   int tzoffset = tz_get_utc_offset(d->getZone(), rv->getEpochSeconds(), is_dst, zone_name);
+   int diff = tzoffset - offset;
+   //printd(5, "tz: '%s' is_dst: %d tzoffset: %d offset: %d delta: %d\n", zone_name, is_dst, tzoffset, offset, diff);
+   if (diff) {
+      // add seconds to the time to bring it into the right time using the current tz offset
+      DateTime delta(0, 0, 0, 0, 0, diff, 0, true);
+      rv = rv->add(&delta);
+   }
+
+   return rv.release();
+}
+
 DateTimeNode *QoreYamlParser::parseAbsoluteDate() {
    const char *val = (const char *)event.data.scalar.value;
    size_t len = event.data.scalar.length;
@@ -401,9 +419,11 @@ DateTimeNode *QoreYamlParser::parseAbsoluteDate() {
    // information is given, then the value is assumed to be in UTC
    // http://yaml.org/type/timestamp.html
 
+   const AbstractQoreZoneInfo* tz = currentTZ();
+
    // if there is no time portion, return date in UTC
    if (!*p)
-      return DateTimeNode::makeAbsolute(0, year, month, day);
+      return yaml_return_date(DateTimeNode::makeAbsolute(tz, year, month, day));
 
    if (*p != ' ' && *p != 't' && *p != 'T')
       return dt_err(xsink, val, "invalid date/time separator character");
@@ -452,7 +472,7 @@ DateTimeNode *QoreYamlParser::parseAbsoluteDate() {
    }      
 
    if (!*p)
-      return DateTimeNode::makeAbsolute(0, year, month, day, hour, minute, second);
+      return yaml_return_date(DateTimeNode::makeAbsolute(tz, year, month, day, hour, minute, second));
 	 
    int us = 0;
    if (*p == '.') {
@@ -481,10 +501,10 @@ DateTimeNode *QoreYamlParser::parseAbsoluteDate() {
    }
 
    if (!*p)
-      return DateTimeNode::makeAbsolute(0, year, month, day, hour, minute, second, us);
+      return yaml_return_date(DateTimeNode::makeAbsolute(tz, year, month, day, hour, minute, second, us));
 
-   // get time zone offset
-   const AbstractQoreZoneInfo *zone = 0;
+   // UTC offset in seconds east of UTC
+   int utc_offset = 0;
 
    // read 
    if (*p == ' ') {
@@ -546,8 +566,8 @@ DateTimeNode *QoreYamlParser::parseAbsoluteDate() {
 	    offset += utc_s;		    
 	 }
       }
-	 
-      zone = findCreateOffsetZone(offset * mult);
+
+      utc_offset = offset * mult;
    }
    else {
       return dt_err(xsink, val, invalid_chars_after_time);
@@ -556,5 +576,5 @@ DateTimeNode *QoreYamlParser::parseAbsoluteDate() {
    if (*p)
       return dt_err(xsink, val, invalid_chars_after_time);
 
-   return DateTimeNode::makeAbsolute(zone, year, month, day, hour, minute, second, us);
+   return yaml_return_date(DateTimeNode::makeAbsolute(tz, year, month, day, hour, minute, second, us), utc_offset);
 }
