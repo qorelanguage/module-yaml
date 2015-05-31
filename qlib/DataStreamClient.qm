@@ -188,7 +188,7 @@ DataStreamClient ds(("url": "http://localhost:8001/rest"));
         #! sends an HTTP request to an HTTP REST server supporting the @ref datastreamprotocol "DataStream protocol" and returns the decoded and deserialized response in the given callback as each HTTP chunk is received
         /** @par Example:
             @code
-rest.recvDataStream(reccallback, "GET", "/orders/1", body);
+rest.recvDataStream(recvcallback, endcallback, "GET", "/orders/1", body);
             @endcode
 
             @param rcb The receive callback for the data received; the argument passed to this callback is the decoded and deserialized data in the message
