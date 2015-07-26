@@ -26,4 +26,6 @@ src/.libs/
 src/Makefile
 src/Makefile.in
 src/*.dox.h
-src/ql_yaml.cpp
+src/qc_*.cpp
+src/ql_*.cpp
+src/QC_*.cpp
