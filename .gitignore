@@ -29,3 +29,16 @@ src/*.dox.h
 src/qc_*.cpp
 src/ql_*.cpp
 src/QC_*.cpp
+
+# ignore tmp doc files
+docs/*.tag
+docs/DataStreamClient/
+docs/DataStreamRequestHandler/
+docs/DataStreamUtil/
+docs/YamlRpcClient/
+docs/YamlRpcHandler/
+docs/doxyfile
+docs/mainpage.doxygen
+*.dox.h
+Doxyfile.*
+docs/yaml/
