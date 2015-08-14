@@ -44,7 +44,7 @@
 
 # do not use $ signs in declarations
 %new-style
-    
+
 module DataStreamUtil {
     version = "1.0";
     desc = "user module supporting YAML-encoded HTTP chunked transfers where each chunk is a unique data entity";
@@ -67,7 +67,7 @@ module DataStreamUtil {
     In %Qore, DataStream support is implemented on top of and is designed to extend the REST infrastructure provided by the %Qore library.
 
     This module is used automatically by the <a href="../../DataStreamClient/html/index.html">DataStreamClient</a> and <a href="../../DataStreamRequestHandler/html/index.html">DataStreamRequestHandler</a> user modules; to use this module directly for low-level DataStream protocol support, use \c "%requires DataStreamUtil" in your code.
-    
+
     All the public symbols in the module are defined in the DataStreamUtil namespace
 
     Functions:
@@ -103,7 +103,7 @@ module DataStreamUtil {
     The following headers are set with DataStream chunked requests:\n
     <b>DataStream Chunked Request Headers</b>
     |!Header|!Value|!Description
-    |\c Content-Type|\c application/octet-stream|<b>MUST</b> be present to make the chunked data opaque to the standard HTTP protocol since the semantic completeness of the message body is not defined over the entire body but rather over each chunk 
+    |\c Content-Type|\c application/octet-stream|<b>MUST</b> be present to make the chunked data opaque to the standard HTTP protocol since the semantic completeness of the message body is not defined over the entire body but rather over each chunk
     |\c Accept|<tt>text/x-yaml,application/octet-stream</tt>|other media types <b>MAY</b> be included, but at least the following <b>MUST</b> be included:\n - \c text/x-yaml: <b>MUST</b> be included in case a non-chunked response is returned\n - \c application/octet-stream: <b>MUST</b> be included in case of a DataStream chunked response
     |[\c Accept-Encoding]|<tt>gzip,bzip2,deflate</tt>|optional header declaring the content encoding methods supported by the sender (if present, clients <b>MUST</b> set this to the same value as the \c DataStream-Accept-Encoding header)
     |\c DataStream-Content-Type|<tt>text/x-yaml;charset=utf8</tt>|<b>MUST</b> be present to identify the content type of each chunk as YAML-encoded data (\c "utf8" is case-insensitive and may contain a hyphen before the 8)
@@ -328,7 +328,7 @@ public namespace DataStreamUtil {
     #! returns a @ref call_reference "call reference" useful for sending HTTP chunked data with %Qore methods taking send callbacks; data is encoded with YAML and optionally a @ref ds_get_content_encode "content encoding" @ref call_reference "call reference" or @ref closure "closure"
     /** @par Example:
         @code
-httpclient.sendWithSendCallback(ds_get_send(scb, enc_func), method, path, hdr, timeout_ms, False, \info);            
+httpclient.sendWithSendCallback(ds_get_send(scb, enc_func), method, path, hdr, timeout_ms, False, \info);
         @endcode
 
         @param scb the send data callback that should return data for sending
@@ -412,7 +412,7 @@ httpclient.sendWithRecvCallback(ds_get_recv(rcb), body, method, path, hdr, timeo
                     # call "end of data" callback with any error message reported by the sender
                     ecb(h.hdr{DataStreamError.lwr()});
                     return;
-                }                
+                }
 
                 # set "header parsed" flag to True
                 hp = True;
@@ -428,8 +428,8 @@ httpclient.sendWithRecvCallback(ds_get_recv(rcb), body, method, path, hdr, timeo
 
                 # we have to handle both chunked and non-chunked messages
                 if (chunked) {
-                    ct = h.hdr{DataStreamContentType.lwr()};
-                    ce = h.hdr{DataStreamContentEncoding.lwr()};
+                    ct = h.hdr{DataStreamContentType.lwr()} ?? h.hdr."content-type";
+                    ce = h.hdr{DataStreamContentEncoding.lwr()} ?? h.hdr."content-encoding";
                 }
                 else {
                     ct = h.hdr."content-type";
@@ -438,10 +438,10 @@ httpclient.sendWithRecvCallback(ds_get_recv(rcb), body, method, path, hdr, timeo
 
                 # remove any ";charset=utf-8" from the end of the content-type header
                 ct =~ s/; ?charset=utf-?8$//i;
-                
+
                 # data is always transferred in UTF-8 encoding with DataStream
                 h.obj.setEncoding("utf8");
-                
+
                 dce = ds_get_content_decode(ce);
 
                 if (h.send_aborted)
@@ -449,7 +449,7 @@ httpclient.sendWithRecvCallback(ds_get_recv(rcb), body, method, path, hdr, timeo
 
                 return;
             }
-            if (exists h.data) {                
+            if (exists h.data) {
                 if (!h.deserialized) {
                     switch (h.data.typeCode()) {
                         # can be a string if sent in a regular body without content-encoding
@@ -474,18 +474,18 @@ httpclient.sendWithRecvCallback(ds_get_recv(rcb), body, method, path, hdr, timeo
                     }
                     *hash ddc = DataStreamDeserializationSupport{ct};
                     if (!ddc) {
-                        if (bcb)
+                        if (bcb && ct)
                             bcb(h.data, ct);
                         throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize request body; content-type is: %y; types supported: %y", ct, DataStreamDeserializationSupport.keys());
                     }
-                    
+
                     # pass the content-decoded body to any "body callback" before deserialization
                     if (bcb)
                         bcb(h.data, ddc.code);
                     h.data = ddc.in(h.data);
                 }
 
-                # if the server has returned an error status code, then handle as an exception on the remote side                
+                # if the server has returned an error status code, then handle as an exception on the remote side
                 if (!chunked) {
                     if ((send_aborted || status_code >= 300) && h.data.err && h.data.desc)
                         throw h.data.err, h.data.desc, h.data.arg;
