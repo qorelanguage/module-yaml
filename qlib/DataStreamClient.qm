@@ -61,7 +61,7 @@ module DataStreamClient {
     In %Qore, DataStream support is implemented on top of the REST infrastructure provided by the %Qore library; in this module, the @ref DataStreamClient::DataStreamClient "DataStreamClient" class inherits and extends RestClient for this reason.
 
     To use this module, use \c "%requires DataStreamClient" in your code.
-    
+
     All the public symbols in the module are defined in the DataStreamClient namespace
 
     Classes:
@@ -134,7 +134,7 @@ public namespace DataStreamClient {
     public class DataStreamMessage inherits DataStreamSendMessage, DataStreamRecvMessage {
     }
 
-    #! this class extends @ref RestClient::RestClient "RestClient" with support for the @ref datastreamprotocol "DataStream protocol" 
+    #! this class extends @ref RestClient::RestClient "RestClient" with support for the @ref datastreamprotocol "DataStream protocol"
     public class DataStreamClient inherits RestClient::RestClient {
         public {
             #! DataStreamClient Version
@@ -181,7 +181,7 @@ DataStreamClient ds(("url": "http://localhost:8001/rest"));
                     dh{DataStreamAcceptEncoding} = dae;
             }
             else
-                dh{DataStreamAcceptEncoding} = "gzip,bzip2,deflate";            
+                dh{DataStreamAcceptEncoding} = "gzip,bzip2,deflate";
             headers = dh + opts.headers;
         }
 
@@ -492,7 +492,7 @@ rest.sendRecvDataStream(send_callback, reccallback, "POST", "/path");
             @code
 hash h = rest.sendRawStream(sender, "POST", uri_path, 20s);
             @endcode
-                
+
             The request will be made with the \c "Accept" header set to \c "application/x-yaml"; replies are expected to be YAML-serialized data.  Note that the \c "body" key in the return value will contain the deserialized YAML payload as Qore data.
 
             @param scb The callback giving the chunked HTTP data to send; this callback must return either a string or a binary value each time it is called to give the chunked data to send; when all data has been sent, then a hash of message trailers can be sent or simply @ref nothing which will close the chunked message
@@ -526,7 +526,7 @@ hash h = rest.sendRawStream(sender, "POST", uri_path, 20s);
         }
 
         #! receives raw chunked data using the given closure and returns any headers received
-        /** @par Example: 
+        /** @par Example:
             @code
 hash h = rest.getRawStream(recv, "GET", uri_path, 20s);
             @endcode
@@ -558,7 +558,7 @@ hash h = rest.getRawStream(recv, "GET", uri_path, 20s);
             @throw SOCKET-TIMEOUT Data transmission or reception for a single send() or recv() action exceeded the timeout period
             @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
             @throw SOCKET-HTTP-ERROR Invalid HTTP data was received
-            
+
             @note For possible exceptions when implicitly establishing a connection, see the Socket::connect() method (or Socket::connectSSL() for secure connections)
         */
         hash getRawStream(code rcb, string method, *string path, any body, timeout timeout_ms = 0, *reference info, *hash hdr) {
@@ -575,7 +575,7 @@ hash h = rest.getRawStream(recv, "GET", uri_path, 20s);
             sendWithRecvCallback(mrcb, body, method, path, hdr, timeout_ms, False, \info);
             return rvhdr;
         }
-        
+
         #! adds default headers to each request; these headers will be sent in all requests but can be overridden in requests as well
         /** @par Example:
             @code
@@ -584,7 +584,7 @@ rest.addDefaultHeaders(("Accept-Encoding": "compress"));
             @endcode
 
             @param h a hash of headers to add to the default headers to send on each request
-            
+
             @note default headers can also be set in the constructor
 
             @see @ref RestClient::RestClient::getDefaultHeaders() "RestClient::getDefaultHeaders()"
@@ -609,7 +609,7 @@ rest.setContentEncoding("gzip");
             RestClient::setContentEncoding(enc);
             headers{DataStreamAcceptEncoding} = headers."Accept-Encoding";
         }
-        
+
         #! sets up headers and encodes any body for sending
         private nothing prepareMsg(reference body, reference hdr, string ct = "Content-Type") {
             RestClient::prepareMsg(\body, \hdr, ct);
@@ -675,10 +675,13 @@ rest.setContentEncoding("gzip");
             sendWithRecvCallback(rcb, body, m, path, hdr, 60s, False, \info);
 
             # rethrow exceptions returned from the sender
-            if (rhdr.status_code >= 300 && rmd.err && rmd.desc) {
-                if (decode_errors && rmd.arg.body)
-                    decodeError(rmd.arg, \info);
-                throw rmd.err, rmd.desc, rmd.arg;
+            if (rhdr.status_code >= 300) {
+                if (rmd.err && rmd.desc) {
+                    if (decode_errors && rmd.arg.body)
+                        decodeError(rmd.arg, \info);
+                    throw rmd.err, rmd.desc, rmd.arg;
+                }
+                throw "DATASTREAM-CLIENT-RECEIVE-ERROR", sprintf("HTTP status code %d received: message: %y", rhdr.status_code, rhdr.status_message), rhdr + ("body": rmd);
             }
 
             if (send_aborted)
