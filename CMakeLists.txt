@@ -34,7 +34,7 @@ set(QMOD
     qlib/YamlRpcClient.qm
 )
 
-qore_wrap_qpp(QPP_SOURCES ${QPP_SRC})
+qore_wrap_qpp_value(QPP_SOURCES ${QPP_SRC})
 
 SET (module_name "yaml")
 
