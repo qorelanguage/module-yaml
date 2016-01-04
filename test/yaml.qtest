@@ -1,15 +1,18 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+
 %new-style
-%requires yaml
 %require-types
-%requires qore >= 0.8.12
+%strict-args
+%enable-all-warnings
+
+%requires yaml
 %requires QUnit
+
 %exec-class Main
 
-
 const DATA = (
-        1, "two", 
+        1, "two",
         NOTHING,
         0,
         0.0,
@@ -28,7 +31,7 @@ const DATA = (
         P2M3DT10H14u,
         now_us(),
         binary("hello, how's it going, this is a long string, you know XXXXXXXXXXXXXXXXXXXXXXXX"),
-        ("a" : 2.0, 
+        ("a" : 2.0,
          "b" : "hello",
          "key" : True),
         @nan@n,
@@ -59,32 +62,32 @@ public class Main inherits QUnit::Test {
     }
 
     testYaml() {
-        string s = makeYAML(DATA);
-        any l = parseYAML(s);
+        string s = make_yaml(DATA);
+        any l = parse_yaml(s);
         testAssertion("test simple yaml", \equals(), (DATA, l));
     }
 
     testOptions() {
         ListIterator it(YAML_OPTIONS);
         while (it.next()) {
-            string s = makeYAML(DATA, it.getValue());
-            any l = parseYAML(s);
-            testAssertion(sprintf("option: %n", it.getValue()), \equals(), (DATA, l));
+            string s = make_yaml(DATA, it.getValue());
+            any l = parse_yaml(s);
+            assertEq(DATA, l, sprintf("option: %y", it.getValue()));
         }
     }
 
     testIndent() {
         for (int i = 0; i < 100; i++) {
-            string s = makeYAML(DATA, NOTHING, NOTHING, 1);
-            any l = parseYAML(s);
+            string s = make_yaml(DATA, NOTHING, NOTHING, 1);
+            any l = parse_yaml(s);
             testAssertion(sprintf("indent: %2d", i), \equals(), (DATA, l));
         }
     }
 
     testLen() {
         for (int i = -10; i < 11; i++) {
-            string s = makeYAML(DATA, NOTHING, i);
-            any l = parseYAML(s);
+            string s = make_yaml(DATA, NOTHING, i);
+            any l = parse_yaml(s);
             testAssertion(sprintf("len: %2d", i), \equals(), (DATA, l));
         }
     }
@@ -95,8 +98,7 @@ public class Main inherits QUnit::Test {
         date dt2 = tz.date(dt1);
         testAssertion("timezone test", \equals(), (dt1, dt2));
 
-        any dt3 = parseYAML(makeYAML(dt1));
+        any dt3 = parse_yaml(make_yaml(dt1));
         testAssertion("yaml date test", \equals(), (dt2, dt3));
     }
 }
-

@@ -15,6 +15,11 @@ version 0.5
   current time zone locale so that time zone rules can be applied to
   deserialized dates, otherwise time zone information is always lost which can
   cause errors when performing date arithmetic on deserialized yaml dates
+* deprecated camel-case function names in favor of names conforming to the
+  standard naming convention for functions:
+  - makeYAML() deprecated for make_yaml()
+  - parseYAML() deprecated for parse_yaml()
+  - getYAMLInfo() deprecated for get_yaml_info()
 
 
 ***********
