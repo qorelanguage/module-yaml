@@ -61,7 +61,7 @@ module DataStreamRequestHandler {
     In %Qore, DataStream support is implemented on top of the REST infrastructure provided by the %Qore library, for this reason the @ref DataStreamRequestHandler::AbstractDataStreamRequestHandler "AbstractDataStreamRequestHandler" inherits and extends AbstractRestStreamRequestHandler provided by the RestHandler module.
 
     To use this module, use \c "%requires DataStreamRequestHandler" in your code.
-    
+
     All the public symbols in the module are defined in the DataStreamRequestHandler namespace.
 
     Classes:
@@ -132,7 +132,7 @@ public namespace DataStreamRequestHandler {
             if (ex)
                 return (
                     "code": (err = 409),
-                    "body": makeYAML(ex),
+                    "body": make_yaml(ex),
                     "hdr": ("Content-Type": MimeTypeYaml),
                     "close": True,
                 );
@@ -181,7 +181,7 @@ public namespace DataStreamRequestHandler {
 	#! This is the concrete method called when data is received; it calls recvDataImpl() in turn
 	/** @param data the data received
 	*/
-	private nothing recvData(any data) {            
+	private nothing recvData(any data) {
             recvDataImpl(data);
         }
 
@@ -210,4 +210,3 @@ public namespace DataStreamRequestHandler {
 	private abstract any sendDataImpl();
     }
 }
-

@@ -521,7 +521,7 @@ hash h = rest.sendRawStream(sender, "POST", uri_path, 20s);
                 hdr.Accept = MimeTypeYaml;
             hash h = sendWithSendCallback(scb, method, path, hdr, timeout_ms, False, \info);
             if (h."content-type" == MimeTypeYaml && h.body)
-                h.body = parseYAML(h.body);
+                h.body = parse_yaml(h.body);
             return h;
         }
 
@@ -569,7 +569,7 @@ hash h = rest.getRawStream(recv, "GET", uri_path, 20s);
                 rcb(h);
             };
             if (exists body) {
-                body = makeYAML(body);
+                body = make_yaml(body);
                 hdr."Content-Type" = MimeTypeYaml;
             }
             sendWithRecvCallback(mrcb, body, method, path, hdr, timeout_ms, False, \info);

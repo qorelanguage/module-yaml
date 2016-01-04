@@ -233,13 +233,13 @@ public namespace DataStreamUtil {
 
     public const DataStreamDeserializeYaml = (
         "code": "yaml",
-        "in": \parseYAML(),
+        "in": \parse_yaml(),
         );
 
 %ifndef NoXml
     const DataStreamDeserializeXmlRpc = (
         "code": "xml",
-        "in": \parseXMLRPCValue(),
+        "in": \parse_xmlrpc_value(),
         );
 %endif
 
@@ -350,7 +350,7 @@ httpclient.sendWithSendCallback(ds_get_send(scb, enc_func), method, path, hdr, t
 
                 # encode data for sending
                 if (exists data) {
-                    data = makeYAML(data);
+                    data = make_yaml(data);
                     if (enc_func)
                         data = enc_func(data);
                 }
