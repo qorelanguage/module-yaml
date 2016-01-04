@@ -167,7 +167,7 @@ public namespace YamlRpcHandler {
             # add internal methods
             foreach hash im in (YamlRpcHandler::InternalMethods)
                 addMethodInternal(im + ( "internal" : True ));
-            
+
             foreach hash m in (v_methods) {
                 if (!exists m.name)
                     throw "YAML-RPC-CONSTRUCTOR-ERROR", sprintf("expecting 'name' key in method hash: %y", m);
@@ -213,15 +213,15 @@ public namespace YamlRpcHandler {
 
         #! serializes a reponse in YAML-RPC format given the arguments
         static string makeResponse(any response, int flags = YAML::None) {
-            return makeYAML(("result":response), flags);
+            return make_yaml(("result":response), flags);
         }
-        
+
         #! serializes an error reponse in YAML-RPC format given the arguments
         static string makeErrorResponse(int code, string mess, any err, int flags = YAML::None) {
             hash h = ("name":"YAMLRPCError","code":code,"message":mess);
             if (exists err)
                 h.error = err;
-            return makeYAML(("error":h), flags);
+            return make_yaml(("error":h), flags);
         }
 
         #! @cond nodoc
@@ -234,15 +234,15 @@ public namespace YamlRpcHandler {
 
             if (hdr.method == "GET") {
                 string path = substr(hdr.path, index(hdr.path, "/") + 1);
-                
+
                 if (path.empty())
                     return (
                         "code": 501,
                         "desc": "invalid HTTP GET: no path/YAML-RPC method name given",
-                    ); 
+                    );
 
                 yamlrpc += parse_uri_query(path);
-                
+
                 if (exists get_prefix && index(yamlrpc.method, ".") == -1)
                     yamlrpc.method = get_prefix + yamlrpc.method;
             }
@@ -254,7 +254,7 @@ public namespace YamlRpcHandler {
                     );
 
                 try {
-                    yamlrpc = parseYAML(body);
+                    yamlrpc = parse_yaml(body);
                 }
                 catch (hash ex) {
                     string estr = sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc);
@@ -327,7 +327,7 @@ public namespace YamlRpcHandler {
                 "summary": "provides a YAML-RPC handler to the HTTP server",
                 #"address": address,
                 "procs": procs,
-                ); 
+                );
         }
 
         private list listMethods() {
@@ -367,7 +367,7 @@ public namespace YamlRpcHandler {
                 *string msg = getLogMessage ? getLogMessage(cx, found, \params) : NOTHING;
                 if (msg)
                     log(cx, msg);
-                
+
                 #printf("found: %y (getLogMessage: %y method: %s params: %y)\n", getLogMessage, found.text, method, params);
                 any rv = found.internal ? call_object_method_args(self, found.function, params) : call_function_args(found.function, params);
                 hash h.body = YamlRpcHandler::makeResponse(rv);
