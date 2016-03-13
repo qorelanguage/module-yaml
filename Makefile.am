@@ -41,8 +41,7 @@ docs/qlib/YamlRpcClient.qm.dox.h: qlib/YamlRpcClient.qm
 
 docs/YamlRpcClient/html: docs/qlib/YamlRpcClient.qm.dox.h docs/qlib/Doxyfile.YamlRpcClient
 	cd docs; $(DOXYGEN_CMD) qlib/Doxyfile.YamlRpcClient
-	$(QDX) --post docs/YamlRpcClient/html/*html
-	$(QDX) --post docs/YamlRpcClient/html/search/*html
+	$(QDX) --post docs/YamlRpcClient/html docs/YamlRpcClient/html/search
 
 docs/qlib/Doxyfile.YamlRpcHandler: docs/qlib/Doxyfile.tmpl
 	$(QDX) -M=qlib/YamlRpcHandler.qm:qlib/YamlRpcHandler.qm.dox.h $< $@
@@ -52,8 +51,7 @@ docs/qlib/YamlRpcHandler.qm.dox.h: qlib/YamlRpcHandler.qm
 
 docs/YamlRpcHandler/html: docs/qlib/YamlRpcHandler.qm.dox.h docs/qlib/Doxyfile.YamlRpcHandler
 	cd docs; $(DOXYGEN_CMD) qlib/Doxyfile.YamlRpcHandler
-	$(QDX) --post docs/YamlRpcHandler/html/*html
-	$(QDX) --post docs/YamlRpcHandler/html/search/*html
+	$(QDX) --post docs/YamlRpcHandler/html docs/YamlRpcHandler/html/search/*html
 
 docs/qlib/Doxyfile.DataStreamUtil: docs/qlib/Doxyfile.tmpl
 	$(QDX) -M=qlib/DataStreamUtil.qm:qlib/DataStreamUtil.qm.dox.h $< $@
@@ -63,8 +61,7 @@ docs/qlib/DataStreamUtil.qm.dox.h: qlib/DataStreamUtil.qm
 
 docs/DataStreamUtil/html: docs/qlib/DataStreamUtil.qm.dox.h docs/qlib/Doxyfile.DataStreamUtil
 	cd docs; $(DOXYGEN_CMD) qlib/Doxyfile.DataStreamUtil
-	$(QDX) --post docs/DataStreamUtil/html/*html
-	$(QDX) --post docs/DataStreamUtil/html/search/*html
+	$(QDX) --post docs/DataStreamUtil/html docs/DataStreamUtil/html/search
 
 docs/qlib/Doxyfile.DataStreamClient: docs/qlib/Doxyfile.tmpl
 	$(QDX) -M=qlib/DataStreamClient.qm:qlib/DataStreamClient.qm.dox.h -tDataStreamUtil.tag=../../DataStreamUtil/html $< $@
@@ -74,8 +71,7 @@ docs/qlib/DataStreamClient.qm.dox.h: qlib/DataStreamClient.qm
 
 docs/DataStreamClient/html: docs/qlib/DataStreamClient.qm.dox.h docs/qlib/Doxyfile.DataStreamClient
 	cd docs; $(DOXYGEN_CMD) qlib/Doxyfile.DataStreamClient
-	$(QDX) --post docs/DataStreamClient/html/*html
-	$(QDX) --post docs/DataStreamClient/html/search/*html
+	$(QDX) --post docs/DataStreamClient/html docs/DataStreamClient/html/search
 
 docs/qlib/Doxyfile.DataStreamRequestHandler: docs/qlib/Doxyfile.tmpl
 	$(QDX) -M=qlib/DataStreamRequestHandler.qm:qlib/DataStreamRequestHandler.qm.dox.h -tDataStreamUtil.tag=../../DataStreamUtil/html $< $@
@@ -85,13 +81,11 @@ docs/qlib/DataStreamRequestHandler.qm.dox.h: qlib/DataStreamRequestHandler.qm
 
 docs/DataStreamRequestHandler/html: docs/qlib/DataStreamRequestHandler.qm.dox.h docs/qlib/Doxyfile.DataStreamRequestHandler
 	cd docs; $(DOXYGEN_CMD) qlib/Doxyfile.DataStreamRequestHandler
-	$(QDX) --post docs/DataStreamRequestHandler/html/*html
-	$(QDX) --post docs/DataStreamRequestHandler/html/search/*html
+	$(QDX) --post docs/DataStreamRequestHandler/html docs/DataStreamRequestHandler/html/search
 
 docs/yaml/html: $(DOXYFILES)
 	cd docs; $(DOXYGEN_CMD) doxyfile;
-	$(QDX) --post docs/yaml/html/*html
-	$(QDX) --post docs/yaml/html/search/*html
+	$(QDX) --post docs/yaml/html docs/yaml/html/search
 
 docs/mainpage.doxygen: docs/mainpage.doxygen.tmpl
 	$(QDX) -d $< $@
