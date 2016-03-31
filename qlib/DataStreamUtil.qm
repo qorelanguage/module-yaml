@@ -398,7 +398,7 @@ httpclient.sendWithRecvCallback(ds_get_recv(rcb), body, method, path, hdr, timeo
         # send aborted flag
         bool send_aborted;
         # HTTP status code received
-        int status_code;
+        *int status_code;
         # content type received
         *string ct;
 
@@ -417,8 +417,9 @@ httpclient.sendWithRecvCallback(ds_get_recv(rcb), body, method, path, hdr, timeo
                 # set "header parsed" flag to True
                 hp = True;
 
-                # save status code
-                status_code = h.hdr.status_code;
+                # save status code if present
+                if (h.hdr.status_code)
+                    status_code = h.hdr.status_code;
 
                 # parse content type and optionally any content encoding
                 *string ce;
@@ -485,12 +486,16 @@ httpclient.sendWithRecvCallback(ds_get_recv(rcb), body, method, path, hdr, timeo
                     h.data = ddc.in(h.data);
                 }
 
-                # if the server has returned an error status code, then handle as an exception on the remote side
+                # if the server has returned a status code, then handle as an exception on the remote side, otherwise throw a SEND-ABORTED exception
                 if (!chunked) {
                     if ((send_aborted || status_code >= 300) && h.data.err && h.data.desc)
                         throw h.data.err, h.data.desc, h.data.arg;
-                    if (send_aborted)
-                        throw "SEND-ABORTED", sprintf("sender sent status code %d before chunked send was complete", status_code), h.data;
+                    if (send_aborted) {
+                        if (status_code)
+                            throw "SEND-ABORTED", sprintf("receiver sent status code %d before chunked send was complete", status_code), h.data;
+                        else
+                            throw "SEND-ABORTED", sprintf("receiver sent a reply before chunked send was complete"), h.data;
+                    }
                 }
 
                 # call data callback
