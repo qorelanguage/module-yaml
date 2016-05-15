@@ -28,8 +28,8 @@ static int qore_yaml_write_handler(QoreYamlWriteHandler *wh, unsigned char *buff
 }
 
 QoreYamlEmitter::QoreYamlEmitter(QoreYamlWriteHandler &n_wh, int flags, int width, int indent, ExceptionSink *n_xsink)
-   : QoreYamlBase(n_xsink), wh(n_wh), block(flags & QYE_BLOCK_STYLE), 
-     implicit_start_doc(!(flags & QYE_EXPLICIT_START_DOC)), 
+   : QoreYamlBase(n_xsink), wh(n_wh), block(flags & QYE_BLOCK_STYLE),
+     implicit_start_doc(!(flags & QYE_EXPLICIT_START_DOC)),
      implicit_end_doc(!(flags & QYE_EXPLICIT_END_DOC)),
      yaml_ver(0) {
    if (!yaml_emitter_initialize(&emitter)) {
@@ -55,61 +55,58 @@ QoreYamlEmitter::QoreYamlEmitter(QoreYamlWriteHandler &n_wh, int flags, int widt
    else if (flags & QYE_VER_1_0)
       yaml_ver = &yaml_ver_1_0;
 
-   yaml_emitter_set_output(&emitter, (yaml_write_handler_t*)qore_yaml_write_handler, &wh);   
+   yaml_emitter_set_output(&emitter, (yaml_write_handler_t*)qore_yaml_write_handler, &wh);
 
    //printd(5, "QoreYamlEmitter::QoreYamlEmitter() indent=%d width=%d\n", indent, width);
    yaml_emitter_set_indent(&emitter, indent);
    yaml_emitter_set_width(&emitter, width);
 
    if (!streamStart() && !docStart())
-      valid = true;   
+      valid = true;
 }
 
-int QoreYamlEmitter::emit(const AbstractQoreNode* p) {
-   qore_type_t t = get_node_type(p);
-   switch (t) {
+int QoreYamlEmitter::emit(const QoreValue& v) {
+   switch (v.getType()) {
       case NT_STRING:
-	 return emit(*reinterpret_cast<const QoreStringNode*>(p));
+	 return emitValue(*v.get<const QoreStringNode>());
 
       case NT_INT:
-	 return emit(*reinterpret_cast<const QoreBigIntNode*>(p));
+	 return emitValue(v.getAsBigInt());
 
       case NT_FLOAT:
-	 return emit(*reinterpret_cast<const QoreFloatNode*>(p));
+	 return emitValue(v.getAsFloat());
+
+      case NT_NUMBER:
+	 return emitValue(*v.get<const QoreNumberNode>());
 
       case NT_BOOLEAN:
-	 return emit(*reinterpret_cast<const QoreBoolNode*>(p));
+	 return emitValue(v.getAsBool());
 
       case NT_LIST:
-	 return emit(*reinterpret_cast<const QoreListNode*>(p));
+	 return emitValue(*v.get<const QoreListNode>());
 
       case NT_HASH:
-	 return emit(*reinterpret_cast<const QoreHashNode*>(p));
+	 return emitValue(*v.get<const QoreHashNode>());
 
       case NT_DATE:
-	 return emit(*reinterpret_cast<const DateTimeNode*>(p));
+	 return emitValue(*v.get<const DateTimeNode>());
 
       case NT_BINARY:
-	 return emit(*reinterpret_cast<const BinaryNode*>(p));
-
-#ifdef _QORE_HAS_NUMBER_TYPE
-      case NT_NUMBER:
-	 return emit(*reinterpret_cast<const QoreNumberNode*>(p));
-#endif
+	 return emitValue(*v.get<const BinaryNode>());
 
       case NT_NULL:
       case NT_NOTHING:
 	 return emitNull();
 
       default:
-	 err("cannot convert Qore type '%s' to YAML", get_type_name(p));
+	 err("cannot convert Qore type '%s' to YAML", v.getTypeName());
 	 return -1;
    }
 
    return 0;
 }
 
-int QoreYamlEmitter::emit(const DateTime &d) {
+int QoreYamlEmitter::emitValue(const DateTime &d) {
    qore_tm info;
    d.getInfo(info);
 
@@ -124,9 +121,9 @@ int QoreYamlEmitter::emit(const DateTime &d) {
 	    str.sprintf("%dM", info.month);
 	 if (info.day)
 	    str.sprintf("%dD", info.day);
-	 
+
 	 bool has_t = false;
-	 
+
 	 if (info.hour) {
 	    str.sprintf("T%dH", info.hour);
 	    has_t = true;

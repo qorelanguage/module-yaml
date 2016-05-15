@@ -2,13 +2,6 @@
 
     @tableofcontents
 
-    Contents of this documentation:
-    - @ref yamlintro
-    - @ref functions
-    - @ref qore_to_yaml_type_mappings
-    - @ref yaml_emitter_option_constants
-    - @ref yamlreleasenotes
-
     @section yamlintro Introduction
 
     The yaml module provides <a href="http://www.yaml.org">YAML</a> functionality to Qore, allowing qore programs to read and write information in %YAML syntax.
@@ -35,28 +28,37 @@ This module is released under a choice of two licenses:
     - <a href="../../YamlRpcHandler/html/index.html">YamlRpcHandler user module</a>
 
     @section Examples
-    
+
     @par To serialize a simple value or a complex data structure to a YAML string:
     @code
 %requires yaml
-my string $yaml_str = makeYAML($data, YAML::Canonical);
+my string $yaml_str = make_yaml($data, YAML::Canonical);
     @endcode
 
     @par To deserialize a YAML string to a Qore value:
     @code
 %requires yaml
-my any $data = parseYAML($yaml_str);
+my any $data = parse_yaml($yaml_str);
     @endcode
 
-    @section functions Available Functions
-    
+    @section yaml_functions Available Functions
+
     |!Function|!Description|
-    |@ref makeYAML()|creates a %YAML string from Qore data|
-    |@ref parseYAML()|parses a %YAML string and returns Qore data|
-    |@ref getYAMLInfo()|returns version information about <a href="http://pyyaml.org/wiki/LibYAML">libyaml</a>|
+    |@ref make_yaml()|creates a %YAML string from Qore data|
+    |@ref parse_yaml()|parses a %YAML string and returns Qore data|
+    |@ref get_yaml_info()|returns version information about <a href="http://pyyaml.org/wiki/LibYAML">libyaml</a>|
+
+    @section yaml_deprecated_functions Deprecated Functions
+
+    The following camel-case functions were deprecated in yaml 0.5:
+
+    |!Deprecated Function|!New Function|
+    |@ref makeYAML()|@ref make_yaml()|
+    |@ref parseYAML()|@ref parse_yaml()|
+    |@ref getYAMLInfo()|@ref get_yaml_info()|
 
     @section qore_to_yaml_type_mappings Qore to YAML Type Mappings
-    
+
     Note that all Qore types except objects can be serialized to YAML,
     however \c NULL will be deserialized as \c NOTHING.
 
@@ -83,6 +85,9 @@ my any $data = parseYAML($yaml_str);
       - <a href="../../DataStreamRequestHandler/html/index.html">DataStreamRequestHandler user module</a>
       - <a href="../../DataStreamUtil/html/index.html">DataStreamUtil user module</a>
     - user modules moved to top-level qore module directory from version-specific module directory since they are valid for multiple versions of qore
+    - date/time values (yaml !!timestamp type) are now always returned in the current time zone locale so that time zone rules can be applied to deserialized dates; previously time zone information was always lost which could cause errors when performing date arithmetic on deserialized yaml dates
+    - fixed bugs deserializing canonically-encoded YAML strings; arbitrary-precision numeric values were deserialized with their precision values ignored and floating point +/-inf were deserialized as zero
+    - deprecated old camel-case names and implemented new function names confirming to the standard naming convention for functions
 
     @subsection yaml04 yaml Module Version 0.4
 
