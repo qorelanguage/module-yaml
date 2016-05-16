@@ -1,0 +1,104 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%new-style
+%require-types
+%strict-args
+%enable-all-warnings
+
+%requires yaml
+%requires QUnit
+
+%exec-class Main
+
+const DATA = (
+        1, "two",
+        NOTHING,
+        0,
+        0.0,
+        22,
+        9223372036854775807,
+        -9223372036854775807,
+        500n,
+        M_PIn,
+        2.141578291e50n,
+        2010-05-05T15:35:02.100,
+        False,
+        M_PI,
+        250.192393,
+        1970-01-01Z,
+        (hash(), (), "three \"things\""),
+        P2M3DT10H14u,
+        now_us(),
+        binary("hello, how's it going, this is a long string, you know XXXXXXXXXXXXXXXXXXXXXXXX"),
+        ("a" : 2.0,
+         "b" : "hello",
+         "key" : True),
+        @nan@n,
+        @inf@n,
+        -@inf@n,
+        @inf@,
+        -@inf@,
+    );
+
+const YAML_OPTIONS = (
+        YAML::Yaml1_1,
+        YAML::Canonical,
+        #YAML::Yaml1_2,
+        #YAML::Yaml1_0,
+    );
+
+public class Main inherits QUnit::Test {
+
+    constructor() : Test("yaml test", "1.0") {
+        addTestCase("base test", \testYaml());
+        addTestCase("Options test", \testOptions());
+        addTestCase("Skipped test", \testIndent());
+        addTestCase("Len test", \testLen());
+        addTestCase("Date/Time test", \testDates());
+
+        # Return for compatibility with test harness that checks return value.
+        set_return_value(main());
+    }
+
+    testYaml() {
+        string s = make_yaml(DATA);
+        any l = parse_yaml(s);
+        testAssertion("test simple yaml", \equals(), (DATA, l));
+    }
+
+    testOptions() {
+        ListIterator it(YAML_OPTIONS);
+        while (it.next()) {
+            string s = make_yaml(DATA, it.getValue());
+            any l = parse_yaml(s);
+            assertEq(DATA, l, sprintf("option: %y", it.getValue()));
+        }
+    }
+
+    testIndent() {
+        for (int i = 0; i < 100; i++) {
+            string s = make_yaml(DATA, NOTHING, NOTHING, 1);
+            any l = parse_yaml(s);
+            testAssertion(sprintf("indent: %2d", i), \equals(), (DATA, l));
+        }
+    }
+
+    testLen() {
+        for (int i = -10; i < 11; i++) {
+            string s = make_yaml(DATA, NOTHING, i);
+            any l = parse_yaml(s);
+            testAssertion(sprintf("len: %2d", i), \equals(), (DATA, l));
+        }
+    }
+
+    testDates() {
+        TimeZone tz("Europe/Vienna");
+        date dt1 = 2015-03-29T01:00:00Z;
+        date dt2 = tz.date(dt1);
+        testAssertion("timezone test", \equals(), (dt1, dt2));
+
+        any dt3 = parse_yaml(make_yaml(dt1));
+        testAssertion("yaml date test", \equals(), (dt2, dt3));
+    }
+}

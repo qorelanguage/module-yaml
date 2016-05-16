@@ -1,10 +1,10 @@
 /* -*- mode: c++; indent-tabs-mode: nil -*- */
 /*
   yaml-module.h
-  
+
   Qore Programming Language
 
-  Copyright 2003 - 2010 David Nichols
+  Copyright 2003 - 2016 David Nichols
 
   This library is free software; you can redistribute it and/or
   modify it under the terms of the GNU Lesser General Public
@@ -24,7 +24,9 @@
 #ifndef _QORE_YAML_MODULE_H
 #define _QORE_YAML_MODULE_H
 
+#ifdef HAVE_CONFIG_H
 #include "../config.h"
+#endif
 
 #include <qore/Qore.h>
 
@@ -97,7 +99,7 @@ protected:
    QoreYamlWriteHandler &wh;
 
    bool block,
-      implicit_start_doc, 
+      implicit_start_doc,
       implicit_end_doc;
 
    yaml_version_directive_t *yaml_ver;
@@ -128,7 +130,7 @@ protected:
             return err("error emitting yaml %s %s event", event_str, tag);
          return err("error emitting yaml %s event", event_str);
       }
-            
+
       return 0;
    }
 
@@ -174,7 +176,7 @@ public:
 
    DLLLOCAL int seqStart(yaml_sequence_style_t style = YAML_ANY_SEQUENCE_STYLE,
 			 const char *tag = YAML_SEQ_TAG, const char *anchor = 0, bool implicit = true) {
-      if (!yaml_sequence_start_event_initialize(&event, (yaml_char_t *)anchor, (yaml_char_t *)tag, 
+      if (!yaml_sequence_start_event_initialize(&event, (yaml_char_t *)anchor, (yaml_char_t *)tag,
 						implicit, style))
 	 return err("unknown error initializing yaml sequence start event");
 
@@ -191,7 +193,7 @@ public:
 
    DLLLOCAL int mapStart(yaml_mapping_style_t style = YAML_ANY_MAPPING_STYLE,
 			 const char *tag = YAML_MAP_TAG, const char *anchor = 0, bool implicit = true) {
-      if (!yaml_mapping_start_event_initialize(&event, (yaml_char_t *)anchor, (yaml_char_t *)tag, 
+      if (!yaml_mapping_start_event_initialize(&event, (yaml_char_t *)anchor, (yaml_char_t *)tag,
 					       implicit, style))
 	 return err("unknown error initializing yaml mapping start event");
 
@@ -205,26 +207,26 @@ public:
       return emit("map end");
    }
 
-   DLLLOCAL int emitScalar(const QoreString &value, const char *tag, const char *anchor = 0, 
-		       bool plain_implicit = true, bool quoted_implicit = true, 
+   DLLLOCAL int emitScalar(const QoreString &value, const char *tag, const char *anchor = 0,
+		       bool plain_implicit = true, bool quoted_implicit = true,
 		       yaml_scalar_style_t style = YAML_ANY_SCALAR_STYLE) {
       TempEncodingHelper str(&value, QCS_UTF8, xsink);
       if (*xsink)
 	 return -1;
 
-      if (!yaml_scalar_event_initialize(&event, (yaml_char_t *)anchor, (yaml_char_t *)tag, 
-					(yaml_char_t *)str->getBuffer(), str->strlen(), 
+      if (!yaml_scalar_event_initialize(&event, (yaml_char_t *)anchor, (yaml_char_t *)tag,
+					(yaml_char_t *)str->getBuffer(), str->strlen(),
 					plain_implicit, quoted_implicit, style))
 	 return err("unknown error initializing yaml scalar output event for yaml type '%s', value '%s'", tag, value.getBuffer());
 
       return emit("scalar", tag);
    }
 
-   DLLLOCAL int emitScalar(const char *value, const char *tag, const char *anchor = 0, 
-		       bool plain_implicit = true, bool quoted_implicit = true, 
+   DLLLOCAL int emitScalar(const char *value, const char *tag, const char *anchor = 0,
+		       bool plain_implicit = true, bool quoted_implicit = true,
 		       yaml_scalar_style_t style = YAML_ANY_SCALAR_STYLE) {
-      if (!yaml_scalar_event_initialize(&event, (yaml_char_t *)anchor, (yaml_char_t *)tag, 
-					(yaml_char_t *)value, -1, 
+      if (!yaml_scalar_event_initialize(&event, (yaml_char_t *)anchor, (yaml_char_t *)tag,
+					(yaml_char_t *)value, -1,
 					plain_implicit, quoted_implicit, style)) {
 	 return err("unknown error initializing yaml scalar output event for yaml type '%s', value '%s'", tag, value);
       }
@@ -232,25 +234,25 @@ public:
       return emit("scalar", tag);
    }
 
-   DLLLOCAL int emit(const QoreString &str) {
+   DLLLOCAL int emitValue(const QoreString &str) {
       TempEncodingHelper tmp(&str, QCS_UTF8, xsink);
       if (!tmp)
 	 return -1;
       return emitScalar(**tmp, YAML_STR_TAG, 0, true, true, YAML_DOUBLE_QUOTED_SCALAR_STYLE);
    }
-   
-   DLLLOCAL int emit(const QoreBigIntNode &bi) {
+
+   DLLLOCAL int emitValue(int64 i) {
       QoreString tmp;
-      tmp.sprintf("%lld", bi.val);
+      tmp.sprintf("%lld", i);
       return emitScalar(tmp, YAML_INT_TAG);
    }
 
-   DLLLOCAL int emit(const QoreFloatNode &f) {
+   DLLLOCAL int emitValue(double f) {
       QoreString tmp;
-      if (((double)((int64)f.f)) == f.f)
-         tmp.sprintf("%g.0", f.f);
+      if (((double)((int64)f)) == f)
+         tmp.sprintf("%g.0", f);
       else
-         tmp.sprintf("%.25g", f.f);
+         tmp.sprintf("%.25g", f);
 
       if (tmp == "inf")
          tmp.set("@inf@");
@@ -263,10 +265,8 @@ public:
       return emitScalar(tmp, YAML_FLOAT_TAG);
    }
 
-#ifdef _QORE_HAS_NUMBER_TYPE
-   DLLLOCAL int emit(const QoreNumberNode& n) {
+   DLLLOCAL int emitValue(const QoreNumberNode& n) {
       QoreString tmp;
-#ifdef _QORE_HAS_NUMBER_CONS_WITH_PREC
       n.toString(tmp, QORE_NF_SCIENTIFIC|QORE_NF_RAW);
       if (tmp == "inf")
          tmp.set("@inf@n");
@@ -278,22 +278,17 @@ public:
          tmp.concat('n');
       // append precision
       tmp.sprintf("{%d}", n.getPrec());
-#else
-      n.getStringRepresentation(tmp);
-      tmp.concat('n');
-#endif
       //printd(5, "yaml emit number: %s\n", tmp.getBuffer());
       return emitScalar(tmp, QORE_YAML_NUMBER_TAG);
    }
-#endif
 
-   DLLLOCAL int emit(const QoreBoolNode& b) {
+   DLLLOCAL int emitValue(bool b) {
       QoreString tmp;
-      tmp.sprintf("%s", b.getValue() ? "true" : "false");
+      tmp.sprintf("%s", b ? "true" : "false");
       return emitScalar(tmp, YAML_BOOL_TAG);
    }
 
-   DLLLOCAL int emit(const QoreListNode &l) {
+   DLLLOCAL int emitValue(const QoreListNode &l) {
       if (seqStart(block ? YAML_BLOCK_SEQUENCE_STYLE : YAML_FLOW_SEQUENCE_STYLE))
 	 return -1;
       ConstListIterator li(l);
@@ -304,7 +299,7 @@ public:
       return seqEnd();
    }
 
-   DLLLOCAL int emit(const QoreHashNode &h) {
+   DLLLOCAL int emitValue(const QoreHashNode &h) {
       if (mapStart(block ? YAML_BLOCK_MAPPING_STYLE : YAML_FLOW_MAPPING_STYLE))
 	 return -1;
       ConstHashIterator hi(h);
@@ -317,20 +312,20 @@ public:
       return mapEnd();
    }
 
-   DLLLOCAL int emit(const DateTime &d);
+   DLLLOCAL int emitValue(const DateTime &d);
 
-   DLLLOCAL int emit(const BinaryNode &b) {
+   DLLLOCAL int emitValue(const BinaryNode &b) {
       QoreString str(QCS_UTF8);
       str.concatBase64(&b);
       return emitScalar(str, YAML_BINARY_TAG, 0, false, false, YAML_DOUBLE_QUOTED_SCALAR_STYLE);
    }
 
-   DLLLOCAL int emit(const AbstractQoreNode *p);
-   
+   DLLLOCAL int emit(const QoreValue& v);
+
    DLLLOCAL int emitNull() {
       return emitScalar(NullStr, YAML_NULL_TAG);
    }
-   
+
    DLLLOCAL void setCanonical(bool b = true) {
       yaml_emitter_set_canonical(&emitter, b);
    }
@@ -338,7 +333,7 @@ public:
    DLLLOCAL void setUnicode(bool b = true) {
       yaml_emitter_set_unicode(&emitter, b);
    }
-   
+
    DLLLOCAL bool getBlock() const {
       return block;
    }
@@ -381,7 +376,7 @@ protected:
 
    DLLLOCAL int getEvent() {
       discardEvent();
-	 
+
       if (!yaml_parser_parse(&parser, &event)) {
 	 valid = false;
       xsink->raiseException(QY_PARSE_ERR, "getEvent: unexpected event '%s' when parsing YAML document", get_event_name(event.type));
@@ -427,7 +422,7 @@ public:
 
    DLLLOCAL ~QoreYamlParser() {
       discardEvent();
-      yaml_parser_delete(&parser); 
+      yaml_parser_delete(&parser);
    }
 };
 

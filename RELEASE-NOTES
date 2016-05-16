@@ -3,13 +3,23 @@ version 0.5
 ***********
 
 * YamlRpcHandler module updates: minor error logging updates, updated minimum
-  qore version to 0.8.10 for get_ex_pos() and the module license value
+  qore version to 0.8.12 for get_ex_pos() and the module license value and
+  also the UnitTest module
 * added the following user modules implementing DataStream protocol support:
   - DataStreamUtil
   - DataStreamClient
   - DataStreamRequestHandler
 * user modules moved to top-level qore module directory from version-specific
   module directory since they are valid for multiple versions of qore
+* date/time values (yaml !!timestamp type) are now always returned in the
+  current time zone locale so that time zone rules can be applied to
+  deserialized dates, otherwise time zone information is always lost which can
+  cause errors when performing date arithmetic on deserialized yaml dates
+* deprecated camel-case function names in favor of names conforming to the
+  standard naming convention for functions:
+  - makeYAML() deprecated for make_yaml()
+  - parseYAML() deprecated for parse_yaml()
+  - getYAMLInfo() deprecated for get_yaml_info()
 
 
 ***********
