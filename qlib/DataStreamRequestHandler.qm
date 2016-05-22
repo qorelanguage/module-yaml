@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # @file DataStreamRequestHandler.qm Qore user module implementing client support for the DataStream protocol: YAML-encoded HTTP chunked transfers where each chunk is a unique data entity
 
-/*  DataStreamRequestHandler.qm Copyright (C) 2014 Qore Technologies, sro
+/*  DataStreamRequestHandler.qm Copyright (C) 2014 - 2015 Qore Technologies, sro
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -36,6 +36,9 @@
 %requires yaml
 %requires Mime
 
+# do not use $ signs in declarations
+%new-style
+
 module DataStreamRequestHandler {
     version = "1.0";
     desc = "user module implementing server support for the DataStream protocol: YAML-encoded HTTP chunked transfers where each chunk is a unique data entity";
@@ -58,7 +61,7 @@ module DataStreamRequestHandler {
     In %Qore, DataStream support is implemented on top of the REST infrastructure provided by the %Qore library, for this reason the @ref DataStreamRequestHandler::AbstractDataStreamRequestHandler "AbstractDataStreamRequestHandler" inherits and extends AbstractRestStreamRequestHandler provided by the RestHandler module.
 
     To use this module, use \c "%requires DataStreamRequestHandler" in your code.
-    
+
     All the public symbols in the module are defined in the DataStreamRequestHandler namespace.
 
     Classes:
@@ -81,55 +84,55 @@ public namespace DataStreamRequestHandler {
     public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRestStreamRequestHandler {
 	public {
 	    #! the receive callback as returned by the @ref datastreamutilintro "DataStreamUtil" module
-	    code $.rcb;
+	    code rcb;
 
 	    #! the send callback as returned by the @ref datastreamutilintro "DataStreamUtil" module
-	    code $.scb;
+	    code scb;
 
             #! flag for when all data has been received
-            bool $.recv_done = False;
+            bool recv_done = False;
 
             #! flag for when all data has been sent
-            bool $.send_done = False;
+            bool send_done = False;
 
             #! HTTP status code for error response sent
-            int $.err;
+            int err;
 
             #! send error string received
-            *string $.send_error;
+            *string send_error;
 	}
 
 	#! creates the chunked request handler according to the arguments
-	constructor(hash $cx, *hash $ah) : AbstractRestStreamRequestHandler($cx, $ah) {
-	    $.rcb = ds_get_recv(\$.recvData(), \$.recvDataDone());
-	    $.scb = ds_get_send(\$.sendData(), ds_get_content_encode($.cx.encoding));
+	constructor(hash cx, *hash ah) : AbstractRestStreamRequestHandler(cx, ah) {
+	    rcb = ds_get_recv(\recvData(), \recvDataDone());
+	    scb = ds_get_send(\sendData(), ds_get_content_encode(cx.encoding));
 
 	    # setup data stream with header
-	    call_function($.rcb, ("hdr": $cx.hdr, "obj": $cx.socketobject));
+	    call_function(rcb, ("hdr": cx.hdr, "obj": cx.socketobject));
 	}
 
         #! if an error occurred, then return a hash giving an error response, otherwise return @ref nothing
         /** this method is meant to be called by getResponseHeaderMessageImpl()
         */
         *hash getErrorResponse() {
-            if ($.cx.hdr{DataStreamAccept.lwr()} != MimeTypeYaml)
+            if (cx.hdr{DataStreamAccept.lwr()} != MimeTypeYaml)
                 return (
-                    "code": ($.err = 406),
-                    "body": sprintf("cannot accept DataStream request with header %s: %y; expecting %y", DataStreamAccept, $.cx.hdr{DataStreamAccept.lwr()}, MimeTypeYaml),
+                    "code": (err = 406),
+                    "body": sprintf("cannot accept DataStream request with header %s: %y; expecting %y", DataStreamAccept, cx.hdr{DataStreamAccept.lwr()}, MimeTypeYaml),
                     "hdr": ("Content-Type": MimeTypeText),
                     );
 
-            if ($.send_error)
+            if (send_error)
                 return (
-                    "code": ($.err = 400),
+                    "code": (err = 400),
                     "body": "Sender reported a DataStream error in the request trailer",
                     "hdr": ("Content-Type": MimeTypeText),
                 );
 
-            if ($.ex)
+            if (ex)
                 return (
-                    "code": ($.err = 409),
-                    "body": makeYAML($.ex),
+                    "code": (err = 409),
+                    "body": make_yaml(ex),
                     "hdr": ("Content-Type": MimeTypeYaml),
                     "close": True,
                 );
@@ -146,60 +149,60 @@ public namespace DataStreamRequestHandler {
             @note this method is called after the message body has been received
         */
 	hash getResponseHeaderMessageImpl() {
-            my *hash $h = $.getErrorResponse();
-            if ($h)
-                return $h;
+            *hash h = getErrorResponse();
+            if (h)
+                return h;
 
-	    my hash $hdr;
-	    ds_set_chunked_headers(\$hdr, $.cx.encoding);
+	    hash hdr;
+	    ds_set_chunked_headers(\hdr, cx.encoding);
 	    return (
 		"code": 200,
-		"hdr": $hdr,
+		"hdr": hdr,
 		);
 	}
 
 	#! calls the receive callback as returned by the @ref datastreamutilintro "DataStreamUtil" module, which in turn calls @ref recvDataImpl() to deliver deserialized data
-	nothing recvImpl(hash $v) {
-	    call_function($.rcb, $v);
+	nothing recvImpl(hash v) {
+	    rcb(v);
 	}
 
 	#! calls the send callback as returned by the @ref datastreamutilintro "DataStreamUtil" module, which in turn calls @ref sendDataImpl() to get the data to serialize and encode and send as a response
 	any sendImpl() {
-	    return call_function($.scb);
+	    return scb();
 	}
 
         #! this method is called when all data has been received
-        private nothing recvDataDone(*string $err) {
-            $.send_error = $err;
-            $.recv_done = $err ? False : True;
-            $.recvDataDoneImpl($err);
+        private nothing recvDataDone(*string err) {
+            send_error = err;
+            recv_done = err ? False : True;
+            recvDataDoneImpl(err);
         }
 
 	#! This is the concrete method called when data is received; it calls recvDataImpl() in turn
 	/** @param data the data received
 	*/
-	private nothing recvData(any $data) {            
-            $.recvDataImpl($data);
+	private nothing recvData(any data) {
+            recvDataImpl(data);
         }
 
 	#! This is the concrete method called when data is received; it calls recvDataImpl() in turn
 	/** @return data the data to be sent over the link
 	*/
 	private any sendData() {
-            my any $d = $.sendDataImpl();
-            if (!exists $d)
-                $.send_done = True;
-            return $d;
+            any d = sendDataImpl();
+            if (!exists d)
+                send_done = True;
+            return d;
         }
 
         #! this method is called when all data has been received
-        private nothing recvDataDoneImpl(*string $err) {
+        private nothing recvDataDoneImpl(*string err) {
         }
 
 	#! reimplement this method in subclasses to receive decoded and deserialized data
 	/** @param data the argument passed to this callback is the decoded and deserialized data in the message
 	*/
-	private abstract nothing recvDataImpl(any $data);
+	private abstract nothing recvDataImpl(any data);
 
 	#! reimplement this method in subclasses to support streamed data transfers; when this method returns no value, it signifies the end of the streamed data transfer
 	/** @return the data returned by this callback will be serialized to YAML and send via the @ref datastreamprotocol "DataStream protocol" to the remote HTTP REST server in HTTP chunked format; when all data has been send then this callback should return @ref nothing, which will close the chunked message and terminate the request
@@ -207,4 +210,3 @@ public namespace DataStreamRequestHandler {
 	private abstract any sendDataImpl();
     }
 }
-
