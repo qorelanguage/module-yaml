@@ -18,9 +18,9 @@ lib_LTLIBRARIES = yaml.la
 yaml_la_SOURCES = $(YAML_SOURCES)
 yaml_la_LDFLAGS = -module -avoid-version ${YAML_LIBS} ${MODULE_LDFLAGS}
 
-INCLUDES = -I$(top_srcdir)/include $(YAML_CPPFLAGS)
+INCLUDES = -I$(top_srcdir)/include
 
-AM_CPPFLAGS=$(QORE_CPPFLAGS)
+AM_CPPFLAGS=$(QORE_CPPFLAGS) $(YAML_CPPFLAGS)
 
 if COND_PROFILE
 AM_CXXFLAGS=-g -pg
@@ -37,4 +37,3 @@ endif
 install-exec-hook:
 	mv $(DESTDIR)$(libdir)/$(MNAME).$(MODULE_SUFFIX) $(DESTDIR)$(libdir)/$(MNAME)-api-$(MODULE_API).qmod
 	$(RM) $(DESTDIR)$(libdir)/$(MNAME).la $(DESTDIR)$(libdir)/$(MNAME).a $(RM_OTHER)
-
