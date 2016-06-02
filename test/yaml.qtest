@@ -113,11 +113,11 @@ public class Main inherits QUnit::Test {
     testNanStructure() {
         string s = make_yaml(DATA2);
         any l = parse_yaml(s);
-        assertEq(DATA[0], l[0]);
-        assertEq(DATA[1], l[1]);
-        assertEq(DATA[2], l[2]);
+        assertEq(DATA2[0], l[0]);
+        assertEq(DATA2[1], l[1]);
+        assertEq(DATA2[2], l[2]);
         assertTrue(l[3].nanp());
-        assertFalse(DATA[3] == l[3]);
-        assertEq(DATA[4], l[4]);
+        assertFalse(DATA2[3] == l[3]);
+        assertEq(DATA2[4], l[4]);
     }
 }
