@@ -34,11 +34,18 @@ const DATA = (
         ("a" : 2.0,
          "b" : "hello",
          "key" : True),
-        @nan@n,
         @inf@n,
         -@inf@n,
         @inf@,
         -@inf@,
+    );
+
+const DATA2 = (
+        1,
+        "two",
+        22,
+        @nan@n,
+        @inf@n,
     );
 
 const YAML_OPTIONS = (
@@ -56,6 +63,7 @@ public class Main inherits QUnit::Test {
         addTestCase("Skipped test", \testIndent());
         addTestCase("Len test", \testLen());
         addTestCase("Date/Time test", \testDates());
+        addTestCase("Structure with NaN test", \testNanStructure());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -100,5 +108,16 @@ public class Main inherits QUnit::Test {
 
         any dt3 = parse_yaml(make_yaml(dt1));
         testAssertion("yaml date test", \equals(), (dt2, dt3));
+    }
+
+    testNanStructure() {
+        string s = make_yaml(DATA2);
+        any l = parse_yaml(s);
+        assertEq(DATA[0], l[0]);
+        assertEq(DATA[1], l[1]);
+        assertEq(DATA[2], l[2]);
+        assertTrue(l[3].nanp());
+        assertFalse(DATA[3] == l[3]);
+        assertEq(DATA[4], l[4]);
     }
 }
