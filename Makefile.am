@@ -8,10 +8,10 @@ noinst_HEADERS = src/yaml-module.h
 
 USER_MODULES = qlib/YamlRpcClient.qm qlib/YamlRpcHandler.qm qlib/DataStreamUtil.qm qlib/DataStreamClient.qm qlib/DataStreamRequestHandler.qm
 
-EXTRA_DIST = COPYING.LGPL COPYING.MIT ChangeLog AUTHORS README \
+EXTRA_DIST = COPYING.LGPL COPYING.MIT AUTHORS README \
 	RELEASE-NOTES \
 	src/ql_yaml.qpp \
-	test/yaml-test.q \
+	test/yaml.qtest \
 	examples/yaml-server.q \
 	$(USER_MODULES) \
 	qore-yaml-module.spec
