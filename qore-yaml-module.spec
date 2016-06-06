@@ -112,7 +112,7 @@ rm -rf $RPM_BUILD_ROOT
 * Sat May 28 2011 David Nichols <david@qore.org> 0.3
 - updated to version 0.3
 
-* Tue Jun 30 2010 David Nichols <david@qore.org>
+* Wed Jun 30 2010 David Nichols <david@qore.org>
 - updated to version 0.2
 
 * Tue May 4 2010 David Nichols <david_nichols@users.sourceforge.net>
