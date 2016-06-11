@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # @file DataStreamClient.qm Qore user module implementing client support for the DataStream protocol: YAML-encoded HTTP chunked transfers where each chunk is a unique data entity
 
-/*  DataStreamClient.qm Copyright (C) 2014 - 2015 Qore Technologies, sro
+/*  DataStreamClient.qm Copyright (C) 2014 - 2016 Qore Technologies, sro
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -152,7 +152,7 @@ public namespace DataStreamClient {
 
         #! calls the base class RestClient constructor and optionally connects to the REST server
         /** @par Example:
-            @code
+            @code{.py}
 DataStreamClient ds(("url": "http://localhost:8001/rest"));
             @endcode
 
@@ -187,7 +187,7 @@ DataStreamClient ds(("url": "http://localhost:8001/rest"));
 
         #! sends an HTTP request to an HTTP REST server supporting the @ref datastreamprotocol "DataStream protocol" and returns the decoded and deserialized response in the given callback as each HTTP chunk is received
         /** @par Example:
-            @code
+            @code{.py}
 rest.recvDataStream(recvcallback, endcallback, "GET", "/orders/1", body);
             @endcode
 
@@ -233,7 +233,7 @@ rest.recvDataStream(recvcallback, endcallback, "GET", "/orders/1", body);
 
         #! sends an HTTP request to an HTTP REST server supporting the @ref datastreamprotocol "DataStream protocol" and returns the decoded and deserialized response in the given callback as each HTTP chunk is received
         /** @par Example:
-            @code
+            @code{.py}
 rest.recvDataStream(reccallback, "GET", "/orders/1", body);
             @endcode
 
@@ -268,7 +268,7 @@ rest.recvDataStream(reccallback, "GET", "/orders/1", body);
         /** If a connection has not already been established, an internal call to HTTPClient::connect() will be made before sending the message
 
             @par Example:
-            @code
+            @code{.py}
 hash h = rest.sendDataStream(callback, "POST", "/path");
             @endcode
 
@@ -365,7 +365,7 @@ hash h = rest.sendDataStream(callback, "POST", "/path");
         /** If a connection has not already been established, an internal call to HTTPClient::connect() will be made before sending the message
 
             @par Example:
-            @code
+            @code{.py}
 hash h = rest.sendDataStream(callback, "POST", "/path");
             @endcode
 
@@ -406,7 +406,7 @@ hash h = rest.sendDataStream(callback, "POST", "/path");
             If a connection has not already been established, an internal call to HTTPClient::connect() will be made before sending the message
 
             @par Example:
-            @code
+            @code{.py}
 rest.sendRecvDataStream(send_callback, reccallback, "POST", "/path");
             @endcode
 
@@ -454,7 +454,7 @@ rest.sendRecvDataStream(send_callback, reccallback, "POST", "/path");
             If a connection has not already been established, an internal call to HTTPClient::connect() will be made before sending the message
 
             @par Example:
-            @code
+            @code{.py}
 rest.sendRecvDataStream(send_callback, reccallback, "POST", "/path");
             @endcode
 
@@ -489,7 +489,7 @@ rest.sendRecvDataStream(send_callback, reccallback, "POST", "/path");
 
         #! send raw chunked data to the client and expect a YAML-formatted response
         /** @par Example:
-            @code
+            @code{.py}
 hash h = rest.sendRawStream(sender, "POST", uri_path, 20s);
             @endcode
 
@@ -527,7 +527,7 @@ hash h = rest.sendRawStream(sender, "POST", uri_path, 20s);
 
         #! receives raw chunked data using the given closure and returns any headers received
         /** @par Example:
-            @code
+            @code{.py}
 hash h = rest.getRawStream(recv, "GET", uri_path, 20s);
             @endcode
 
@@ -578,7 +578,7 @@ hash h = rest.getRawStream(recv, "GET", uri_path, 20s);
 
         #! adds default headers to each request; these headers will be sent in all requests but can be overridden in requests as well
         /** @par Example:
-            @code
+            @code{.py}
 # disable gzip and bzip encoding in responses
 rest.addDefaultHeaders(("Accept-Encoding": "compress"));
             @endcode
@@ -597,7 +597,7 @@ rest.addDefaultHeaders(("Accept-Encoding": "compress"));
 
         #! sets the request and desired response encoding for the object; see @ref EncodingSupport for valid options
         /** @par Example:
-            @code
+            @code{.py}
 rest.setContentEncoding("gzip");
             @endcode
 
