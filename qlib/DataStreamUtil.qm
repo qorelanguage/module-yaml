@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # @file DataStreamUtil.qm Qore user module implementing support for the DataStream protocol: YAML-encoded HTTP chunked transfers where each chunk is a unique data entity
 
-/*  DataStreamUtil.qm Copyright (C) 2014 - 2015 Qore Technologies, sro
+/*  DataStreamUtil.qm Copyright (C) 2014 - 2016 Qore Technologies, sro
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -260,7 +260,7 @@ public namespace DataStreamUtil {
 
     #! returns a @ref call_reference "call reference" (or @ref nothing) based on an optional \c "Content-Encoding" header value for decoding HTTP encoded data
     /** @par Example:
-        @code
+        @code{.py}
 *code decode = ds_get_content_decode(hdr."content-encoding");
         @endcode
 
@@ -296,7 +296,7 @@ public namespace DataStreamUtil {
 
     #! returns a @ref call_reference "call reference" (or @ref nothing) based on an optional \c "Content-Encoding" header value for encoding HTTP encoded data
     /** @par Example:
-        @code
+        @code{.py}
 *code decode = ds_get_content_encode("bzip2");
         @endcode
 
@@ -327,7 +327,7 @@ public namespace DataStreamUtil {
 
     #! returns a @ref call_reference "call reference" useful for sending HTTP chunked data with %Qore methods taking send callbacks; data is encoded with YAML and optionally a @ref ds_get_content_encode "content encoding" @ref call_reference "call reference" or @ref closure "closure"
     /** @par Example:
-        @code
+        @code{.py}
 httpclient.sendWithSendCallback(ds_get_send(scb, enc_func), method, path, hdr, timeout_ms, False, \info);
         @endcode
 
@@ -372,7 +372,7 @@ httpclient.sendWithSendCallback(ds_get_send(scb, enc_func), method, path, hdr, t
 
     #! returns a @ref call_reference "call reference" useful for receiving HTTP chunked data with %Qore methods taking receive callbacks; YAML data is deserialized and passed as %Qore data to the given callback argument
     /** @par Example:
-        @code
+        @code{.py}
 httpclient.sendWithRecvCallback(ds_get_recv(rcb), body, method, path, hdr, timeout_ms, False, \info);
         @endcode
 
@@ -506,7 +506,7 @@ httpclient.sendWithRecvCallback(ds_get_recv(rcb), body, method, path, hdr, timeo
 
     #! sets up HTTP headers for DataStream chunked data transfers
     /** @par Example:
-        @code
+        @code{.py}
 ds_set_chunked_headers(\hdr, "bzip");
         @endcode
 
@@ -545,7 +545,7 @@ ds_set_chunked_headers(\hdr, "bzip");
 
     #! sets up HTTP headers for DataStream non-chunked data transfers
     /** @par Example:
-        @code
+        @code{.py}
 ds_set_non_chunked_headers(\hdr, "bzip");
         @endcode
 
@@ -573,7 +573,7 @@ ds_set_non_chunked_headers(\hdr, "bzip");
 
     #! returns the \c "DataStream-Accept-Encoding" header value corresponding to the \c "Accept-Encoding" header passed as an argument, or \c "identity" if none present
     /** @par Example:
-        @code
+        @code{.py}
 string dae = ds_get_ds_accept_enc_header(hdr."Accept-Encoding");
         @endcode
 
