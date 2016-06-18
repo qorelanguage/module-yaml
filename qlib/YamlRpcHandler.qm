@@ -109,8 +109,6 @@ http.waitStop();
     - updated to a user module
 */
 
-*/
-
 #! the %YamlRpcHandler namespace holds all public definitions in the %YamlRpcHandler module
 public namespace YamlRpcHandler {
     #! YamlRpcHandler class definition; to be registered as a handler in the HttpServer class
