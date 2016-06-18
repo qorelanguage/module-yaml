@@ -48,13 +48,9 @@ module YamlRpcHandler {
     license = "MIT";
 }
 
-/*  Version History
-    * 2014-03-05 v1.2: David Nichols <david@qore.org>: minor error logging updates, updated minimum qore version to 0.8.7 for get_ex_pos()
-    * 2013-09-24 v1.1: David Nichols <david@qore.org>: added optional log closure to constructor
-    * 2012-05-24 v1.0: David Nichols <david@qore.org>: updated to a user module
-*/
-
 /** @mainpage YamlRpcHandler Module
+
+    @tableofcontents
 
     @section yamlrpchandlerintro Introduction
 
@@ -98,6 +94,21 @@ http.setDefaultHandler("yamlrpc", yamlRpcHandler);
 log("now listening on %s\n", Bind);
 http.waitStop();
     @endcode
+
+    @section ymlarpchandler_relnotes YamlRpcHandler Release Notes
+
+    @subsection yamlrpchandler_v1_2 YamlRpcHandler v1.2
+    - minor error logging updates
+    - updated minimum qore version to 0.8.12 for get_ex_pos()
+    - updated for new YAML function names (removed references to deprecated camel-case functions)
+
+    @subsection yamlrpchandler_v1_1 YamlRpcHAndler v1.1
+    * added optional log closure to constructor
+
+    @subsection yamlrpchandler_v1_0 YamlRpcHAndler v1.0
+    - updated to a user module
+*/
+
 */
 
 #! the %YamlRpcHandler namespace holds all public definitions in the %YamlRpcHandler module
