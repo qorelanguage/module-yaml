@@ -48,6 +48,8 @@ module YamlRpcClient {
 
 /** @mainpage YamlRpcClient Module
 
+    @tableofcontents
+
     @section yamlrpcclientintro YamlRpcClient Module Introduction
 
     This module implements client-side support for a proprietary RPC-based protocol using <a href="http://yaml.org">YAML</a> for serialization/deserialization of message data.
