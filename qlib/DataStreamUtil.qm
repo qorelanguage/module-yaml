@@ -488,7 +488,7 @@ httpclient.sendWithRecvCallback(ds_get_recv(rcb), body, method, path, hdr, timeo
                     }
 
                     # pass the content-decoded body to any "body callback" before deserialization
-                    if (bcb && ddc.code)
+                    if (bcb)
                         bcb(h.data, ddc.code);
                     h.data = ddc.in(h.data);
                 }
