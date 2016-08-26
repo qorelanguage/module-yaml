@@ -399,6 +399,8 @@ httpclient.sendWithRecvCallback(ds_get_recv(rcb), body, method, path, hdr, timeo
         bool send_aborted;
         # HTTP status code received
         *int status_code;
+        # HTTP status message received
+        *string status_message;
         # content type received
         *string ct;
 
@@ -418,8 +420,10 @@ httpclient.sendWithRecvCallback(ds_get_recv(rcb), body, method, path, hdr, timeo
                 hp = True;
 
                 # save status code if present
-                if (h.hdr.status_code)
+                if (h.hdr.status_code) {
                     status_code = h.hdr.status_code;
+                    status_message = h.hdr.status_message;
+                }
 
                 # parse content type and optionally any content encoding
                 *string ce;
@@ -477,6 +481,9 @@ httpclient.sendWithRecvCallback(ds_get_recv(rcb), body, method, path, hdr, timeo
                     if (!ddc) {
                         if (bcb && ct)
                             bcb(h.data, ct);
+                        # if an HTTP error code was returned, then raise another exception
+                        if (status_code >= 400)
+                            throw "DESERIALIZATION-ERROR", sprintf("HTTP server returned a \"%d %s\" response with non-deserializable Content-Type %y: %s", status_code, status_message, ct, h.data);
                         throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize request body; content-type is: %y; types supported: %y", ct, DataStreamDeserializationSupport.keys());
                     }
 
