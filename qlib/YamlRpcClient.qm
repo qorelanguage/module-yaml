@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file YamlRpcClient.qm @brief provides the definition for the YamlRpcClient class
 
-/*  YamlRpcClient.qm Copyright 2012 - 2015 David Nichols
+/*  YamlRpcClient.qm Copyright 2012 - 2016 David Nichols
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -47,6 +47,8 @@ module YamlRpcClient {
 */
 
 /** @mainpage YamlRpcClient Module
+
+    @tableofcontents
 
     @section yamlrpcclientintro YamlRpcClient Module Introduction
 
