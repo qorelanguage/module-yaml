@@ -1,3 +1,10 @@
+*************
+version 0.5.1
+*************
+
+* fixed handling non-DataStream chunked responses (issue 1438)
+
+
 ***********
 version 0.6
 ***********
