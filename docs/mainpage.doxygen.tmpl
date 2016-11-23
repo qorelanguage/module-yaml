@@ -30,15 +30,24 @@ This module is released under a choice of two licenses:
     @section Examples
 
     @par To serialize a simple value or a complex data structure to a YAML string:
-    @code
+    @code{.py}
+%new-style
+%strict-args
+%require-types
+%enable-all-warnings
+
 %requires yaml
-my string $yaml_str = make_yaml($data, YAML::Canonical);
+string yaml_str = make_yaml(data, YAML::Canonical);
     @endcode
 
     @par To deserialize a YAML string to a Qore value:
-    @code
-%requires yaml
-my any $data = parse_yaml($yaml_str);
+    @code{.py}
+%new-style
+%strict-args
+%require-types
+%enable-all-warnings
+
+any data = parse_yaml(yaml_str);
     @endcode
 
     @section yaml_functions Available Functions
@@ -77,6 +86,11 @@ my any $data = parse_yaml($yaml_str);
 
     @section yamlreleasenotes Release Notes
 
+    @subsection yaml06 yaml Module Version 0.6
+
+    - improved the description for the \c DESERIALIZATION-ERROR exception for non-deserializable message bodies from HTTP servers with error responses (<a href="https://github.com/qorelanguage/qore/issues/1033">issue 1033</a>)
+    - fixed bugs handling non-DataStream chunked responses (<a href="https://github.com/qorelanguage/qore/issues/1438">issue 1438</a>)
+
     @subsection yaml05 yaml Module Version 0.5
 
     <b>New Features and Bug Fixes</b>
@@ -85,7 +99,7 @@ my any $data = parse_yaml($yaml_str);
       - <a href="../../DataStreamRequestHandler/html/index.html">DataStreamRequestHandler user module</a>
       - <a href="../../DataStreamUtil/html/index.html">DataStreamUtil user module</a>
     - user modules moved to top-level qore module directory from version-specific module directory since they are valid for multiple versions of qore
-    - date/time values (yaml !!timestamp type) are now always returned in the current time zone locale so that time zone rules can be applied to deserialized dates; previously time zone information was always lost which could cause errors when performing date arithmetic on deserialized yaml dates
+    - date/time values (yaml \c !!timestamp type) are now always returned in the current time zone locale so that time zone rules can be applied to deserialized dates; previously time zone information was always lost which could cause errors when performing date arithmetic on deserialized yaml dates
     - fixed bugs deserializing canonically-encoded YAML strings; arbitrary-precision numeric values were deserialized with their precision values ignored and floating point +/-inf were deserialized as zero
     - deprecated old camel-case names and implemented new function names confirming to the standard naming convention for functions
 

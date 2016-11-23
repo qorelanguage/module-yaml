@@ -1,4 +1,13 @@
 ***********
+version 0.6
+***********
+
+* fixed exception description for non-deserializable responses from HTTP
+  servers with error responses (issue 1033)
+* fixed handling non-DataStream chunked responses (issue 1438)
+
+
+***********
 version 0.5
 ***********
 

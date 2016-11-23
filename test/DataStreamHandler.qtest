@@ -1,0 +1,38 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%new-style
+%require-types
+%strict-args
+%enable-all-warnings
+
+%requires ../qlib/DataStreamRequestHandler.qm
+%requires QUnit
+
+%exec-class DataStreamRequestHandlerTest
+
+class TestDataStreamRequestHandler inherits AbstractDataStreamRequestHandler {
+    constructor(hash cx, *hash ah) : AbstractDataStreamRequestHandler(cx, ah) {
+    }
+
+    any sendDataImpl() {
+    }
+
+    nothing recvDataImpl(any data) {
+    }
+}
+
+class DataStreamRequestHandlerTest inherits QUnit::Test {
+    constructor() : Test("DataStreamRequestHandler test", "1.0") {
+        addTestCase("base test", \testDataStreamRequestHandler());
+
+        # Return for compatibility with test harness that checks return value.
+        set_return_value(main());
+    }
+
+    testDataStreamRequestHandler() {
+        TestDataStreamRequestHandler handler(("socketobject": new Socket()));
+
+        assertEq(True, handler instanceof AbstractDataStreamRequestHandler);
+    }
+}
