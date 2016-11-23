@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # @file DataStreamClient.qm Qore user module implementing client support for the DataStream protocol: YAML-encoded HTTP chunked transfers where each chunk is a unique data entity
 
-/*  DataStreamClient.qm Copyright (C) 2014 - 2016 Qore Technologies, sro
+/*  DataStreamClient.qm Copyright (C) 2014 - 2016 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -40,7 +40,7 @@
 %new-style
 
 module DataStreamClient {
-    version = "1.0";
+    version = "1.0.1";
     desc = "user module implementing client support for the DataStream protocol: YAML-encoded HTTP chunked transfers where each chunk is a unique data entity";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -73,6 +73,9 @@ module DataStreamClient {
     @note Most of the underlying functionality is provided by the @ref datastreamutilintro "DataStreamUtil" module
 
     @section datastreamclientrelnotes Release Notes
+
+    @subsection datastreamclient_v1_0_1 DataStreamClient v1.0.1
+    - fixed bugs handling non-DataStream chunked responses (<a href="https://github.com/qorelanguage/qore/issues/1438">issue 1438</a>)
 
     @subsection datastreamclient_v1_0 DataStreamClient v1.0
     - initial release of the module
@@ -138,7 +141,7 @@ public namespace DataStreamClient {
     public class DataStreamClient inherits RestClient::RestClient {
         public {
             #! DataStreamClient Version
-            const Version = "1.0";
+            const Version = "1.0.1";
 
             #! DataStreamClient Version String
             const VersionString = sprintf("Qore-DataStreamClient/%s", DataStreamClient::Version);
@@ -618,7 +621,7 @@ rest.setContentEncoding("gzip");
 
         #! sends the outgoing HTTP message and recodes the response to data
         hash sendAndDecodeResponse(*data body, string m, string path, hash hdr, *reference info, *softbool decode_errors) {
-            /* we cannot just receive standard HTTP chunk data here since any Content-Encoding will not be respected,
+            /* we cannot just receive standard HTTP chunked data here since any Content-Encoding will not be respected,
              * and any DataStream content encoding can only be applied to each chunk separately.  Therefore we have
              * to intercept the chunked messages here to build the respose data and also capture the headers
              * returned
@@ -644,12 +647,12 @@ rest.setContentEncoding("gzip");
             # response serialization
             string rs;
             # raw response
-            string rrs = "";
+            data rrs;
             on_exit info += (
                 "response-body": rrs,
                 "response-serialization": rs,
                 );
-            code bcb = sub (string b, string code) {
+            code bcb = sub (any b, string code) {
                 rrs += b;
                 rs = code;
             };
@@ -673,6 +676,30 @@ rest.setContentEncoding("gzip");
             };
 
             sendWithRecvCallback(rcb, body, m, path, hdr, 60s, False, \info);
+
+            # we can get a binary response if we received a chunked non-DataStream message
+            # in which case we need to decode it here (issue 1438)
+            if (rrs.typeCode() == NT_BINARY) {
+                *string ce;
+                *string ct;
+                if (chunked) {
+                    ct = rhdr{DataStreamContentType.lwr()} ?? rhdr."content-type";
+                    ce = rhdr{DataStreamContentEncoding.lwr()} ?? rhdr."content-encoding";
+                }
+                else {
+                    ct = rhdr."content-type";
+                    ce = rhdr."content-encoding";
+                }
+                if (ce) {
+                    rrs = ds_get_content_decode(ce)(rrs, "utf8");
+                }
+                if (rmd.typeCode() == NT_STRING && ct) {
+                    *hash ddc = DataStreamDeserializationSupport{ct};
+                    if (ddc)
+                        rmd = ddc.in(rrs);
+                }
+
+            }
 
             # rethrow exceptions returned from the sender
             if (rhdr.status_code >= 300) {
