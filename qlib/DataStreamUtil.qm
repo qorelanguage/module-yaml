@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # @file DataStreamUtil.qm Qore user module implementing support for the DataStream protocol: YAML-encoded HTTP chunked transfers where each chunk is a unique data entity
 
-/*  DataStreamUtil.qm Copyright (C) 2014 - 2015 Qore Technologies, sro
+/*  DataStreamUtil.qm Copyright (C) 2014 - 2016 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -46,7 +46,7 @@
 %new-style
 
 module DataStreamUtil {
-    version = "1.0";
+    version = "1.0.1";
     desc = "user module supporting YAML-encoded HTTP chunked transfers where each chunk is a unique data entity";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -170,7 +170,7 @@ module DataStreamUtil {
     @verbatim
 PUT /api/system?action=dataStream HTTP/1.1
 Accept: text/x-yaml,application/x-yaml,text/xml,application/xml,application/json,application/octet-stream
-User-Agent: Qore-DataStreamClient/1.0
+User-Agent: Qore-DataStreamClient/1.0.1
 Content-Type: application/octet-stream
 DataStream-Content-Type: text/x-yaml;charset=utf8
 DataStream-Accept: text/x-yaml
@@ -196,6 +196,9 @@ Server: Qorus-HTTP-Server/0.3.7
     @endverbatim
 
     @section datastreamutilrelnotes Release Notes
+
+    @subsection datastreamutil_v1_0_1 DataStreamUtil v1.0.1
+    - fixed a bug handling chunked non-DataStream messages (<a href="https://github.com/qorelanguage/qore/issues/1438">issue 1438</a>)
 
     @subsection datastreamutil_v1_0 DataStreamUtil v1.0
     - initial release of the module
@@ -395,6 +398,8 @@ httpclient.sendWithRecvCallback(ds_get_recv(rcb), body, method, path, hdr, timeo
         bool hp;
         # chunked flag
         bool chunked;
+        # data stream flag
+        bool datastream;
         # send aborted flag
         bool send_aborted;
         # HTTP status code received
@@ -443,6 +448,9 @@ httpclient.sendWithRecvCallback(ds_get_recv(rcb), body, method, path, hdr, timeo
                 # data is always transferred in UTF-8 encoding with DataStream
                 h.obj.setEncoding("utf8");
 
+                # if we have a chunked non-DataStream transfer, then we cannot decode the chunks
+                datastream = ct =~ /DataStream/;
+
                 dce = ds_get_content_decode(ce);
 
                 if (h.send_aborted)
@@ -464,8 +472,10 @@ httpclient.sendWithRecvCallback(ds_get_recv(rcb), body, method, path, hdr, timeo
                         }
                         # is a binary if sent in a regular body without content-encoding or sent chunked
                         case NT_BINARY: {
-                            if (dce)
-                                h.data = dce(h.data, "utf8");
+                            if (dce) {
+                                if (!chunked || datastream)
+                                    h.data = dce(h.data, "utf8");
+                            }
                             else
                                 h.data = binary_to_string(h.data, "utf8");
                             break;
@@ -483,7 +493,8 @@ httpclient.sendWithRecvCallback(ds_get_recv(rcb), body, method, path, hdr, timeo
                     # pass the content-decoded body to any "body callback" before deserialization
                     if (bcb)
                         bcb(h.data, ddc.code);
-                    h.data = ddc.in(h.data);
+                    if (!chunked || datastream)
+                        h.data = ddc.in(h.data);
                 }
 
                 # if the server has returned a status code, then handle as an exception on the remote side, otherwise throw a SEND-ABORTED exception
@@ -506,7 +517,7 @@ httpclient.sendWithRecvCallback(ds_get_recv(rcb), body, method, path, hdr, timeo
 
     #! sets up HTTP headers for DataStream chunked data transfers
     /** @par Example:
-        @code
+        @code{.py}
 ds_set_chunked_headers(\hdr, "bzip");
         @endcode
 
@@ -545,7 +556,7 @@ ds_set_chunked_headers(\hdr, "bzip");
 
     #! sets up HTTP headers for DataStream non-chunked data transfers
     /** @par Example:
-        @code
+        @code{.py}
 ds_set_non_chunked_headers(\hdr, "bzip");
         @endcode
 
@@ -594,13 +605,7 @@ string dae = ds_get_ds_accept_enc_header(hdr."Accept-Encoding");
 namespace DataStreamUtilPrivate {
     # private function
     sub ds_do_request_headers(reference hdr) {
-        if (hdr.Accept) {
-            if (hdr.Accept !~ /text\/x-yaml/)
-                hdr.Accept += "," + MimeTypeYaml;
-            if (hdr.Accept !~ /application\/octet-stream/)
-                hdr.Accept += "," + MimeTypeOctetStream;
-        }
-        else
+        if (!hdr.Accept)
             hdr.Accept = MimeTypeYaml + "," + MimeTypeOctetStream;
 
         if (!hdr{DataStreamAccept})
