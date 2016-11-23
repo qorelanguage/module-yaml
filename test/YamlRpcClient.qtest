@@ -1,0 +1,27 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%new-style
+%require-types
+%strict-args
+%enable-all-warnings
+
+%requires ../qlib/YamlRpcClient.qm
+%requires QUnit
+
+%exec-class YamlRpcClientTest
+
+class YamlRpcClientTest inherits QUnit::Test {
+    constructor() : Test("YamlRpcClient test", "1.0") {
+        addTestCase("base test", \testYamlRpcClient());
+
+        # Return for compatibility with test harness that checks return value.
+        set_return_value(main());
+    }
+
+    testYamlRpcClient() {
+        YamlRpcClient client(("url": "http://localhost:80"), True);
+
+        assertEq(True, client instanceof YamlRpcClient);
+    }
+}

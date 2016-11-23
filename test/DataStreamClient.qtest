@@ -1,0 +1,27 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%new-style
+%require-types
+%strict-args
+%enable-all-warnings
+
+%requires ../qlib/DataStreamClient.qm
+%requires QUnit
+
+%exec-class DataStreamClientTest
+
+class DataStreamClientTest inherits QUnit::Test {
+    constructor() : Test("DataStreamClient test", "1.0") {
+        addTestCase("base test", \testDataStreamClient());
+
+        # Return for compatibility with test harness that checks return value.
+        set_return_value(main());
+    }
+
+    testDataStreamClient() {
+        DataStreamClient client(("url": "http://localhost:80"), True);
+
+        assertEq(True, client instanceof DataStreamClient);
+    }
+}

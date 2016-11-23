@@ -1,0 +1,33 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%new-style
+%require-types
+%strict-args
+%enable-all-warnings
+
+%requires ../qlib/YamlRpcHandler.qm
+%requires HttpServer
+%requires QUnit
+
+%exec-class YamlRpcHandlerTest
+
+class YamlRpcHandlerTest inherits QUnit::Test {
+    public {
+        const Methods = (
+            );
+    }
+
+    constructor() : Test("YamlRpcHandler test", "1.0") {
+        addTestCase("base test", \testYamlRpcHandler());
+
+        # Return for compatibility with test harness that checks return value.
+        set_return_value(main());
+    }
+
+    testYamlRpcHandler() {
+        YamlRpcHandler handler(new PermissiveAuthenticator(), Methods);
+
+        assertEq(True, handler instanceof YamlRpcHandler);
+    }
+}

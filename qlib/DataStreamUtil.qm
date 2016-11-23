@@ -263,7 +263,7 @@ public namespace DataStreamUtil {
 
     #! returns a @ref call_reference "call reference" (or @ref nothing) based on an optional \c "Content-Encoding" header value for decoding HTTP encoded data
     /** @par Example:
-        @code
+        @code{.py}
 *code decode = ds_get_content_decode(hdr."content-encoding");
         @endcode
 
@@ -299,7 +299,7 @@ public namespace DataStreamUtil {
 
     #! returns a @ref call_reference "call reference" (or @ref nothing) based on an optional \c "Content-Encoding" header value for encoding HTTP encoded data
     /** @par Example:
-        @code
+        @code{.py}
 *code decode = ds_get_content_encode("bzip2");
         @endcode
 
@@ -330,7 +330,7 @@ public namespace DataStreamUtil {
 
     #! returns a @ref call_reference "call reference" useful for sending HTTP chunked data with %Qore methods taking send callbacks; data is encoded with YAML and optionally a @ref ds_get_content_encode "content encoding" @ref call_reference "call reference" or @ref closure "closure"
     /** @par Example:
-        @code
+        @code{.py}
 httpclient.sendWithSendCallback(ds_get_send(scb, enc_func), method, path, hdr, timeout_ms, False, \info);
         @endcode
 
@@ -375,7 +375,7 @@ httpclient.sendWithSendCallback(ds_get_send(scb, enc_func), method, path, hdr, t
 
     #! returns a @ref call_reference "call reference" useful for receiving HTTP chunked data with %Qore methods taking receive callbacks; YAML data is deserialized and passed as %Qore data to the given callback argument
     /** @par Example:
-        @code
+        @code{.py}
 httpclient.sendWithRecvCallback(ds_get_recv(rcb), body, method, path, hdr, timeout_ms, False, \info);
         @endcode
 
@@ -404,6 +404,8 @@ httpclient.sendWithRecvCallback(ds_get_recv(rcb), body, method, path, hdr, timeo
         bool send_aborted;
         # HTTP status code received
         *int status_code;
+        # HTTP status message received
+        *string status_message;
         # content type received
         *string ct;
 
@@ -423,8 +425,10 @@ httpclient.sendWithRecvCallback(ds_get_recv(rcb), body, method, path, hdr, timeo
                 hp = True;
 
                 # save status code if present
-                if (h.hdr.status_code)
+                if (h.hdr.status_code) {
                     status_code = h.hdr.status_code;
+                    status_message = h.hdr.status_message;
+                }
 
                 # parse content type and optionally any content encoding
                 *string ce;
@@ -487,6 +491,9 @@ httpclient.sendWithRecvCallback(ds_get_recv(rcb), body, method, path, hdr, timeo
                     if (!ddc) {
                         if (bcb && ct)
                             bcb(h.data, ct);
+                        # if an HTTP error code was returned, then raise another exception
+                        if (status_code >= 400)
+                            throw "DESERIALIZATION-ERROR", sprintf("HTTP server returned a \"%d %s\" response with non-deserializable Content-Type %y: %s", status_code, status_message, ct, h.data);
                         throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize request body; content-type is: %y; types supported: %y", ct, DataStreamDeserializationSupport.keys());
                     }
 
@@ -584,7 +591,7 @@ ds_set_non_chunked_headers(\hdr, "bzip");
 
     #! returns the \c "DataStream-Accept-Encoding" header value corresponding to the \c "Accept-Encoding" header passed as an argument, or \c "identity" if none present
     /** @par Example:
-        @code
+        @code{.py}
 string dae = ds_get_ds_accept_enc_header(hdr."Accept-Encoding");
         @endcode
 
