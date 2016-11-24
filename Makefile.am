@@ -12,6 +12,11 @@ EXTRA_DIST = COPYING.LGPL COPYING.MIT AUTHORS README \
 	RELEASE-NOTES \
 	src/ql_yaml.qpp \
 	test/yaml.qtest \
+	test/YamlRpcClient.qtest \
+	test/YamlRpcHandler.qtest \
+	test/DataStreamUtil.qtest \
+	test/DataStreamClient.qtest \
+	test/DataStreamRequestHandler.qtest \
 	examples/yaml-server.q \
 	$(USER_MODULES) \
 	qore-yaml-module.spec
