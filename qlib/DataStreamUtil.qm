@@ -447,13 +447,13 @@ httpclient.sendWithRecvCallback(ds_get_recv(rcb), body, method, path, hdr, timeo
                 }
 
                 # remove any ";charset=utf-8" from the end of the content-type header
-                ct =~ s/; ?charset=utf-?8$//i;
+                ct =~ s/; *charset=utf-?8$//i;
 
                 # data is always transferred in UTF-8 encoding with DataStream
                 h.obj.setEncoding("utf8");
 
                 # if we have a chunked non-DataStream transfer, then we cannot decode the chunks
-                datastream = ct =~ /DataStream/;
+                datastream = chunked && h.hdr.hasKey(DataStreamContentType.lwr());
 
                 dce = ds_get_content_decode(ce);
 

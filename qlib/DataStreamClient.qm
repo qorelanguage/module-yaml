@@ -22,8 +22,8 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-# this module requires Qore 0.8.10 or better
-%requires qore >= 0.8.10
+# this module requires Qore 0.8.12 or better
+%requires qore >= 0.8.12
 
 # require type definitions everywhere
 %require-types
@@ -698,7 +698,6 @@ rest.setContentEncoding("gzip");
                     if (ddc)
                         rmd = ddc.in(rrs);
                 }
-
             }
 
             # rethrow exceptions returned from the sender
