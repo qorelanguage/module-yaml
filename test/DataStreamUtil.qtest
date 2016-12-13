@@ -1,0 +1,44 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%new-style
+%require-types
+%strict-args
+%enable-all-warnings
+
+%requires ../qlib/DataStreamUtil.qm
+%requires Mime
+%requires QUnit
+
+%exec-class DataStreamutilTest
+
+class DataStreamutilTest inherits QUnit::Test {
+    constructor() : Test("DataStreamutil test", "1.0") {
+        addTestCase("base test", \testDataStreamutil());
+
+        # Return for compatibility with test harness that checks return value.
+        set_return_value(main());
+    }
+
+    testDataStreamutil() {
+        *code c = ds_get_content_decode();
+        assertEq(NOTHING, c);
+        c = ds_get_content_encode();
+        assertEq(NOTHING, c);
+        c = ds_get_send(sub () {});
+        assertEq(Type::Closure, c.type());
+        c = ds_get_recv(sub () {}, sub () {});
+        assertEq(Type::Closure, c.type());
+
+        hash hdr;
+        ds_set_chunked_headers(\hdr);
+        assertEq(DataStreamError, hdr.Trailer);
+        assertEq("chunked", hdr."Transfer-Encoding");
+
+        delete hdr;
+        ds_set_non_chunked_headers(\hdr);
+        assertEq(True, regex(hdr."Content-Type", MimeTypeYaml));
+
+        assertEq(True, ds_get_ds_accept_enc_header() =~ /deflate/);
+    }
+}

@@ -163,7 +163,7 @@ static unsigned is_prec(const char* str, size_t len) {
    const char* p = str + 1;
    while (isdigit(*p))
       ++p;
-   if (p == (str + 1) || *p != '}' || (p - str + 1) != len)
+   if (p == (str + 1) || *p != '}' || static_cast<size_t>(p - str + 1) != len)
       return 0;
 
    return (unsigned)atoi(str + 1);
@@ -172,7 +172,7 @@ static unsigned is_prec(const char* str, size_t len) {
 static double parseFloat(const char* val, size_t len) {
    assert(len);
    bool sign = (*val == '-' || *val == '+');
-   if ((len == (5 + sign)) && (!strcasecmp(val + sign, "@nan@") || !strcasecmp(val + sign, "@inf@"))) {
+   if ((len == static_cast<size_t>(5 + sign)) && (!strcasecmp(val + sign, "@nan@") || !strcasecmp(val + sign, "@inf@"))) {
       if (val[1 + sign] == 'n' || val[1 + sign] == 'N')
 	 return strtod("nan", 0);
       double d = strtod("inf", 0);
@@ -190,7 +190,7 @@ static QoreNumberNode* parseNumber(const char* val, size_t len) {
    // check for @inf@ and @nan@
    if (!strncasecmp(val + sign, "@nan@", 5) || !strncasecmp(val + sign, "@inf@", 5)) {
       if (val[5 + sign] == 'n') {
-	 if (len == (6 + sign))
+	 if (len == static_cast<size_t>(6 + sign))
 	    return new QoreNumberNode(val);
 	 else {
 	    unsigned prec = is_prec(val + sign + 6, len - sign - 6);
@@ -218,7 +218,7 @@ static AbstractQoreNode* try_parse_number(const char* val, size_t len) {
 
    // check for @inf@ and @nan@
    if (!strncasecmp(val + sign, "@nan@", 5) || !strncasecmp(val + sign, "@inf@", 5)) {
-      if (len == (5 + sign)) {
+      if (len == static_cast<size_t>(5 + sign)) {
 	 if (val[1 + sign] == 'n' || val[1 + sign] == 'N')
 	    return new QoreFloatNode(strtod("nan", 0));
 	 double d = strtod("inf", 0);
@@ -227,7 +227,7 @@ static AbstractQoreNode* try_parse_number(const char* val, size_t len) {
 	 return new QoreFloatNode(d);
       }
       if (val[5 + sign] == 'n') {
-	 if (len == (6 + sign))
+	 if (len == static_cast<size_t>(6 + sign))
 	    return new QoreNumberNode(val);
 	 else {
 	    unsigned prec = is_prec(val + sign + 6, len - sign - 6);
