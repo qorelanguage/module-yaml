@@ -1,7 +1,13 @@
 MNAME=yaml
 
+if COND_MINGW
+QPP=qpp_native
+else
+QPP=qpp
+endif
+
 ql_yaml.cpp: ql_yaml.qpp
-	qpp -V $<
+	$(QPP) -V $<
 
 GENERATED_SOURCES = ql_yaml.cpp
 CLEANFILES = $(GENERATED_SOURCES)
