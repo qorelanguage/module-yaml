@@ -1,16 +1,18 @@
-*************
-version 0.5.1
-*************
-
-* fixed handling non-DataStream chunked responses (issue 1438)
-
-
 ***********
 version 0.6
 ***********
 
 * fixed exception description for non-deserializable responses from HTTP
   servers with error responses (issue 1033)
+* added the YamlRpcConnection class to the YamlRpcClient module to
+  support the ConnectionProvider API
+
+
+*************
+version 0.5.1
+*************
+
+* fixed handling non-DataStream chunked responses (issue 1438)
 
 
 ***********

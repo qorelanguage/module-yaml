@@ -152,9 +152,11 @@ public namespace YamlRpcClient {
     #! defines a YAML-RPC client class
     /** The %YamlRpcClient class will correctly serialize YAML-RPC messages, send them to the server, deserialize the responses and return a Qore-language data structure for the response.
 
-        YAML-RPC is a proprietary HTTP-based RPC protocol; for a description of the YAML-RPC protocol implemented by the %YamlRpcClient class, see @ref YAMLRPC.\n
+        YAML-RPC is a proprietary HTTP-based RPC protocol; for a description of the YAML-RPC protocol implemented by the %YamlRpcClient class, see @ref YAMLRPC.
 
-        @note subclassed from Qore''s HTTPClient class
+        @note
+        - if no URI path is given in the constructor(), the default path used is \c "/YAML"
+        - subclassed from Qore''s HTTPClient class
     */
     public class YamlRpcClient inherits Qore::HTTPClient {
         #! YAML-RPC Client Version
