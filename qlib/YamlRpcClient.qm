@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file YamlRpcClient.qm @brief provides the definition for the YamlRpcClient class
 
-/*  YamlRpcClient.qm Copyright 2012 - 2016 David Nichols
+/*  YamlRpcClient.qm Copyright 2012 - 2016 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -23,7 +23,7 @@
 */
 
 # minimum qore version
-%requires qore >= 0.8.10
+%requires qore >= 0.8.13
 
 # requires the binary yaml module
 %requires yaml >= 0.3
@@ -31,20 +31,24 @@
 # need mime definitions
 %requires Mime >= 1.0
 
+%requires(reexport) ConnectionProvider >= 1.0
+
 # do not use $ signs in declarations
 %new-style
+# require type declarations
+%require-types
+# enable all warnings
+%enable-all-warnings
+# do not ignore arg errors in calls, disallow access to all NOOP variants
+%strict-args
 
 module YamlRpcClient {
-    version = "1.0";
+    version = "1.1";
     desc = "YamlRpcClient module";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
     license = "MIT";
 }
-
-/*  Version History
-    * 2012-05-24 v1.0: David Nichols <david@qore.org>: updated to a user module
-*/
 
 /** @mainpage YamlRpcClient Module
 
@@ -54,7 +58,9 @@ module YamlRpcClient {
 
     This module implements client-side support for a proprietary RPC-based protocol using <a href="http://yaml.org">YAML</a> for serialization/deserialization of message data.
 
-    All the functionality in this module is accessible with the @ref YamlRpcClient::YamlRpcClient "YamlRpcClient" class.
+    The following classes are provided by this module:
+    - @ref YamlRpcClient::YamlRpcClient "YamlRpcClient"
+    - @ref YamlRpcClient::YamlRpcConnection "YamlRpcConnection"
 
     @section YAMLRPC YAML-RPC Protocol Implementation
 
@@ -102,7 +108,7 @@ Content-Length: 49
     @code
 HTTP/1.1 200 OK
 Content-type: application/x-yaml;charset=utf-8
-Server: Qore-HTTP-Server/0.3.3
+Server: Qore-HTTP-Server/0.3.11.1
 Connection: Keep-Alive
 Date: Mon, 27 Sep 2010 10:34:06 GMT
 Content-Encoding: deflate
@@ -123,7 +129,7 @@ Content-Length: 152
     @code
 HTTP/1.1 200 OK
 Content-type: application/x-yaml;charset=utf-8
-Server: Qore-HTTP-Server/0.3.3
+Server: Qore-HTTP-Server/0.3.11.1
 Connection: Keep-Alive
 Date: Mon, 27 Sep 2010 10:38:06 GMT
 Content-Encoding: deflate
@@ -132,140 +138,216 @@ Content-Length: 118
 {error: {name: "YAMLRPCError", code: 105, message: "YAML-RPC-SERVER-UNKNOWN-METHOD: unknown method \"omq.system.none\""}}
     @endcode
 
+    @section yamlrpcclient_relnotes YamlRpcClient Module Release History
+
+    @subsection yrc_v_1_1 YamlRpcClient v1.1
+    - added the @ref YamlRpcClient::YamlRpcConnection "YamlRpcConnection" class
+
+    @subsection yrc_v_1_0 YamlRpcClient v1.0
+    - updated to a user module
 */
 
 #! the %YamlRpcClient namespace holds all public definitions in the %YamlRpcClient module
-public namespace YamlRpcClient;
+public namespace YamlRpcClient {
+    #! defines a YAML-RPC client class
+    /** The %YamlRpcClient class will correctly serialize YAML-RPC messages, send them to the server, deserialize the responses and return a Qore-language data structure for the response.
 
-#! defines a YAML-RPC client class
-/** The %YamlRpcClient class will correctly serialize YAML-RPC messages, send them to the server, deserialize the responses and return a Qore-language data structure for the response.
+        YAML-RPC is a proprietary HTTP-based RPC protocol; for a description of the YAML-RPC protocol implemented by the %YamlRpcClient class, see @ref YAMLRPC.
 
-    YAML-RPC is a proprietary HTTP-based RPC protocol; for a description of the YAML-RPC protocol implemented by the %YamlRpcClient class, see @ref YAMLRPC.\n
+        @note
+        - if no URI path is given in the constructor(), the default path used is \c "/YAML"
+        - subclassed from Qore''s HTTPClient class
+    */
+    public class YamlRpcClient inherits Qore::HTTPClient {
+        #! YAML-RPC Client Version
+        const Version = "1.0";
 
-    @note subclassed from Qore''s HTTPClient class
-  */
-public class YamlRpcClient::YamlRpcClient inherits Qore::HTTPClient {
-    #! YAML-RPC Client Version
-    const Version = "1.0";
-
-    #! default options for the YamlRpcClient::constructor()
-    const DefaultOptions = (
-        "protocols": (
-            "yamlrpc": (
-                "port": 80,
-                "ssl": False,
+        #! default options for the YamlRpcClient::constructor()
+        const DefaultOptions = (
+            "protocols": (
+                "yamlrpc": (
+                    "port": 80,
+                    "ssl": False,
+                ),
+                "yamlrpcs": (
+                    "port": 443,
+                    "ssl": True,
+                ),
             ),
-            "yamlrpcs": (
-                "port": 443,
-                "ssl": True,
-            ),
-        ),
-        "default_path": "YAML",
-        );
+            "default_path": "YAML",
+            );
 
-    #! YAML-RPC Client Version String
-    const VersionString = sprintf("Qore-YAML-RPC-Client/%s", YamlRpcClient::Version);
+        #! YAML-RPC Client Version String
+        const VersionString = sprintf("Qore-YAML-RPC-Client/%s", YamlRpcClient::Version);
 
-    #! default HTTP headers
-    const DefaultHeaders = (
-        "Content-Type": MimeTypeYamlRpc + ";charset=utf-8",
-        "Accept": MimeTypeYamlRpc,
-        "User-Agent": YamlRpcClient::VersionString,
-        );
+        #! default HTTP headers
+        const DefaultHeaders = (
+            "Content-Type": MimeTypeYamlRpc + ";charset=utf-8",
+            "Accept": MimeTypeYamlRpc,
+            "User-Agent": YamlRpcClient::VersionString,
+            );
 
-    private {
-	hash headers;
-	int flags = YAML::None;
-	string path;
-    }
+        private {
+            hash headers;
+            int flags = YAML::None;
+            string path;
+        }
 
-    #! calls the base class HTTPClient constructor, overrides the "protocols" key to "yamlrpc"
-    /** @param opts valid options are:
-    - \c url: A string giving the URL to connect to
-        - \c default_port: The default port number to connect to if none is given in the URL
-        - \c http_version: Either '1.0' or '1.1' for the claimed HTTP protocol version compliancy in outgoing message headers
-        - \c default_path: The default path to use for new connections if a path is not otherwise specified in the connection URL
-        - \c max_redirects: The maximum number of redirects before throwing an exception (the default is 5)
-        - \c proxy: The proxy URL for connecting through a proxy
-        - \c timeout: The timeout value in milliseconds (also can be a relative date-time value for clarity, ex: 5m)
-        - \c connect_timeout: The timeout value in milliseconds for establishing a new socket connection (also can be a relative date-time value for clarity, ex: 30s)
-        @param do_not_connect if \c False (the default), then a connection will be immediately established to the remote server
+        #! calls the base class HTTPClient constructor, overrides the "protocols" key to "yamlrpc"
+        /** @param opts valid options are:
+        - \c url: A string giving the URL to connect to
+            - \c default_port: The default port number to connect to if none is given in the URL
+            - \c http_version: Either '1.0' or '1.1' for the claimed HTTP protocol version compliancy in outgoing message headers
+            - \c default_path: The default path to use for new connections if a path is not otherwise specified in the connection URL
+            - \c max_redirects: The maximum number of redirects before throwing an exception (the default is 5)
+            - \c proxy: The proxy URL for connecting through a proxy
+            - \c timeout: The timeout value in milliseconds (also can be a relative date-time value for clarity, ex: 5m)
+            - \c connect_timeout: The timeout value in milliseconds for establishing a new socket connection (also can be a relative date-time value for clarity, ex: 30s)
+            @param do_not_connect if \c False (the default), then a connection will be immediately established to the remote server
         */
-    constructor(hash opts = hash(), bool do_not_connect = False) : HTTPClient(YamlRpcClient::DefaultOptions + opts) {
-        # unconditionally set the encoding to utf-8
-        setEncoding("utf-8");
+        constructor(hash opts = hash(), bool do_not_connect = False) : HTTPClient(YamlRpcClient::DefaultOptions + opts) {
+            # unconditionally set the encoding to utf-8
+            setEncoding("utf-8");
 
-	if (!do_not_connect)
-	    connect();
+            if (!do_not_connect)
+                connect();
 
-	headers = YamlRpcClient::DefaultHeaders + opts.headers;
-	flags |= opts.flags;
+            headers = YamlRpcClient::DefaultHeaders + opts.headers;
+            flags |= opts.flags;
 
-	# set path
-	any v_path = parse_url(getURL()).path;
-	if (exists v_path)
-	    path = v_path;
-	else
-	    path = exists opts.default_path ? opts.default_path : DefaultOptions.default_path;
-    }
+            # set path
+            any v_path = parse_url(getURL()).path;
+            if (exists v_path)
+                path = v_path;
+            else
+                path = exists opts.default_path ? opts.default_path : DefaultOptions.default_path;
+        }
 
-    #! simple constructor using default arguments
-    /** @param do_not_connect if \c False (the default), then a connection will be immediately established to the remote server
+        #! simple constructor using default arguments
+        /** @param do_not_connect if \c False (the default), then a connection will be immediately established to the remote server
         */
-    constructor(bool do_not_connect = False) : HTTPClient(YamlRpcClient::DefaultOptions) {
-        # unconditionally set the encoding to utf-8
-        setEncoding("utf-8");
+        constructor(bool do_not_connect = False) : HTTPClient(YamlRpcClient::DefaultOptions) {
+            # unconditionally set the encoding to utf-8
+            setEncoding("utf-8");
 
-	if (!do_not_connect)
-	    connect();
+            if (!do_not_connect)
+                connect();
+        }
+
+        #! makes a call to the YAML-RPC server using the second argument as the list of arguments to send
+        /** @param method the remote method to call
+            @param args the argument(s) to the call
+            @return the value returned from the server; if an error response is returned, an exception is raised
+        */
+        any callArgs(string method, any args) {
+            # create outgoing message in YamlRpc Call format
+            string msg = YamlRpcClient::makeRequest(method, args, flags);
+            # send the message to the server and get the response as an YAML string
+            string ans = post(path, msg, headers);
+            # parse the response and return a qore data structure
+            return parse_yaml(ans);
+        }
+
+        #! makes a call to the YAML-RPC server using the third argument as the list of arguments to send
+        /** @param info a reference to a hash with technical information about the call
+            @param method the remote method to call
+            @param args the argument(s) to the call
+            @return the value returned from the server; if an error response is returned, an exception is raised
+        */
+        any callArgsWithInfo(reference info, string method, any args) {
+            # create outgoing message in YamlRpc Call format
+            string msg = YamlRpcClient::makeRequest(method, args, flags);
+            trim msg;
+            on_exit info.request = msg;
+
+            # send the message to the server and get the response as an YAML string
+            info.response_headers = send(msg, "POST", path, headers, False, \info);
+
+            info.response = remove info.response_headers.body;
+            trim info.response;
+
+            # parse the response and return a qore data structure
+            return parse_yaml(info.response);
+        }
+
+        #! makes a method call to the YAML-RPC server using the remaining arguments after the method name as the list of arguments to send
+        /** @param method the remote method to call
+            @return the value returned from the server; if no error occurred, then a hash is returned with a \c result key (see @ref YAMLRPCResult), otherwise a hash is returned with an \c error key containing the error information (see @ref YAMLRPCError)
+        */
+        any call(string method) {
+            return callArgs(method, argv);
+        }
+
+        #! makes a YAML-RPC request string
+        static string makeRequest(string method, any arg, int flags = YAML::None) {
+            return make_yaml(("method":method,"params":arg), flags);
+        }
     }
 
-    #! makes a call to the YAML-RPC server using the second argument as the list of arguments to send
-    /** @param method the remote method to call
-        @param args the argument(s) to the call
-        @return the value returned from the server; if an error response is returned, an exception is raised
+    #! class for @ref YAMLRPC "YAML-RPC" connections; returns @ref YamlRpcClient objects
+    /** supports the following options:
+    - \c "http_version": HTTP version to use (\c "1.0" or \c "1.1", defaults to \c "1.1")
+        - \c "max_redirects": maximum redirects to support
+        - \c "proxy": proxy URL to use
+        - \c "timeout": transfer timeout to use in milliseconds
+        - \c "connect_timeout": connection timeout to use in milliseconds
+
+        @see @ref YamlRpcClient::constructor() for more information on the above options
     */
-    any callArgs(string method, any args) {
-	# create outgoing message in YamlRpc Call format
-	string msg = YamlRpcClient::makeRequest(method, args, flags);
-	# send the message to the server and get the response as an YAML string
-	string ans = post(path, msg, headers);
-	# parse the response and return a qore data structure
-	return parse_yaml(ans);
-    }
+    public class YamlRpcConnection inherits ConnectionProvider::HttpBasedConnection {
+        public {
+            hash real_opts;
+        }
 
-    #! makes a call to the YAML-RPC server using the third argument as the list of arguments to send
-    /** @param info a reference to a hash with technical information about the call
-        @param method the remote method to call
-        @param args the argument(s) to the call
-        @return the value returned from the server; if an error response is returned, an exception is raised
-    */
-    any callArgsWithInfo(reference info, string method, any args) {
-	# create outgoing message in YamlRpc Call format
-	string msg = YamlRpcClient::makeRequest(method, args, flags);
-	trim msg;
-	on_exit info.request = msg;
+        #! creates the YamlRpcConnection object
+        /** @param name the name of the connection
+            @param desc connection description
+            @param url connection URL (potentially with password info)
+            @param monitor monitoring flag
+            @param opts connection options
+            @param urlh broken down URL hash (as returned by @ref Qore::parse_url())
+        */
+        constructor(string name, string desc, string url, bool monitor, *hash opts, hash urlh) : HttpBasedConnection(name, desc, url, monitor, opts, urlh) {
+            real_opts = ("url": real_url) + opts;
+        }
 
-	# send the message to the server and get the response as an YAML string
-	info.response_headers = send(msg, "POST", path, headers, False, \info);
+        #! returns a @ref YamlRpcClient::YamlRpcClient object
+        /** @param connect if @ref Qore::True "True", then the connection is returned already connected
+            @param rtopts this connection type does not accept any runtime option, so this parameter is ignored
 
-	info.response = remove info.response_headers.body;
-	trim info.response;
+            @return a @ref YamlRpcClient::YamlRpcClient object
+        */
+        private YamlRpcClient getImpl(bool connect = True, *hash rtopts) {
+            return new YamlRpcClient(real_opts, !connect);
+        }
 
-	# parse the response and return a qore data structure
-	return parse_yaml(info.response);
-    }
+        #! gets options
+        /** @return returns a hash with the following supported options:
+        - \c "http_version": HTTP version to use (\c "1.0" or \c "1.1", defaults to \c "1.1")
+            - \c "max_redirects": maximum redirects to support
+            - \c "proxy": proxy URL to use
+            - \c "timeout": transfer timeout to use in milliseconds
+            - \c "connect_timeout": connection timeout to use in milliseconds
 
-    #! makes a method call to the YAML-RPC server using the remaining arguments after the method name as the list of arguments to send
-    /** @param method the remote method to call
-        @return the value returned from the server; if no error occurred, then a hash is returned with a \c result key (see @ref YAMLRPCResult), otherwise a hash is returned with an \c error key containing the error information (see @ref YAMLRPCError)
-    */
-    any call(string method) {
-	return callArgs(method, argv);
-    }
+            @see @ref YamlRpcClient::YamlRpcClient::constructor() "YamlRpcClient::constructor()" for more information on the above options
+        */
+        hash getOptions() {
+            return HttpConnection::Options;
+        }
 
-    #! makes a YAML-RPC request string
-    static string makeRequest(string method, any arg, int flags = YAML::None) {
-	return make_yaml(("method":method,"params":arg), flags);
+        #! returns default options
+        *hash getDefaultOptions() {
+            return HttpConnection::DefaultOptions;
+        }
+
+        #! returns \c "yamlrpc"
+        string getType() {
+            return "yamlrpc";
+        }
+
+        #! static constructor
+        static YamlRpcConnection make(string name, string desc, string url, bool monitor, *hash opts, hash urlh) {
+            return new YamlRpcConnection(name, desc, url, monitor, opts, urlh);
+        }
     }
 }
