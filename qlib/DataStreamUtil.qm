@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # @file DataStreamUtil.qm Qore user module implementing support for the DataStream protocol: YAML-encoded HTTP chunked transfers where each chunk is a unique data entity
 
-/*  DataStreamUtil.qm Copyright (C) 2014 - 2016 Qore Technologies, s.r.o.
+/*  DataStreamUtil.qm Copyright (C) 2014 - 2017 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -22,8 +22,8 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-# this module requires Qore 0.8.12 or better
-%requires qore >= 0.8.12
+# this module requires Qore 0.8.123or better
+%requires qore >= 0.8.13
 
 # require type definitions everywhere
 %require-types
@@ -46,7 +46,7 @@
 %new-style
 
 module DataStreamUtil {
-    version = "1.0.1";
+    version = "1.1";
     desc = "user module supporting YAML-encoded HTTP chunked transfers where each chunk is a unique data entity";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -170,7 +170,7 @@ module DataStreamUtil {
     @verbatim
 PUT /api/system?action=dataStream HTTP/1.1
 Accept: text/x-yaml,application/x-yaml,text/xml,application/xml,application/json,application/octet-stream
-User-Agent: Qore-DataStreamClient/1.0.1
+User-Agent: Qore-DataStreamClient/1.1
 Content-Type: application/octet-stream
 DataStream-Content-Type: text/x-yaml;charset=utf8
 DataStream-Accept: text/x-yaml
@@ -196,6 +196,9 @@ Server: Qorus-HTTP-Server/0.3.7
     @endverbatim
 
     @section datastreamutilrelnotes Release Notes
+
+    @subsection datastreamutil_v1_1 DataStreamUtil v1.1
+    - minor updates for complex types
 
     @subsection datastreamutil_v1_0_1 DataStreamUtil v1.0.1
     - fixed a bug handling chunked non-DataStream messages (<a href="https://github.com/qorelanguage/qore/issues/1438">issue 1438</a>)
@@ -540,7 +543,7 @@ ds_set_chunked_headers(\hdr, "bzip");
         @param content_encoding an optional string giving the \c "DataStream-Content-Encoding" header to set (must be a recognized content encoding as recognized by @ref ds_get_content_encode())
         @param req set to @ref Qore::True "True" if the headers are required for a request
     */
-    public nothing sub ds_set_chunked_headers(reference hdr, *string content_encoding, *softbool req) {
+    public nothing sub ds_set_chunked_headers(reference<hash> hdr, *string content_encoding, *softbool req) {
         if (!hdr."Content-Type")
             hdr."Content-Type" = MimeTypeOctetStream;
 
@@ -576,7 +579,7 @@ ds_set_non_chunked_headers(\hdr, "bzip");
         @param content_encoding an optional string giving the \c "Content-Encoding" header to set (must be a recognized content encoding as recognized by @ref ds_get_content_encode())
         @param req set to @ref Qore::True "True" if the headers are required for a request
     */
-    public nothing sub ds_set_non_chunked_headers(reference hdr, *string content_encoding, *softbool req) {
+    public nothing sub ds_set_non_chunked_headers(reference<hash> hdr, *string content_encoding, *softbool req) {
         if (!hdr."Content-Type")
             hdr."Content-Type" = MimeTypeYaml + ";charset=utf8";
         else if (hdr."Content-Type" !~ /; ?charset=utf-?8/i)
@@ -611,7 +614,7 @@ string dae = ds_get_ds_accept_enc_header(hdr."Accept-Encoding");
 # private namespace for non-exported definitions
 namespace DataStreamUtilPrivate {
     # private function
-    sub ds_do_request_headers(reference hdr) {
+    sub ds_do_request_headers(reference<hash> hdr) {
         if (!hdr.Accept)
             hdr.Accept = MimeTypeYaml + "," + MimeTypeOctetStream;
 

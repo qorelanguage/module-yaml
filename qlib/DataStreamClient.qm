@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # @file DataStreamClient.qm Qore user module implementing client support for the DataStream protocol: YAML-encoded HTTP chunked transfers where each chunk is a unique data entity
 
-/*  DataStreamClient.qm Copyright (C) 2014 - 2016 Qore Technologies, s.r.o.
+/*  DataStreamClient.qm Copyright (C) 2014 - 2017 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -22,8 +22,8 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-# this module requires Qore 0.8.12 or better
-%requires qore >= 0.8.12
+# this module requires Qore 0.8.13 or better
+%requires qore >= 0.8.13
 
 # require type definitions everywhere
 %require-types
@@ -32,7 +32,7 @@
 %enable-all-warnings
 
 %requires DataStreamUtil
-%requires RestClient
+%requires RestClient >= 1.4
 %requires yaml
 %requires Mime
 
@@ -40,7 +40,7 @@
 %new-style
 
 module DataStreamClient {
-    version = "1.0.1";
+    version = "1.1";
     desc = "user module implementing client support for the DataStream protocol: YAML-encoded HTTP chunked transfers where each chunk is a unique data entity";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -73,6 +73,9 @@ module DataStreamClient {
     @note Most of the underlying functionality is provided by the @ref datastreamutilintro "DataStreamUtil" module
 
     @section datastreamclientrelnotes Release Notes
+
+    @subsection datastreamclient_v1_1 DataStreamClient v1.1
+    - updated for internal RestClient API changes related to REST schema validation (<a href="https://github.com/qorelanguage/qore/issues/2072">issue 2072</a>)
 
     @subsection datastreamclient_v1_0_1 DataStreamClient v1.0.1
     - fixed bugs handling chunked non-DataStream messages (<a href="https://github.com/qorelanguage/qore/issues/1438">issue 1438</a>)
@@ -141,7 +144,7 @@ public namespace DataStreamClient {
     public class DataStreamClient inherits RestClient::RestClient {
         public {
             #! DataStreamClient Version
-            const Version = "1.0.1";
+            const Version = "1.1";
 
             #! DataStreamClient Version String
             const VersionString = sprintf("Qore-DataStreamClient/%s", DataStreamClient::Version);
@@ -218,8 +221,8 @@ rest.recvDataStream(recvcallback, endcallback, "GET", "/orders/1", body);
 
             @note this method can also be used if the server returns a non-chunked response; the response body will be decoded, deserialized, and passed to the receive callback as if a chunked body were received, additionally the terminating call with no arguments is also made to signal the end of the chunked data
          */
-        recvDataStream(code rcb, code ecb, string method, string path, any body, timeout timeout_ms = 0, *reference info, *hash hdr) {
-            prepareMsg(\body, \hdr);
+        recvDataStream(code rcb, code ecb, string method, string path, any body, timeout timeout_ms = 0, *reference<hash> info, *hash hdr) {
+            prepareMsg(method, path, \body, \hdr);
 
             on_exit if (exists body) {
                 info += (
@@ -263,7 +266,7 @@ rest.recvDataStream(reccallback, "GET", "/orders/1", body);
 
             @note this method can also be used if the server returns a non-chunked response; the response body will be decoded, deserialized, and passed to the receive callback as if a chunked body were received, additionally the terminating call with no arguments is also made to signal the end of the chunked data
          */
-        recvDataStream(DataStreamRecvMessage dsm, string method, string path, any body, timeout timeout_ms = 0, *reference info, *hash hdr) {
+        recvDataStream(DataStreamRecvMessage dsm, string method, string path, any body, timeout timeout_ms = 0, *reference<hash> info, *hash hdr) {
             recvDataStream(\dsm.recvData(), \dsm.recvDataDone(), method, path, body, timeout_ms, \info, hdr);
         }
 
@@ -302,7 +305,7 @@ hash h = rest.sendDataStream(callback, "POST", "/path");
             - this method can also be used when the server returns chunked @ref datastreamprotocol "DataStream protocol" data; in this case the chunked response is received in its entirity and returns in the return value's \c "body" key as a list where each list element is the data value of the respective DataStream chunk
             - the value of the return value's \c "body" key will be decoded and deserialized data
         */
-        hash sendDataStream(code scb, string method, string path, timeout timeout_ms = 0, *reference info, *hash hdr) {
+        hash sendDataStream(code scb, string method, string path, timeout timeout_ms = 0, *reference<hash> info, *hash hdr) {
             hdr = headers + hdr;
 
             ds_set_chunked_headers(\hdr, seh.ce, True);
@@ -399,7 +402,7 @@ hash h = rest.sendDataStream(callback, "POST", "/path");
             - this method can also be used when the server returns chunked @ref datastreamprotocol "DataStream protocol" data; in this case the chunked response is received in its entirity and returns in the return value's \c "body" key as a list where each list element is the data value of the respective DataStream chunk
             - the value of the return value's \c "body" key will be decoded and deserialized data
         */
-        hash sendDataStream(DataStreamSendMessage dsm, string method, string path, timeout timeout_ms = 0, *reference info, *hash hdr) {
+        hash sendDataStream(DataStreamSendMessage dsm, string method, string path, timeout timeout_ms = 0, *reference<hash> info, *hash hdr) {
             return sendDataStream(\dsm.sendData(), method, path, timeout_ms, \info, hdr);
         }
 
@@ -440,7 +443,7 @@ rest.sendRecvDataStream(send_callback, reccallback, "POST", "/path");
 
             @note this method can also be used if the server returns a non-chunked response; the response body will be decoded, deserialized, and passed to the receive callback as if a chunked body were received, additionally the terminating call with no arguments is also made to signal the end of the chunked data
         */
-        sendRecvDataStream(code scb, code rcb, code ecb, string method, string path, timeout timeout_ms = 0, *reference info, *hash hdr) {
+        sendRecvDataStream(code scb, code rcb, code ecb, string method, string path, timeout timeout_ms = 0, *reference<hash> info, *hash hdr) {
             hdr = headers + hdr;
 
             ds_set_chunked_headers(\hdr, seh.ce, True);
@@ -486,7 +489,7 @@ rest.sendRecvDataStream(send_callback, reccallback, "POST", "/path");
 
             @note this method can also be used if the server returns a non-chunked response; the response body will be decoded, deserialized, and passed to the receive callback as if a chunked body were received, additionally the terminating call with no arguments is also made to signal the end of the chunked data
         */
-        sendRecvDataStream(DataStreamMessage dsm, string method, string path, timeout timeout_ms = 0, *reference info, *hash hdr) {
+        sendRecvDataStream(DataStreamMessage dsm, string method, string path, timeout timeout_ms = 0, *reference<hash> info, *hash hdr) {
             sendRecvDataStream(\dsm.sendData(), \dsm.recvData(), \dsm.recvDataDone(), method, path, timeout_ms, \info, hdr);
         }
 
@@ -519,7 +522,7 @@ hash h = rest.sendRawStream(sender, "POST", uri_path, 20s);
             @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
             @throw SOCKET-HTTP-ERROR Invalid HTTP data was received
         */
-        hash sendRawStream(code scb, string method, *string path, timeout timeout_ms = 0, *reference info, *hash hdr) {
+        hash sendRawStream(code scb, string method, *string path, timeout timeout_ms = 0, *reference<hash> info, *hash hdr) {
             if (!hdr.Accept)
                 hdr.Accept = MimeTypeYaml;
             hash h = sendWithSendCallback(scb, method, path, hdr, timeout_ms, False, \info);
@@ -564,7 +567,7 @@ hash h = rest.getRawStream(recv, "GET", uri_path, 20s);
 
             @note For possible exceptions when implicitly establishing a connection, see the Socket::connect() method (or Socket::connectSSL() for secure connections)
         */
-        hash getRawStream(code rcb, string method, *string path, any body, timeout timeout_ms = 0, *reference info, *hash hdr) {
+        hash getRawStream(code rcb, string method, *string path, any body, timeout timeout_ms = 0, *reference<hash> info, *hash hdr) {
             hash rvhdr;
             code mrcb = sub (hash h) {
                 if (h.hdr && !rvhdr)
@@ -614,13 +617,13 @@ rest.setContentEncoding("gzip");
         }
 
         #! sets up headers and encodes any body for sending
-        private nothing prepareMsg(reference body, reference hdr, string ct = "Content-Type") {
-            RestClient::prepareMsg(\body, \hdr, ct);
+        private nothing prepareMsg(string method, string path, reference body, reference<hash> hdr, string ct = "Content-Type") {
+            RestClient::prepareMsg(method, path, \body, \hdr, ct);
             ds_set_non_chunked_headers(\hdr, seh.ce, True);
         }
 
         #! sends the outgoing HTTP message and recodes the response to data
-        hash sendAndDecodeResponse(*data body, string m, string path, hash hdr, *reference info, *softbool decode_errors) {
+        hash sendAndDecodeResponse(*data body, string m, string path, hash hdr, *reference<hash> info, *softbool decode_errors) {
             /* we cannot just receive standard HTTP chunked data here since any Content-Encoding will not be respected,
              * and any DataStream content encoding can only be applied to each chunk separately.  Therefore we have
              * to intercept the chunked messages here to build the respose data and also capture the headers
