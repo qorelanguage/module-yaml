@@ -2,7 +2,7 @@
 /*
   yaml Qore module
 
-  Copyright (C) 2010 - 2013 David Nichols, all rights reserved
+  Copyright (C) 2010 - 2017 Qore Technologies, s.r.o.
 
   This library is free software; you can redistribute it and/or
   modify it under the terms of the GNU Lesser General Public
@@ -31,6 +31,7 @@ QoreYamlEmitter::QoreYamlEmitter(QoreYamlWriteHandler &n_wh, int flags, int widt
    : QoreYamlBase(n_xsink), wh(n_wh), block(flags & QYE_BLOCK_STYLE),
      implicit_start_doc(!(flags & QYE_EXPLICIT_START_DOC)),
      implicit_end_doc(!(flags & QYE_EXPLICIT_END_DOC)),
+     emit_sqlnull(flags & QYE_EMIT_SQLNULL),
      yaml_ver(0) {
    if (!yaml_emitter_initialize(&emitter)) {
       err("unknown error initializing yaml emitter");
@@ -68,39 +69,43 @@ QoreYamlEmitter::QoreYamlEmitter(QoreYamlWriteHandler &n_wh, int flags, int widt
 int QoreYamlEmitter::emit(const QoreValue& v) {
    switch (v.getType()) {
       case NT_STRING:
-	 return emitValue(*v.get<const QoreStringNode>());
+         return emitValue(*v.get<const QoreStringNode>());
 
       case NT_INT:
-	 return emitValue(v.getAsBigInt());
+         return emitValue(v.getAsBigInt());
 
       case NT_FLOAT:
-	 return emitValue(v.getAsFloat());
+         return emitValue(v.getAsFloat());
 
       case NT_NUMBER:
-	 return emitValue(*v.get<const QoreNumberNode>());
+         return emitValue(*v.get<const QoreNumberNode>());
 
       case NT_BOOLEAN:
-	 return emitValue(v.getAsBool());
+         return emitValue(v.getAsBool());
 
       case NT_LIST:
-	 return emitValue(*v.get<const QoreListNode>());
+         return emitValue(*v.get<const QoreListNode>());
 
       case NT_HASH:
-	 return emitValue(*v.get<const QoreHashNode>());
+         return emitValue(*v.get<const QoreHashNode>());
 
       case NT_DATE:
-	 return emitValue(*v.get<const DateTimeNode>());
+         return emitValue(*v.get<const DateTimeNode>());
 
       case NT_BINARY:
-	 return emitValue(*v.get<const BinaryNode>());
+         return emitValue(*v.get<const BinaryNode>());
 
       case NT_NULL:
+         if (emit_sqlnull)
+            return emitSqlNull();
+         // fall down to nothing
+
       case NT_NOTHING:
-	 return emitNull();
+         return emitNull();
 
       default:
-	 err("cannot convert Qore type '%s' to YAML", v.getTypeName());
-	 return -1;
+         err("cannot convert Qore type '%s' to YAML", v.getTypeName());
+         return -1;
    }
 
    return 0;
@@ -115,43 +120,43 @@ int QoreYamlEmitter::emitValue(const DateTime &d) {
    if (d.isRelative()) {
       str.concat('P');
       if (d.hasValue()) {
-	 if (info.year)
-	    str.sprintf("%dY", info.year);
-	 if (info.month)
-	    str.sprintf("%dM", info.month);
-	 if (info.day)
-	    str.sprintf("%dD", info.day);
+         if (info.year)
+            str.sprintf("%dY", info.year);
+         if (info.month)
+            str.sprintf("%dM", info.month);
+         if (info.day)
+            str.sprintf("%dD", info.day);
 
-	 bool has_t = false;
+         bool has_t = false;
 
-	 if (info.hour) {
-	    str.sprintf("T%dH", info.hour);
-	    has_t = true;
-	 }
-	 if (info.minute) {
-	    if (!has_t) {
-	       str.concat('T');
-	       has_t = true;
-	    }
-	    str.sprintf("%dM", info.minute);
-	 }
-	 if (info.second) {
-	    if (!has_t) {
-	       str.concat('T');
-	       has_t = true;
-	    }
-	    str.sprintf("%dS", info.second);
-	 }
-	 if (info.us) {
-	    if (!has_t) {
-	       str.concat('T');
-	       has_t = true;
-	    }
-	    str.sprintf("%du", info.us);
-	 }
+         if (info.hour) {
+            str.sprintf("T%dH", info.hour);
+            has_t = true;
+         }
+         if (info.minute) {
+            if (!has_t) {
+               str.concat('T');
+               has_t = true;
+            }
+            str.sprintf("%dM", info.minute);
+         }
+         if (info.second) {
+            if (!has_t) {
+               str.concat('T');
+               has_t = true;
+            }
+            str.sprintf("%dS", info.second);
+         }
+         if (info.us) {
+            if (!has_t) {
+               str.concat('T');
+               has_t = true;
+            }
+            str.sprintf("%du", info.us);
+         }
       }
       else
-	 str.concat("0D");
+         str.concat("0D");
 
       return emitScalar(str, QORE_YAML_DURATION_TAG);
    }
@@ -163,13 +168,13 @@ int QoreYamlEmitter::emitValue(const DateTime &d) {
    else {
       d.format(str, "YYYY-MM-DD");
       if (!info.isTimeNull() || info.secsEast()) {
-	 // use spaces for enhanced readability
-	 if (!info.us)
-	    d.format(str, " HH:mm:SS.");
-	 else if (!(info.us % 1000))
-	    d.format(str, " HH:mm:SS.ms");
-	 else
-	    d.format(str, " HH:mm:SS.xx");
+         // use spaces for enhanced readability
+         if (!info.us)
+            d.format(str, " HH:mm:SS.");
+         else if (!(info.us % 1000))
+            d.format(str, " HH:mm:SS.ms");
+         else
+            d.format(str, " HH:mm:SS.xx");
       }
    }
 
@@ -182,9 +187,9 @@ int QoreYamlEmitter::emitValue(const DateTime &d) {
    // then add a space
    if (!emitter.canonical) {
       if (!info.isTimeNull() || info.secsEast()) {
-	 str.concat(' ');
-	 // add time zone offset (or "Z")
-	 d.format(str, "Z");
+         str.concat(' ');
+         // add time zone offset (or "Z")
+         d.format(str, "Z");
       }
    }
    else

@@ -64,6 +64,7 @@ public class Main inherits QUnit::Test {
         addTestCase("Len test", \testLen());
         addTestCase("Date/Time test", \testDates());
         addTestCase("Structure with NaN test", \testNanStructure());
+        addTestCase("sql null test", \sqlNull());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -119,5 +120,23 @@ public class Main inherits QUnit::Test {
         assertTrue(l[3].nanp());
         assertFalse(DATA2[3] == l[3]);
         assertEq(DATA2[4], l[4]);
+    }
+
+    sqlNull() {
+        string yaml = make_yaml(NULL, EmitSqlNull);
+        assertRegex("^sqlnull", yaml);
+        assertEq(NULL, parse_yaml(yaml));
+        yaml = make_yaml("sqlnull");
+        assertRegex("sqlnull", yaml);
+        assertEq("sqlnull", parse_yaml(yaml));
+        yaml = make_yaml("sqlnull", EmitSqlNull);
+        assertRegex("sqlnull", yaml);
+        assertEq("sqlnull", parse_yaml(yaml));
+        yaml = make_yaml(NULL);
+        assertRegex("^null", yaml);
+        assertEq(NOTHING, parse_yaml(yaml));
+        list d = DATA + "NULL";
+        yaml = make_yaml(d, EmitSqlNull);
+        assertEq(d, parse_yaml(yaml));
     }
 }
