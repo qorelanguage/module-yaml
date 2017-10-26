@@ -38,6 +38,8 @@ const DATA = (
         -@inf@n,
         @inf@,
         -@inf@,
+        "'single quoted string'",
+        "'1234'",
     );
 
 const DATA2 = (
@@ -64,6 +66,7 @@ public class Main inherits QUnit::Test {
         addTestCase("Len test", \testLen());
         addTestCase("Date/Time test", \testDates());
         addTestCase("Structure with NaN test", \testNanStructure());
+        addTestCase("single quoted strings", \testSingleQuotedStrings());
         addTestCase("sql null test", \sqlNull());
 
         # Return for compatibility with test harness that checks return value.
@@ -71,9 +74,7 @@ public class Main inherits QUnit::Test {
     }
 
     testYaml() {
-        string s = make_yaml(DATA);
-        any l = parse_yaml(s);
-        testAssertion("test simple yaml", \equals(), (DATA, l));
+        assertEq(DATA, parse_yaml(make_yaml(DATA)));
     }
 
     testOptions() {
@@ -120,6 +121,13 @@ public class Main inherits QUnit::Test {
         assertTrue(l[3].nanp());
         assertFalse(DATA2[3] == l[3]);
         assertEq(DATA2[4], l[4]);
+    }
+
+    testSingleQuotedStrings() {
+        # issue 2343
+        assertEq("1234", parse_yaml("'1234'"));
+        assertEq(500n, parse_yaml("'5e+02n{128}'"));
+        assertEq(2017-10-26T09:37:36.119613+02:00, parse_yaml("'2017-10-26 09:37:36.119613 +02:00'"));
     }
 
     sqlNull() {

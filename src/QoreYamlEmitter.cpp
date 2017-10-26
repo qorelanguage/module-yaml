@@ -195,5 +195,6 @@ int QoreYamlEmitter::emitValue(const DateTime &d) {
    else
       d.format(str, "Z");
 
+   // issue #2343: to avoid ambiguity with single quoted strings, we always use the tag here
    return emitScalar(str, YAML_TIMESTAMP_TAG);
 }

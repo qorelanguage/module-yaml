@@ -211,22 +211,22 @@ public:
       return emit("map end");
    }
 
-   DLLLOCAL int emitScalar(const QoreString &value, const char *tag, const char *anchor = 0,
+   DLLLOCAL int emitScalar(const QoreString &value, const char *tag, const char *anchor = nullptr,
                        bool plain_implicit = true, bool quoted_implicit = true,
                        yaml_scalar_style_t style = YAML_ANY_SCALAR_STYLE) {
       TempEncodingHelper str(&value, QCS_UTF8, xsink);
       if (*xsink)
          return -1;
 
-      if (!yaml_scalar_event_initialize(&event, (yaml_char_t *)anchor, (yaml_char_t *)tag,
-                                        (yaml_char_t *)str->getBuffer(), str->strlen(),
+      if (!yaml_scalar_event_initialize(&event, (yaml_char_t*)anchor, (yaml_char_t *)tag,
+                                        (yaml_char_t*)str->c_str(), str->strlen(),
                                         plain_implicit, quoted_implicit, style))
          return err("unknown error initializing yaml scalar output event for yaml type '%s', value '%s'", tag, value.getBuffer());
 
       return emit("scalar", tag);
    }
 
-   DLLLOCAL int emitScalar(const char *value, const char *tag, const char *anchor = 0,
+   DLLLOCAL int emitScalar(const char *value, const char *tag, const char *anchor = nullptr,
                        bool plain_implicit = true, bool quoted_implicit = true,
                        yaml_scalar_style_t style = YAML_ANY_SCALAR_STYLE) {
       if (!yaml_scalar_event_initialize(&event, (yaml_char_t *)anchor, (yaml_char_t *)tag,
@@ -283,7 +283,8 @@ public:
       // append precision
       tmp.sprintf("{%d}", n.getPrec());
       //printd(5, "yaml emit number: %s\n", tmp.getBuffer());
-      return emitScalar(tmp, QORE_YAML_NUMBER_TAG);
+      // issue #2343: to avoid ambiguity with single quoted strings, we always use the tag here
+      return emitScalar(tmp, QORE_YAML_NUMBER_TAG, nullptr, false, false);
    }
 
    DLLLOCAL int emitValue(bool b) {

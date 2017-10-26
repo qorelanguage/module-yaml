@@ -213,7 +213,8 @@ static QoreNumberNode* parseNumber(const char* val, size_t len) {
 }
 
 // FIXME: this is still capable of false positives
-static AbstractQoreNode* try_parse_number(const char* val, size_t len) {
+static AbstractQoreNode* try_parse_number(const char* val, size_t len, bool no_simple_numeric = false) {
+   //printd(5, "try_parse_number() val: \"%s\" len: %d\n", val, (int)len);
    bool sign = (*val == '-' || *val == '+');
 
    // check for @inf@ and @nan@
@@ -235,7 +236,7 @@ static AbstractQoreNode* try_parse_number(const char* val, size_t len) {
                return new QoreNumberNode(val, prec);
          }
       }
-      return 0;
+      return nullptr;
    }
 
    const char* str = val + (int)sign;
@@ -266,21 +267,21 @@ static AbstractQoreNode* try_parse_number(const char* val, size_t len) {
          od = false;
       if (*str == '.') {
          if (dp || e || pm)
-            return 0;
+            return nullptr;
          dp = true;
       }
       else if (*str == 'e' || *str == 'E') {
          if (e || pm)
-            return 0;
+            return nullptr;
          e = true;
       }
       else if (*str == '+' || *str == '-') {
          if (pm || !e)
-            return 0;
+            return nullptr;
          pm = true;
       }
       else
-         return 0;
+         return nullptr;
       ++str;
    }
 
@@ -293,6 +294,8 @@ static AbstractQoreNode* try_parse_number(const char* val, size_t len) {
            || (len == 20 && sign
                && ((*val == '+' && strcmp(val, "+9223372036854775807") <= 0)
                    || (*val == '-' && strcmp(val, "-9223372036854775808") <= 0))))) {
+         if (no_simple_numeric)
+            return nullptr;
          int64 iv = strtoll(val, 0, 10);
          errno = 0;
          assert(errno != ERANGE);
@@ -304,7 +307,7 @@ static AbstractQoreNode* try_parse_number(const char* val, size_t len) {
       return new QoreNumberNode(val);
    }
 
-   return new QoreFloatNode(strtod(val, 0));
+   return no_simple_numeric ? nullptr : new QoreFloatNode(strtod(val, 0));
 }
 
 AbstractQoreNode* QoreYamlParser::parseScalar(bool favor_string) {
@@ -316,9 +319,21 @@ AbstractQoreNode* QoreYamlParser::parseScalar(bool favor_string) {
    //printd(5, "QoreYamlParser::parseScalar() anchor=%s tag=%s value=%s len=%d plain_implicit=%d quoted_implicit=%d style=%d\n", event.data.scalar.anchor ? event.data.scalar.anchor : (yaml_char_t*)"n/a", event.data.scalar.tag ? event.data.scalar.tag : (yaml_char_t*)"n/a", val, len, event.data.scalar.plain_implicit, event.data.scalar.quoted_implicit, event.data.scalar.style);
 
    if (!event.data.scalar.tag) {
-      if (favor_string || (event.data.scalar.quoted_implicit && event.data.scalar.style == YAML_DOUBLE_QUOTED_SCALAR_STYLE)) {
+      if (favor_string || (event.data.scalar.quoted_implicit
+                           && (event.data.scalar.style == YAML_DOUBLE_QUOTED_SCALAR_STYLE))) {
          // assume it's a string
          return new QoreStringNode(val, len, QCS_UTF8);
+      }
+
+      // issue #2343: could be a string, arbitrary-precision numeric or special floating-point value, or an ISO-8601 date/time value
+      if (event.data.scalar.quoted_implicit && event.data.scalar.style == YAML_SINGLE_QUOTED_SCALAR_STYLE) {
+         if (len > 9 && isdigit(val[0]) && isdigit(val[1]) && isdigit(val[2]) && isdigit(val[3]) && val[4] == '-'
+             && isdigit(val[5]) && isdigit(val[6]) && val[7] == '-'
+             && isdigit(val[8]) && isdigit(val[9]))
+            return parseAbsoluteDate();
+         // try
+         AbstractQoreNode* n = try_parse_number(val, len, true);
+         return n ? n : new QoreStringNode(val, len, QCS_UTF8);
       }
 
       // check for boolean values
@@ -329,14 +344,16 @@ AbstractQoreNode* QoreYamlParser::parseScalar(bool favor_string) {
 
       // check for null
       if (!strcmp(val, "null") || !strcmp(val, "~") || !len)
-         return 0;
+         return nullptr;
 
       // check for sqlnull
       if (!strcmp(val, "sqlnull"))
          return &Null;
 
       // check for absolute date/time values
-      if (isdigit(val[0]) && isdigit(val[1]) && isdigit(val[2]) && isdigit(val[3]) && val[4] == '-')
+      if (len > 9 && isdigit(val[0]) && isdigit(val[1]) && isdigit(val[2]) && isdigit(val[3]) && val[4] == '-'
+          && isdigit(val[5]) && isdigit(val[6]) && val[7] == '-'
+          && isdigit(val[8]) && isdigit(val[9]))
          return parseAbsoluteDate();
 
       // check for relative date/time values (durations)
@@ -363,6 +380,7 @@ AbstractQoreNode* QoreYamlParser::parseScalar(bool favor_string) {
    }
 
    const char* tag = (const char*)event.data.scalar.tag;
+   // FIXME: use a map here for O(ln(n)) performance
    if (!strcmp(tag, YAML_TIMESTAMP_TAG))
       return parseAbsoluteDate();
    if (!strcmp(tag, YAML_BINARY_TAG))
@@ -370,7 +388,7 @@ AbstractQoreNode* QoreYamlParser::parseScalar(bool favor_string) {
    if (!strcmp(tag, YAML_STR_TAG))
       return new QoreStringNode(val, len, QCS_UTF8);
    if (!strcmp(tag, YAML_NULL_TAG))
-      return 0;
+      return nullptr;
    if (!strcmp(tag, YAML_BOOL_TAG))
       return parseBool();
    if (!strcmp(tag, YAML_INT_TAG))
@@ -381,10 +399,12 @@ AbstractQoreNode* QoreYamlParser::parseScalar(bool favor_string) {
       return new DateTimeNode(val);
    if (!strcmp(tag, QORE_YAML_NUMBER_TAG))
       return parseNumber(val, len);
+   if (!strcmp(tag, QORE_YAML_SQLNULL_TAG))
+      return &Null;
 
    xsink->raiseException(QY_PARSE_ERR, "don't know how to parse scalar tag '%s'", tag);
 
-   return 0;
+   return nullptr;
 }
 
 QoreBoolNode* QoreYamlParser::parseBool() {
