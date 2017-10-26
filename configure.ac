@@ -568,7 +568,7 @@ else
    fi
 
    if test $qvc -lt 812; then
-      AC_MSG_ERROR([found $qore_version; this module requires at least version 0.8.12])
+      AC_MSG_ERROR([found $qore_version; this module requires at least version 0.8.12 $qvc])
    fi
 
    AC_MSG_RESULT([${qore_version} OK])
