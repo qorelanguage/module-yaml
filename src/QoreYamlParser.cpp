@@ -2,7 +2,7 @@
 /*
   yaml Qore module
 
-  Copyright (C) 2010 - 2016 David Nichols, all rights reserved
+  Copyright (C) 2010 - 2017 Qore Technologies, s.r.o.
 
   This library is free software; you can redistribute it and/or
   modify it under the terms of the GNU Lesser General Public
@@ -344,13 +344,17 @@ AbstractQoreNode* QoreYamlParser::parseScalar(bool favor_string) {
 
       // check for null
       if (!strcmp(val, "null") || !strcmp(val, "~") || !len)
-         return 0;
+         return nullptr;
+
+      // check for sqlnull
+      if (!strcmp(val, "sqlnull"))
+         return &Null;
 
       // check for absolute date/time values
       if (len > 9 && isdigit(val[0]) && isdigit(val[1]) && isdigit(val[2]) && isdigit(val[3]) && val[4] == '-'
           && isdigit(val[5]) && isdigit(val[6]) && val[7] == '-'
           && isdigit(val[8]) && isdigit(val[9]))
-            return parseAbsoluteDate();
+         return parseAbsoluteDate();
 
       // check for relative date/time values (durations)
       if (*val == 'P') {
@@ -376,6 +380,7 @@ AbstractQoreNode* QoreYamlParser::parseScalar(bool favor_string) {
    }
 
    const char* tag = (const char*)event.data.scalar.tag;
+   // FIXME: use a map here for O(ln(n)) performance
    if (!strcmp(tag, YAML_TIMESTAMP_TAG))
       return parseAbsoluteDate();
    if (!strcmp(tag, YAML_BINARY_TAG))
@@ -383,7 +388,7 @@ AbstractQoreNode* QoreYamlParser::parseScalar(bool favor_string) {
    if (!strcmp(tag, YAML_STR_TAG))
       return new QoreStringNode(val, len, QCS_UTF8);
    if (!strcmp(tag, YAML_NULL_TAG))
-      return 0;
+      return nullptr;
    if (!strcmp(tag, YAML_BOOL_TAG))
       return parseBool();
    if (!strcmp(tag, YAML_INT_TAG))
@@ -394,10 +399,12 @@ AbstractQoreNode* QoreYamlParser::parseScalar(bool favor_string) {
       return new DateTimeNode(val);
    if (!strcmp(tag, QORE_YAML_NUMBER_TAG))
       return parseNumber(val, len);
+   if (!strcmp(tag, QORE_YAML_SQLNULL_TAG))
+      return &Null;
 
    xsink->raiseException(QY_PARSE_ERR, "don't know how to parse scalar tag '%s'", tag);
 
-   return 0;
+   return nullptr;
 }
 
 QoreBoolNode* QoreYamlParser::parseBool() {

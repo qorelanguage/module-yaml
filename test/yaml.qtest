@@ -66,7 +66,11 @@ public class Main inherits QUnit::Test {
         addTestCase("Len test", \testLen());
         addTestCase("Date/Time test", \testDates());
         addTestCase("Structure with NaN test", \testNanStructure());
+<<<<<<< HEAD
         addTestCase("single quoted strings", \testSingleQuotedStrings());
+=======
+        addTestCase("sql null test", \sqlNull());
+>>>>>>> origin/develop
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -122,10 +126,29 @@ public class Main inherits QUnit::Test {
         assertEq(DATA2[4], l[4]);
     }
 
+<<<<<<< HEAD
     testSingleQuotedStrings() {
         # issue 2343
         assertEq("1234", parse_yaml("'1234'"));
         assertEq(500n, parse_yaml("'5e+02n{128}'"));
         assertEq(2017-10-26T09:37:36.119613+02:00, parse_yaml("'2017-10-26 09:37:36.119613 +02:00'"));
+=======
+    sqlNull() {
+        string yaml = make_yaml(NULL, EmitSqlNull);
+        assertRegex("^sqlnull", yaml);
+        assertEq(NULL, parse_yaml(yaml));
+        yaml = make_yaml("sqlnull");
+        assertRegex("sqlnull", yaml);
+        assertEq("sqlnull", parse_yaml(yaml));
+        yaml = make_yaml("sqlnull", EmitSqlNull);
+        assertRegex("sqlnull", yaml);
+        assertEq("sqlnull", parse_yaml(yaml));
+        yaml = make_yaml(NULL);
+        assertRegex("^null", yaml);
+        assertEq(NOTHING, parse_yaml(yaml));
+        list d = DATA + "NULL";
+        yaml = make_yaml(d, EmitSqlNull);
+        assertEq(d, parse_yaml(yaml));
+>>>>>>> origin/develop
     }
 }
