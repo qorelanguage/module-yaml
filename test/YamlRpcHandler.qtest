@@ -12,10 +12,25 @@
 
 %exec-class YamlRpcHandlerTest
 
+class MyYamlRpcHandler inherits YamlRpcHandler {
+    constructor(HttpServer::AbstractAuthenticator auth, list methods, *code get_log_msg, bool dbg = False, *string get_prefix, *code log) : YamlRpcHandler(auth, methods, get_log_msg, dbg, get_prefix, log) {
+    }
+
+    hash testCallMethod(hash cx, auto params) {
+        return callMethod(cx, params);
+    }
+}
+
 class YamlRpcHandlerTest inherits QUnit::Test {
     public {
         const Methods = (
-            );
+            (
+                "name": "^example\$",
+                "text": "example",
+                "function": string sub (string arg) { return arg; },
+                "help": "example call",
+            ),
+        );
     }
 
     constructor() : Test("YamlRpcHandler test", "1.0") {
@@ -26,8 +41,10 @@ class YamlRpcHandlerTest inherits QUnit::Test {
     }
 
     testYamlRpcHandler() {
-        YamlRpcHandler handler(new PermissiveAuthenticator(), Methods);
+        MyYamlRpcHandler handler(new PermissiveAuthenticator(), Methods);
 
         assertEq(True, handler instanceof YamlRpcHandler);
+
+        assertThrows("RPC-ARG-ERROR", "missing one or more required arguments", \handler.testCallMethod(), ({"method": "example"}, ()));
     }
 }
