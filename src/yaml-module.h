@@ -4,7 +4,7 @@
 
   Qore Programming Language
 
-  Copyright 2003 - 2016 David Nichols
+  Copyright 2003 - 2017 Qore Technologies, s.r.o.
 
   This library is free software; you can redistribute it and/or
   modify it under the terms of the GNU Lesser General Public
@@ -45,6 +45,7 @@
 #define QYE_VER_1_0             (1 << 5)
 #define QYE_VER_1_1             (1 << 6)
 #define QYE_VER_1_2             (1 << 7)
+#define QYE_EMIT_SQLNULL        (1 << 8)
 
 #define QYE_DEFAULT (QYE_NONE)
 
@@ -58,12 +59,14 @@
 
 DLLLOCAL extern const char* QORE_YAML_DURATION_TAG;
 DLLLOCAL extern const char* QORE_YAML_NUMBER_TAG;
+DLLLOCAL extern const char* QORE_YAML_SQLNULL_TAG;
 
 DLLLOCAL extern const char *QY_EMIT_ERR;
 
 DLLLOCAL extern const char *QY_PARSE_ERR;
 
 DLLLOCAL extern QoreString NullStr;
+DLLLOCAL extern QoreString SqlNullStr;
 
 DLLLOCAL extern yaml_version_directive_t yaml_ver_1_0, yaml_ver_1_1, yaml_ver_1_2;
 
@@ -100,7 +103,8 @@ protected:
 
    bool block,
       implicit_start_doc,
-      implicit_end_doc;
+      implicit_end_doc,
+      emit_sqlnull;
 
    yaml_version_directive_t *yaml_ver;
 
@@ -214,8 +218,8 @@ public:
       if (*xsink)
          return -1;
 
-      if (!yaml_scalar_event_initialize(&event, (yaml_char_t *)anchor, (yaml_char_t *)tag,
-                                        (yaml_char_t *)str->c_str(), str->strlen(),
+      if (!yaml_scalar_event_initialize(&event, (yaml_char_t*)anchor, (yaml_char_t *)tag,
+                                        (yaml_char_t*)str->c_str(), str->strlen(),
                                         plain_implicit, quoted_implicit, style))
          return err("unknown error initializing yaml scalar output event for yaml type '%s', value '%s'", tag, value.getBuffer());
 
@@ -325,6 +329,10 @@ public:
 
    DLLLOCAL int emitNull() {
       return emitScalar(NullStr, YAML_NULL_TAG);
+   }
+
+   DLLLOCAL int emitSqlNull() {
+      return emitScalar(SqlNullStr, QORE_YAML_SQLNULL_TAG);
    }
 
    DLLLOCAL void setCanonical(bool b = true) {
