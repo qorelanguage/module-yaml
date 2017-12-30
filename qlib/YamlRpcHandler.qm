@@ -202,7 +202,7 @@ public namespace YamlRpcHandler {
             @param logopt log options which can be used by a custom logger (see the getLogMessage parameter)
             @param cmark any value that will be added in the method hash under the \c "cmark" key
           */
-        addMethod(string name, code func, string text, string help, any logopt, any cmark) {
+        addMethod(string name, code func, string text, string help, auto logopt, auto cmark) {
             if (!exists func)
                 throw "YAML-RPC-HANDLER-ADD-METHOD-ERROR", "expecting function name and text name as hash key in argument";
 
@@ -226,12 +226,12 @@ public namespace YamlRpcHandler {
         }
 
         #! serializes a reponse in YAML-RPC format given the arguments
-        static string makeResponse(any response, int flags = YAML::None) {
+        static string makeResponse(auto response, int flags = YAML::None) {
             return make_yaml(("result":response), flags);
         }
 
         #! serializes an error reponse in YAML-RPC format given the arguments
-        static string makeErrorResponse(int code, string mess, any err, int flags = YAML::None) {
+        static string makeErrorResponse(int code, string mess, auto err, int flags = YAML::None) {
             hash h = ("name":"YAMLRPCError","code":code,"message":mess);
             if (exists err)
                 h.error = err;
@@ -270,25 +270,25 @@ public namespace YamlRpcHandler {
                 try {
                     yamlrpc = parse_yaml(body);
                 }
-                catch (hash ex) {
+                catch (hash<ExceptionInfo> ex) {
                     string estr = sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc);
                     return (
                         "code": 500,
                         "errlog": estr,
                         "body": estr,
-                        );
+                    );
                 }
             }
             cx += (
                 "method": yamlrpc.method,
                 "yamlid": yamlrpc.id,
-                );
+            );
             try {
-                any rh = callMethod(cx, yamlrpc.params);
+                auto rh = callMethod(cx, yamlrpc.params);
                 #printf("msg=%s\nyamlrpc=%N\nans=%N\n", body, yamlrpc, rh);flush();
                 return ( "code" : 200, "hdr" : ( "Content-Type" : MimeTypeYamlRpc ) ) + rh;
             }
-            catch (hash ex) {
+            catch (hash<ExceptionInfo> ex) {
                 # show complete exception trace if system debug option is enabled
                 string str = !debug
                     ? sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc)
@@ -303,7 +303,7 @@ public namespace YamlRpcHandler {
         # don't reimplement this method; fix/enhance it in the module
         final private addMethodInternal(hash h) {
             # check for duplicate in method index
-            any i = mi.(h.text);
+            auto i = mi.(h.text);
             if (!exists i)
                 i = elements methods;
 
@@ -328,10 +328,10 @@ public namespace YamlRpcHandler {
 
             foreach hash m in (methods)
                 if (m.text != "service.describe")
-		procs += (
-                    "name": m.text,
-                    "summary": m.help,
-                );
+            		procs += (
+                        "name": m.text,
+                        "summary": m.help,
+                    );
 
             return (
                 "sdversion": "1.0",
@@ -341,7 +341,7 @@ public namespace YamlRpcHandler {
                 "summary": "provides a YAML-RPC handler to the HTTP server",
                 #"address": address,
                 "procs": procs,
-                );
+            );
         }
 
         private list listMethods() {
@@ -362,7 +362,7 @@ public namespace YamlRpcHandler {
         }
 
         # don't reimplement this method; fix/enhance it in the module
-        final private hash callMethod(hash cx, any params) {
+        final private hash callMethod(hash cx, auto params) {
             string method = cx.method;
             # find method function
             hash found;
@@ -383,7 +383,16 @@ public namespace YamlRpcHandler {
                     log(cx, msg);
 
                 #printf("found: %y (getLogMessage: %y method: %s params: %y)\n", getLogMessage, found.text, method, params);
-                any rv = found.internal ? call_object_method_args(self, found.function, params) : call_function_args(found.function, params);
+                auto rv;
+                try {
+                    rv = found.internal ? call_object_method_args(self, found.function, params) : call_function_args(found.function, params);
+                }
+                catch (hash<ExceptionInfo> ex) {
+                    # issue #2573: provide a more user-friendly error when the argument cannot be matched to the closure/call ref
+                    if (ex.err == "RUNTIME-TYPE-ERROR" && (ex.callstack[1].file =~ /YamlRpcHandler.qm$/ && (ex.callstack[1].function == "call_function_args" || ex.callstack[1].function == "call_object_method_args")))
+                        throw "RPC-ARG-ERROR", sprintf("a call to YAML-RPC method %y is missing one or more required arguments; internal call error: %s: %s", method, ex.err, ex.desc);
+                    rethrow;
+                }
                 hash h.body = YamlRpcHandler::makeResponse(rv);
                 return h;
             }
