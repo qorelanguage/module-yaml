@@ -4,7 +4,7 @@
 
   yaml Qore module
 
-  Copyright (C) 2010 - 2012 David Nichols
+  Copyright (C) 2010 - 2017 Qore Technologies, s.r.o.
 
   This library is free software; you can redistribute it and/or
   modify it under the terms of the GNU Lesser General Public
@@ -73,6 +73,9 @@ const ExplicitEndDoc = QYE_EXPLICIT_END_DOC;
 
 //! emitter constant: emit seq and map with block style
 const BlockStyle = QYE_BLOCK_STYLE;
+
+//! emitter constant: emit SQL null \c "!!sqlnull"
+const EmitSqlNull = QYE_EMIT_SQLNULL;
 
 //const Yaml1_0 = QYE_VER_1_0;
 

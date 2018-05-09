@@ -80,11 +80,17 @@ any data = parse_yaml(yaml_str);
     |date (relative)|\c !duration|\c P2M3DT10H14u|\c P2M3DT10H14u|Relative date/time values (durations) are serialized with Qore's <a href="http://en.wikipedia.org/wiki/ISO_8601#Durations">ISO-8601</a>-based format.<br><br>This tag is a custom tag used only by Qore to serialize Qore relative date/time values with YAML
     |date (absolute)|\c !!timestamp|\c 2010-05-05T15:35:02.100|\c 2010-05-05T15:35:02.1+02:00|Absolute date/time values are serialized with YAML's <a href="http://yaml.org/type/timestamp.html">timestamp</a> format.<br><br>Note that qore date/time values without an explicit time zone are assumed to be in the local time zone.<br><br>When converting a YAML timestamp to a Qore date, because Qore supports only up to microsecond resolution in date/time values, any digits after microseconds are lost.
     |NOTHING|\c !!null|\c NOTHING|\c null|direct serialization
-    |NULL|\c !!null|\c NULL|\c null|serialization to YAML null, just like \c NOTHING; will be deserialized as \c NOTHING.
+    |NULL|\c !!null or \c !sqlnull|\c NULL|\c null or \c !sqlnull|without @ref @ref Qore::YAML::EmitSqlNull "EmitSqlNull", serialization to YAML null, just like \c NOTHING; will be deserialized as \c NOTHING, with @ref Qore::YAML::EmitSqlNull "EmitSqlNull" will be deserialized to \c NULL.
     |list|\c !!seq|\c (1, 2, "three")|\c [1, 2, "three"]|direct serialization
     |hash|\c !!map|\c ("key" : 1, "other" : 2.0, "data" : "three")|\c {key: 1, other: 2.0, data: "three"}|direct serialization, although qore will maintain key order as well even though this property is only defined for an ordered map
 
     @section yamlreleasenotes Release Notes
+
+    @subsection yaml07 yaml Module Version 0.7
+
+    - added optional support for serializing SQL NULL values with @ref Qore::YAML::EmitSqlNull "EmitSqlNull"
+    - updated the <a href="../../YamlRpcClient/html/index.html">YamlRpcClient</a> module to support the updated
+      abstract connection API (<a href="https://github.com/qorelanguage/qore/issues/2628">issue 2628</a>)
 
     @subsection yaml06 yaml Module Version 0.6
 
