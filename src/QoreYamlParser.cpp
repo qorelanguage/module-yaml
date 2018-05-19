@@ -1,22 +1,22 @@
 /* indent-tabs-mode: nil -*- */
 /*
-  yaml Qore module
+    yaml Qore module
 
-  Copyright (C) 2010 - 2017 Qore Technologies, s.r.o.
+    Copyright (C) 2010 - 2018 Qore Technologies, s.r.o.
 
-  This library is free software; you can redistribute it and/or
-  modify it under the terms of the GNU Lesser General Public
-  License as published by the Free Software Foundation; either
-  version 2.1 of the License, or (at your option) any later version.
+    This library is free software; you can redistribute it and/or
+    modify it under the terms of the GNU Lesser General Public
+    License as published by the Free Software Foundation; either
+    version 2.1 of the License, or (at your option) any later version.
 
-  This library is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-  Lesser General Public License for more details.
+    This library is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+    Lesser General Public License for more details.
 
-  You should have received a copy of the GNU Lesser General Public
-  License along with this library; if not, write to the Free Software
-  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+    You should have received a copy of the GNU Lesser General Public
+    License along with this library; if not, write to the Free Software
+    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 #include "yaml-module.h"
@@ -32,39 +32,39 @@ static const char* invalid_date_format = "invalid date format";
 static const char* truncated_date = "invalid date format; input truncated";
 static const char* invalid_chars_after_time = "invalid characters after time value";
 
-AbstractQoreNode* QoreYamlParser::parse() {
-   ReferenceHolder<AbstractQoreNode> rv(xsink);
+QoreValue QoreYamlParser::parse() {
+    ValueHolder rv(xsink);
 
-   if (getCheckEvent(YAML_STREAM_START_EVENT))
-      return 0;
+    if (getCheckEvent(YAML_STREAM_START_EVENT))
+        return QoreValue();
 
-   if (getEvent())
-      return 0;
+    if (getEvent())
+        return QoreValue();
 
-   if (event.type == YAML_DOCUMENT_START_EVENT) {
-      if (getEvent())
-         return 0;
+    if (event.type == YAML_DOCUMENT_START_EVENT) {
+        if (getEvent())
+            return QoreValue();
 
-      if (event.type != YAML_DOCUMENT_END_EVENT) {
-         rv = parseNode();
-         if (*xsink)
-            return 0;
+        if (event.type != YAML_DOCUMENT_END_EVENT) {
+            rv = parseNode();
+            if (*xsink)
+                return QoreValue();
 
-         if (getCheckEvent(YAML_DOCUMENT_END_EVENT))
-            return 0;
+            if (getCheckEvent(YAML_DOCUMENT_END_EVENT))
+                return QoreValue();
 
-         if (getEvent())
-            return 0;
-      }
-   }
+            if (getEvent())
+                return QoreValue();
+        }
+    }
 
-   if (checkEvent(YAML_STREAM_END_EVENT))
-      return 0;
+    if (checkEvent(YAML_STREAM_END_EVENT))
+        return QoreValue();
 
-   return rv.release();
+    return rv.release();
 }
 
-AbstractQoreNode* QoreYamlParser::parseNode(bool favor_string) {
+QoreValue QoreYamlParser::parseNode(bool favor_string) {
    switch (event.type) {
       case YAML_SCALAR_EVENT:
          return parseScalar(favor_string);
@@ -79,64 +79,64 @@ AbstractQoreNode* QoreYamlParser::parseNode(bool favor_string) {
          xsink->raiseException(QY_PARSE_ERR, "unexpected event '%s' when parsing YAML document", get_event_name(event.type));
    }
 
-   return 0;
+   return QoreValue();
 }
 
 QoreListNode* QoreYamlParser::parseSeq() {
-   ReferenceHolder<QoreListNode> l(new QoreListNode, xsink);
+    ReferenceHolder<QoreListNode> l(new QoreListNode, xsink);
 
-   while (true) {
-      if (getEvent())
-         return 0;
+    while (true) {
+        if (getEvent())
+            return nullptr;
 
-      if (event.type == YAML_SEQUENCE_END_EVENT)
-         break;
+        if (event.type == YAML_SEQUENCE_END_EVENT)
+            break;
 
-      AbstractQoreNode* rv = parseNode();
-      if (*xsink)
-         return 0;
-      l->push(rv);
-   }
+        QoreValue rv = parseNode();
+        if (*xsink)
+            return nullptr;
+        l->push(rv, nullptr);
+    }
 
-   return l.release();
+    return l.release();
 }
 
 QoreHashNode* QoreYamlParser::parseMap() {
-   ReferenceHolder<QoreHashNode> h(new QoreHashNode, xsink);
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode, xsink);
 
-   while (true) {
-      if (getEvent())
-         return 0;
+    while (true) {
+        if (getEvent())
+            return nullptr;
 
-      if (event.type == YAML_MAPPING_END_EVENT)
-         break;
+        if (event.type == YAML_MAPPING_END_EVENT)
+            break;
 
-      // get key node and convert to string
-      ReferenceHolder<AbstractQoreNode> key(parseNode(true), xsink);
-      if (*xsink)
-         return 0;
+        // get key node and convert to string
+        ValueHolder key(parseNode(true), xsink);
+        if (*xsink)
+            return nullptr;
 
-      //printd(5, "key=%p type=%s\n", *key, key->getTypeName());
+        //printd(5, "key=%p type=%s\n", *key, key->getTypeName());
 
-      // convert to string in default encoding
-      QoreStringValueHelper str(*key, QCS_DEFAULT, xsink);
-      if (*xsink)
-         return 0;
+        // convert to string in default encoding
+        QoreStringValueHelper str(*key, QCS_DEFAULT, xsink);
+        if (*xsink)
+            return nullptr;
 
-      // get value
-      if (getEvent())
-         return 0;
+        // get value
+        if (getEvent())
+            return nullptr;
 
-      AbstractQoreNode* value = parseNode();
-      if (*xsink)
-         return 0;
+        QoreValue value = parseNode();
+        if (*xsink)
+            return nullptr;
 
-      h->setKeyValue(str->getBuffer(), value, xsink);
-      if (*xsink)
-         return 0;
-   }
+        h->setKeyValue(str->c_str(), value, xsink);
+        if (*xsink)
+            return nullptr;
+    }
 
-   return h.release();
+    return h.release();
 }
 
 static DateTimeNode* dt_err(ExceptionSink* xsink, const char* val, const char* msg) {
@@ -310,113 +310,113 @@ static AbstractQoreNode* try_parse_number(const char* val, size_t len, bool no_s
    return no_simple_numeric ? nullptr : new QoreFloatNode(strtod(val, 0));
 }
 
-AbstractQoreNode* QoreYamlParser::parseScalar(bool favor_string) {
-   //ReferenceHolder<AbstractQoreNode> rv(xsink);
+QoreValue QoreYamlParser::parseScalar(bool favor_string) {
+    //ReferenceHolder<AbstractQoreNode> rv(xsink);
 
-   const char* val = (const char*)event.data.scalar.value;
-   size_t len = event.data.scalar.length;
+    const char* val = (const char*)event.data.scalar.value;
+    size_t len = event.data.scalar.length;
 
-   //printd(5, "QoreYamlParser::parseScalar() anchor=%s tag=%s value=%s len=%d plain_implicit=%d quoted_implicit=%d style=%d\n", event.data.scalar.anchor ? event.data.scalar.anchor : (yaml_char_t*)"n/a", event.data.scalar.tag ? event.data.scalar.tag : (yaml_char_t*)"n/a", val, len, event.data.scalar.plain_implicit, event.data.scalar.quoted_implicit, event.data.scalar.style);
+    //printd(5, "QoreYamlParser::parseScalar() anchor=%s tag=%s value=%s len=%d plain_implicit=%d quoted_implicit=%d style=%d\n", event.data.scalar.anchor ? event.data.scalar.anchor : (yaml_char_t*)"n/a", event.data.scalar.tag ? event.data.scalar.tag : (yaml_char_t*)"n/a", val, len, event.data.scalar.plain_implicit, event.data.scalar.quoted_implicit, event.data.scalar.style);
 
-   if (!event.data.scalar.tag) {
-      if (favor_string || (event.data.scalar.quoted_implicit
-                           && (event.data.scalar.style == YAML_DOUBLE_QUOTED_SCALAR_STYLE))) {
-         // assume it's a string
-         return new QoreStringNode(val, len, QCS_UTF8);
-      }
+    if (!event.data.scalar.tag) {
+        if (favor_string || (event.data.scalar.quoted_implicit
+                            && (event.data.scalar.style == YAML_DOUBLE_QUOTED_SCALAR_STYLE))) {
+            // assume it's a string
+            return new QoreStringNode(val, len, QCS_UTF8);
+        }
 
-      // issue #2343: could be a string, arbitrary-precision numeric or special floating-point value, or an ISO-8601 date/time value
-      if (event.data.scalar.quoted_implicit && event.data.scalar.style == YAML_SINGLE_QUOTED_SCALAR_STYLE) {
-         if (len > 9 && isdigit(val[0]) && isdigit(val[1]) && isdigit(val[2]) && isdigit(val[3]) && val[4] == '-'
-             && isdigit(val[5]) && isdigit(val[6]) && val[7] == '-'
-             && isdigit(val[8]) && isdigit(val[9]))
+        // issue #2343: could be a string, arbitrary-precision numeric or special floating-point value, or an ISO-8601 date/time value
+        if (event.data.scalar.quoted_implicit && event.data.scalar.style == YAML_SINGLE_QUOTED_SCALAR_STYLE) {
+            if (len > 9 && isdigit(val[0]) && isdigit(val[1]) && isdigit(val[2]) && isdigit(val[3]) && val[4] == '-'
+                && isdigit(val[5]) && isdigit(val[6]) && val[7] == '-'
+                && isdigit(val[8]) && isdigit(val[9]))
+                return parseAbsoluteDate();
+            // try
+            AbstractQoreNode* n = try_parse_number(val, len, true);
+            return n ? n : new QoreStringNode(val, len, QCS_UTF8);
+        }
+
+        // check for boolean values
+        if (!strcmp(val, "true"))
+            return true;
+        if (!strcmp(val, "false"))
+            return false;
+
+        // check for null
+        if (!strcmp(val, "null") || !strcmp(val, "~") || !len)
+            return QoreValue();
+
+        // check for sqlnull
+        if (!strcmp(val, "sqlnull"))
+            return &Null;
+
+        // check for absolute date/time values
+        if (len > 9 && isdigit(val[0]) && isdigit(val[1]) && isdigit(val[2]) && isdigit(val[3]) && val[4] == '-'
+            && isdigit(val[5]) && isdigit(val[6]) && val[7] == '-'
+            && isdigit(val[8]) && isdigit(val[9]))
             return parseAbsoluteDate();
-         // try
-         AbstractQoreNode* n = try_parse_number(val, len, true);
-         return n ? n : new QoreStringNode(val, len, QCS_UTF8);
-      }
 
-      // check for boolean values
-      if (!strcmp(val, "true"))
-         return &True;
-      if (!strcmp(val, "false"))
-         return &False;
-
-      // check for null
-      if (!strcmp(val, "null") || !strcmp(val, "~") || !len)
-         return nullptr;
-
-      // check for sqlnull
-      if (!strcmp(val, "sqlnull"))
-         return &Null;
-
-      // check for absolute date/time values
-      if (len > 9 && isdigit(val[0]) && isdigit(val[1]) && isdigit(val[2]) && isdigit(val[3]) && val[4] == '-'
-          && isdigit(val[5]) && isdigit(val[6]) && val[7] == '-'
-          && isdigit(val[8]) && isdigit(val[9]))
-         return parseAbsoluteDate();
-
-      // check for relative date/time values (durations)
-      if (*val == 'P') {
-         const char* tv = val + 1;
-         if (*tv == 'T') {
-            ++tv;
-            if (is_number(tv)) {
-               if (*tv == 'H' || *tv == 'M' || *tv == 'S' || *tv == 'u')
-                  return new DateTimeNode(val);
+        // check for relative date/time values (durations)
+        if (*val == 'P') {
+            const char* tv = val + 1;
+            if (*tv == 'T') {
+                ++tv;
+                if (is_number(tv)) {
+                if (*tv == 'H' || *tv == 'M' || *tv == 'S' || *tv == 'u')
+                    return new DateTimeNode(val);
+                }
             }
-         }
-         else if (is_number(tv)) {
-            if (*tv == 'Y' || *tv == 'M' || *tv == 'D')
-               return new DateTimeNode(val);
-         }
-      }
+            else if (is_number(tv)) {
+                if (*tv == 'Y' || *tv == 'M' || *tv == 'D')
+                return new DateTimeNode(val);
+            }
+        }
 
-      AbstractQoreNode* n = try_parse_number(val, len);
-      if (n)
-         return n;
+        AbstractQoreNode* n = try_parse_number(val, len);
+        if (n)
+            return n;
 
-      return new QoreStringNode(val, len, QCS_UTF8);
-   }
+        return new QoreStringNode(val, len, QCS_UTF8);
+    }
 
-   const char* tag = (const char*)event.data.scalar.tag;
-   // FIXME: use a map here for O(ln(n)) performance
-   if (!strcmp(tag, YAML_TIMESTAMP_TAG))
-      return parseAbsoluteDate();
-   if (!strcmp(tag, YAML_BINARY_TAG))
-      return parseBase64(val, len, xsink);
-   if (!strcmp(tag, YAML_STR_TAG))
-      return new QoreStringNode(val, len, QCS_UTF8);
-   if (!strcmp(tag, YAML_NULL_TAG))
-      return nullptr;
-   if (!strcmp(tag, YAML_BOOL_TAG))
-      return parseBool();
-   if (!strcmp(tag, YAML_INT_TAG))
-      return new QoreBigIntNode(q_atoll(val));
-   if (!strcmp(tag, YAML_FLOAT_TAG))
-      return new QoreFloatNode(parseFloat(val, len));
-   if (!strcmp(tag, QORE_YAML_DURATION_TAG))
-      return new DateTimeNode(val);
-   if (!strcmp(tag, QORE_YAML_NUMBER_TAG))
-      return parseNumber(val, len);
-   if (!strcmp(tag, QORE_YAML_SQLNULL_TAG))
-      return &Null;
+    const char* tag = (const char*)event.data.scalar.tag;
+    // FIXME: use a map here for O(ln(n)) performance
+    if (!strcmp(tag, YAML_TIMESTAMP_TAG))
+        return parseAbsoluteDate();
+    if (!strcmp(tag, YAML_BINARY_TAG))
+        return parseBase64(val, len, xsink);
+    if (!strcmp(tag, YAML_STR_TAG))
+        return new QoreStringNode(val, len, QCS_UTF8);
+    if (!strcmp(tag, YAML_NULL_TAG))
+        return QoreValue();
+    if (!strcmp(tag, YAML_BOOL_TAG))
+        return parseBool();
+    if (!strcmp(tag, YAML_INT_TAG))
+        return q_atoll(val);
+    if (!strcmp(tag, YAML_FLOAT_TAG))
+        return parseFloat(val, len);
+    if (!strcmp(tag, QORE_YAML_DURATION_TAG))
+        return new DateTimeNode(val);
+    if (!strcmp(tag, QORE_YAML_NUMBER_TAG))
+        return parseNumber(val, len);
+    if (!strcmp(tag, QORE_YAML_SQLNULL_TAG))
+        return &Null;
 
-   xsink->raiseException(QY_PARSE_ERR, "don't know how to parse scalar tag '%s'", tag);
+    xsink->raiseException(QY_PARSE_ERR, "don't know how to parse scalar tag '%s'", tag);
 
-   return nullptr;
+    return QoreValue();
 }
 
-QoreBoolNode* QoreYamlParser::parseBool() {
+bool QoreYamlParser::parseBool() {
    const char* val = (const char*)event.data.scalar.value;
 
    if (!strcmp(val, "true"))
-      return &True;
+      return true;
    if (!strcmp(val, "false"))
-      return &False;
+      return false;
 
    xsink->raiseException(QY_PARSE_ERR, "cannot parse boolean value '%s'", val);
-   return 0;
+   return false;
 }
 
 // always return the date/time value in the current timezone
