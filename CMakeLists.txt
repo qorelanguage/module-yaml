@@ -10,7 +10,7 @@ set (VERSION_PATCH 0)
 set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake )
 
 
-find_package(Qore REQUIRED)
+find_package(Qore 0.9 REQUIRED)
 find_package(LibYAML REQUIRED)
 
 include_directories( ${CMAKE_SOURCE_DIR}/src )

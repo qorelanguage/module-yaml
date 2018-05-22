@@ -1,24 +1,24 @@
 /* -*- mode: c++; indent-tabs-mode: nil -*- */
 /*
-  ql_yaml.qpp
+    ql_yaml.qpp
 
-  yaml Qore module
+    yaml Qore module
 
-  Copyright (C) 2010 - 2017 Qore Technologies, s.r.o.
+    Copyright (C) 2010 - 2018 Qore Technologies, s.r.o.
 
-  This library is free software; you can redistribute it and/or
-  modify it under the terms of the GNU Lesser General Public
-  License as published by the Free Software Foundation; either
-  version 2.1 of the License, or (at your option) any later version.
+    This library is free software; you can redistribute it and/or
+    modify it under the terms of the GNU Lesser General Public
+    License as published by the Free Software Foundation; either
+    version 2.1 of the License, or (at your option) any later version.
 
-  This library is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-  Lesser General Public License for more details.
+    This library is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+    Lesser General Public License for more details.
 
-  You should have received a copy of the GNU Lesser General Public
-  License along with this library; if not, write to the Free Software
-  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+    You should have received a copy of the GNU Lesser General Public
+    License along with this library; if not, write to the Free Software
+    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 #include "yaml-module.h"
@@ -103,7 +103,7 @@ namespace Qore::YAML;
 
     @par Example:
     @code
-my string $str = make_yaml($data, YAML::Canonical);
+string str = make_yaml(data, YAML::Canonical);
     @endcode
 
     @throw YAML-EMITTER-ERROR object found; YAML library error
@@ -112,7 +112,7 @@ my string $str = make_yaml($data, YAML::Canonical);
 
     @since yaml 0.5 as a replacement for deprecated camel-case makeYAML()
  */
-string make_yaml(any data, int flags = {Qore::YAML::None}0, softint width = -1, softint indent = 2) [flags=RET_VALUE_ONLY] {
+string make_yaml(auto data, int flags = {Qore::YAML::None}0, softint width = -1, softint indent = 2) [flags=RET_VALUE_ONLY] {
    return q_make_yaml(data, flags, width, indent, xsink);
 }
 
@@ -130,7 +130,7 @@ string make_yaml(any data, int flags = {Qore::YAML::None}0, softint width = -1, 
 
     @deprecated use make_yaml(); camel-case function names were deprecated in yaml 0.5
  */
-string makeYAML(any data, int flags = {Qore::YAML::None}0, softint width = -1, softint indent = 2) [flags=RET_VALUE_ONLY,DEPRECATED] {
+string makeYAML(auto data, int flags = {Qore::YAML::None}0, softint width = -1, softint indent = 2) [flags=RET_VALUE_ONLY,DEPRECATED] {
    return q_make_yaml(data, flags, width, indent, xsink);
 }
 
@@ -143,7 +143,7 @@ string makeYAML(any data, int flags = {Qore::YAML::None}0, softint width = -1, s
 
     @par Example:
     @code
-my any $data = parse_yaml($yaml_string);
+auto data = parse_yaml(yaml_string);
     @endcode
 
     @throw YAML-PARSER-ERROR error parsing YAML string
@@ -152,7 +152,7 @@ my any $data = parse_yaml($yaml_string);
 
     @see make_yaml()
  */
-any parse_yaml(string yaml) [flags=RET_VALUE_ONLY] {
+auto parse_yaml(string yaml) [flags=RET_VALUE_ONLY] {
    QoreYamlParser parser(*yaml, xsink);
    return parser.parse();
 }
@@ -168,7 +168,7 @@ any parse_yaml(string yaml) [flags=RET_VALUE_ONLY] {
 
     @deprecated use parse_yaml(); camel-case function names were deprecated in yaml 0.5
  */
-any parseYAML(string yaml) [flags=RET_VALUE_ONLY,DEPRECATED] {
+auto parseYAML(string yaml) [flags=RET_VALUE_ONLY,DEPRECATED] {
    QoreYamlParser parser(*yaml, xsink);
    return parser.parse();
 }
@@ -182,7 +182,7 @@ any parseYAML(string yaml) [flags=RET_VALUE_ONLY,DEPRECATED] {
 
     @par Example:
     @code
-my hash $hash = get_yaml_info();
+hash hash = get_yaml_info();
     @endcode
 
     @since yaml 0.5 as a replacement for deprecated camel-case getYAMLInfo()
