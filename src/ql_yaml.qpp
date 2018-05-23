@@ -45,9 +45,9 @@ static QoreHashNode* q_get_yaml_info() {
    int major, minor, patch;
    yaml_get_version(&major, &minor, &patch);
 
-   h->setKeyValue("major", new QoreBigIntNode(major), 0);
-   h->setKeyValue("minor", new QoreBigIntNode(minor), 0);
-   h->setKeyValue("patch", new QoreBigIntNode(patch), 0);
+   h->setKeyValue("major", major, 0);
+   h->setKeyValue("minor", minor, 0);
+   h->setKeyValue("patch", patch, 0);
 
    return h;
 }
@@ -83,7 +83,7 @@ const EmitSqlNull = QYE_EMIT_SQLNULL;
 const Yaml1_1 = QYE_VER_1_1;
 
 //const Yaml1_2 = QYE_VER_1_2;
-//YNS.addConstant("Yaml1_2", new QoreBigIntNode(QYE_VER_1_2));
+//YNS.addConstant("Yaml1_2", QYE_VER_1_2);
 //@}
 
 /** @defgroup yaml_functions YAML Functions

@@ -170,17 +170,18 @@ static unsigned is_prec(const char* str, size_t len) {
 }
 
 static double parseFloat(const char* val, size_t len) {
-   assert(len);
-   bool sign = (*val == '-' || *val == '+');
-   if ((len == static_cast<size_t>(5 + sign)) && (!strcasecmp(val + sign, "@nan@") || !strcasecmp(val + sign, "@inf@"))) {
-      if (val[1 + sign] == 'n' || val[1 + sign] == 'N')
-         return strtod("nan", 0);
-      double d = strtod("inf", 0);
-      if (*val == '-')
-         d = -d;
-      return d;
-   }
-   return strtod(val, 0);
+    assert(len);
+    bool sign = (*val == '-' || *val == '+');
+    if ((len == static_cast<size_t>(5 + sign)) && (!strcasecmp(val + sign, "@nan@") || !strcasecmp(val + sign, "@inf@"))) {
+        if (val[1 + sign] == 'n' || val[1 + sign] == 'N')
+            return q_strtod("nan");
+        double d = q_strtod("inf");
+        if (*val == '-')
+            d = -d;
+        return d;
+    }
+    // issue #2832 do not use strtod() as it's locale-dependent
+    return q_strtod(val);
 }
 
 static QoreNumberNode* parseNumber(const char* val, size_t len) {
@@ -213,101 +214,102 @@ static QoreNumberNode* parseNumber(const char* val, size_t len) {
 }
 
 // FIXME: this is still capable of false positives
-static AbstractQoreNode* try_parse_number(const char* val, size_t len, bool no_simple_numeric = false) {
-   //printd(5, "try_parse_number() val: \"%s\" len: %d\n", val, (int)len);
-   bool sign = (*val == '-' || *val == '+');
+static QoreValue try_parse_number(const char* val, size_t len, bool no_simple_numeric = false) {
+    //printd(5, "try_parse_number() val: \"%s\" len: %d\n", val, (int)len);
+    bool sign = (*val == '-' || *val == '+');
 
-   // check for @inf@ and @nan@
-   if (!strncasecmp(val + sign, "@nan@", 5) || !strncasecmp(val + sign, "@inf@", 5)) {
-      if (len == static_cast<size_t>(5 + sign)) {
-         if (val[1 + sign] == 'n' || val[1 + sign] == 'N')
-            return new QoreFloatNode(strtod("nan", 0));
-         double d = strtod("inf", 0);
-         if (*val == '-')
-            d = -d;
-         return new QoreFloatNode(d);
-      }
-      if (val[5 + sign] == 'n') {
-         if (len == static_cast<size_t>(6 + sign))
-            return new QoreNumberNode(val);
-         else {
-            unsigned prec = is_prec(val + sign + 6, len - sign - 6);
-            if (prec)
-               return new QoreNumberNode(val, prec);
-         }
-      }
-      return nullptr;
-   }
+    // check for @inf@ and @nan@
+    if (!strncasecmp(val + sign, "@nan@", 5) || !strncasecmp(val + sign, "@inf@", 5)) {
+        if (len == static_cast<size_t>(5 + sign)) {
+            if (val[1 + sign] == 'n' || val[1 + sign] == 'N')
+                return new QoreFloatNode(strtod("nan", 0));
+            double d = q_strtod("inf");
+            if (*val == '-')
+                d = -d;
+            return d;
+        }
+        if (val[5 + sign] == 'n') {
+            if (len == static_cast<size_t>(6 + sign))
+                return new QoreNumberNode(val);
+            else {
+                unsigned prec = is_prec(val + sign + 6, len - sign - 6);
+                if (prec)
+                    return new QoreNumberNode(val, prec);
+            }
+        }
+        return QoreValue();
+    }
 
-   const char* str = val + (int)sign;
-   // only digits flag
-   bool od = true;
-   // e char flag
-   bool e = false;
-   // decimal point flag
-   bool dp = false;
-   // plus or minus flag (for exponent)
-   bool pm = false;
-   while (*str) {
-      if (isdigit(*str)) {
-         ++str;
-         continue;
-      }
-      if (*str == 'n') {
-         if ((size_t)(str - val + 1) == len)
-            return new QoreNumberNode(val);
-         else {
-            unsigned prec = is_prec(str + 1, len - (str - val) - 1);
-            //printd(5, "%s prec %d\n", val, prec);
-            if (prec)
-               return new QoreNumberNode(val, prec);
-         }
-      }
-      if (od)
-         od = false;
-      if (*str == '.') {
-         if (dp || e || pm)
-            return nullptr;
-         dp = true;
-      }
-      else if (*str == 'e' || *str == 'E') {
-         if (e || pm)
-            return nullptr;
-         e = true;
-      }
-      else if (*str == '+' || *str == '-') {
-         if (pm || !e)
-            return nullptr;
-         pm = true;
-      }
-      else
-         return nullptr;
-      ++str;
-   }
+    const char* str = val + (int)sign;
+    // only digits flag
+    bool od = true;
+    // e char flag
+    bool e = false;
+    // decimal point flag
+    bool dp = false;
+    // plus or minus flag (for exponent)
+    bool pm = false;
+    while (*str) {
+        if (isdigit(*str)) {
+            ++str;
+            continue;
+        }
+        if (*str == 'n') {
+            if ((size_t)(str - val + 1) == len)
+                return new QoreNumberNode(val);
+            else {
+                unsigned prec = is_prec(str + 1, len - (str - val) - 1);
+                //printd(5, "%s prec %d\n", val, prec);
+                if (prec)
+                    return new QoreNumberNode(val, prec);
+            }
+        }
+        if (od)
+            od = false;
+        if (*str == '.') {
+            if (dp || e || pm)
+                return QoreValue();
+            dp = true;
+        }
+        else if (*str == 'e' || *str == 'E') {
+            if (e || pm)
+                return QoreValue();
+            e = true;
+        }
+        else if (*str == '+' || *str == '-') {
+            if (pm || !e)
+                return QoreValue();
+            pm = true;
+        }
+        else
+            return QoreValue();
+        ++str;
+    }
 
-   //printd(5, "try_parse_number() od: %d len: %d val: %s\n", od, len, val);
+    //printd(5, "try_parse_number() od: %d len: %d val: %s\n", od, len, val);
 
-   if (od) {
-      if ((len < 19
-           || (len == 19 && !sign
-               && ((strcmp(val, "9223372036854775807") <= 0)))
-           || (len == 20 && sign
-               && ((*val == '+' && strcmp(val, "+9223372036854775807") <= 0)
-                   || (*val == '-' && strcmp(val, "-9223372036854775808") <= 0))))) {
-         if (no_simple_numeric)
-            return nullptr;
-         int64 iv = strtoll(val, 0, 10);
-         errno = 0;
-         assert(errno != ERANGE);
-         //printd(5, "try_parse_number() returning INT\n");
-         return new QoreBigIntNode(iv);
-      }
-      //printd(5, "try_parse_number() returning NUMBER\n");
-      // if it is an integer requiring > 64bits, use "number" if possible
-      return new QoreNumberNode(val);
-   }
+    if (od) {
+        if ((len < 19
+            || (len == 19 && !sign
+                && ((strcmp(val, "9223372036854775807") <= 0)))
+            || (len == 20 && sign
+                && ((*val == '+' && strcmp(val, "+9223372036854775807") <= 0)
+                    || (*val == '-' && strcmp(val, "-9223372036854775808") <= 0))))) {
+            if (no_simple_numeric)
+                return QoreValue();
+            int64 iv = strtoll(val, 0, 10);
+            errno = 0;
+            assert(errno != ERANGE);
+            //printd(5, "try_parse_number() returning INT\n");
+            return iv;
+        }
+        //printd(5, "try_parse_number() returning NUMBER\n");
+        // if it is an integer requiring > 64bits, use "number" if possible
+        return new QoreNumberNode(val);
+    }
 
-   return no_simple_numeric ? nullptr : new QoreFloatNode(strtod(val, 0));
+    // issue #2832 do not use strtod() as it's locale-dependent
+    return no_simple_numeric ? QoreValue() : QoreValue(q_strtod(val));
 }
 
 QoreValue QoreYamlParser::parseScalar(bool favor_string) {
@@ -332,7 +334,7 @@ QoreValue QoreYamlParser::parseScalar(bool favor_string) {
                 && isdigit(val[8]) && isdigit(val[9]))
                 return parseAbsoluteDate();
             // try
-            AbstractQoreNode* n = try_parse_number(val, len, true);
+            QoreValue n = try_parse_number(val, len, true);
             return n ? n : new QoreStringNode(val, len, QCS_UTF8);
         }
 
@@ -372,7 +374,7 @@ QoreValue QoreYamlParser::parseScalar(bool favor_string) {
             }
         }
 
-        AbstractQoreNode* n = try_parse_number(val, len);
+        QoreValue n = try_parse_number(val, len);
         if (n)
             return n;
 
