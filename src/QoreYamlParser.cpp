@@ -222,7 +222,7 @@ static QoreValue try_parse_number(const char* val, size_t len, bool no_simple_nu
     if (!strncasecmp(val + sign, "@nan@", 5) || !strncasecmp(val + sign, "@inf@", 5)) {
         if (len == static_cast<size_t>(5 + sign)) {
             if (val[1 + sign] == 'n' || val[1 + sign] == 'N')
-                return new QoreFloatNode(strtod("nan", 0));
+                return q_strtod("nan");
             double d = q_strtod("inf");
             if (*val == '-')
                 d = -d;
