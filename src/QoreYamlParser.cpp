@@ -25,6 +25,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <strings.h>
+#include <math.h>
 
 const char* QY_PARSE_ERR = "YAML-PARSER-ERROR";
 
@@ -65,21 +66,21 @@ QoreValue QoreYamlParser::parse() {
 }
 
 QoreValue QoreYamlParser::parseNode(bool favor_string) {
-   switch (event.type) {
-      case YAML_SCALAR_EVENT:
-         return parseScalar(favor_string);
+    switch (event.type) {
+        case YAML_SCALAR_EVENT:
+            return parseScalar(favor_string);
 
-      case YAML_SEQUENCE_START_EVENT:
-         return parseSeq();
+        case YAML_SEQUENCE_START_EVENT:
+            return parseSeq();
 
-      case YAML_MAPPING_START_EVENT:
-         return parseMap();
+        case YAML_MAPPING_START_EVENT:
+            return parseMap();
 
-      default:
-         xsink->raiseException(QY_PARSE_ERR, "unexpected event '%s' when parsing YAML document", get_event_name(event.type));
-   }
+        default:
+            xsink->raiseException(QY_PARSE_ERR, "unexpected event '%s' when parsing YAML document", get_event_name(event.type));
+    }
 
-   return QoreValue();
+    return QoreValue();
 }
 
 QoreListNode* QoreYamlParser::parseSeq() {
@@ -140,33 +141,33 @@ QoreHashNode* QoreYamlParser::parseMap() {
 }
 
 static DateTimeNode* dt_err(ExceptionSink* xsink, const char* val, const char* msg) {
-   xsink->raiseException(QY_PARSE_ERR, "cannot parse timestamp value '%s': %s", val, msg);
-   return 0;
+    xsink->raiseException(QY_PARSE_ERR, "cannot parse timestamp value '%s': %s", val, msg);
+    return nullptr;
 }
 
 static bool is_number(const char* &tv) {
-   if (*tv == '-')
-      ++tv;
-   if (!isdigit(*tv))
-      return false;
-   ++tv;
-   while (isdigit(*tv))
-      ++tv;
-   return true;
+    if (*tv == '-')
+        ++tv;
+    if (!isdigit(*tv))
+        return false;
+    ++tv;
+    while (isdigit(*tv))
+        ++tv;
+    return true;
 }
 
 static unsigned is_prec(const char* str, size_t len) {
-   //printd(5, "is_prec str: '%s' len: %d strlen: %d\n", str, len, strlen(str));
-   if (*str != '{')
-      return 0;
+    //printd(5, "is_prec str: '%s' len: %d strlen: %d\n", str, len, strlen(str));
+    if (*str != '{')
+        return 0;
 
-   const char* p = str + 1;
-   while (isdigit(*p))
-      ++p;
-   if (p == (str + 1) || *p != '}' || static_cast<size_t>(p - str + 1) != len)
-      return 0;
+    const char* p = str + 1;
+    while (isdigit(*p))
+        ++p;
+    if (p == (str + 1) || *p != '}' || static_cast<size_t>(p - str + 1) != len)
+        return 0;
 
-   return (unsigned)atoi(str + 1);
+    return (unsigned)atoi(str + 1);
 }
 
 static double parseFloat(const char* val, size_t len) {
@@ -174,8 +175,8 @@ static double parseFloat(const char* val, size_t len) {
     bool sign = (*val == '-' || *val == '+');
     if ((len == static_cast<size_t>(5 + sign)) && (!strcasecmp(val + sign, "@nan@") || !strcasecmp(val + sign, "@inf@"))) {
         if (val[1 + sign] == 'n' || val[1 + sign] == 'N')
-            return q_strtod("nan");
-        double d = q_strtod("inf");
+            return (double)NAN;
+        double d = (double)INFINITY;
         if (*val == '-')
             d = -d;
         return d;
@@ -185,32 +186,32 @@ static double parseFloat(const char* val, size_t len) {
 }
 
 static QoreNumberNode* parseNumber(const char* val, size_t len) {
-   assert(val);
-   bool sign = (*val == '-' || *val == '+');
+    assert(val);
+    bool sign = (*val == '-' || *val == '+');
 
-   // check for @inf@ and @nan@
-   if (!strncasecmp(val + sign, "@nan@", 5) || !strncasecmp(val + sign, "@inf@", 5)) {
-      if (val[5 + sign] == 'n') {
-         if (len == static_cast<size_t>(6 + sign))
-            return new QoreNumberNode(val);
-         else {
-            unsigned prec = is_prec(val + sign + 6, len - sign - 6);
-            if (prec)
-               return new QoreNumberNode(val, prec);
-         }
-      }
-      return 0;
-   }
+    // check for @inf@ and @nan@
+    if (!strncasecmp(val + sign, "@nan@", 5) || !strncasecmp(val + sign, "@inf@", 5)) {
+        if (val[5 + sign] == 'n') {
+            if (len == static_cast<size_t>(6 + sign))
+                return new QoreNumberNode(val);
+            else {
+                unsigned prec = is_prec(val + sign + 6, len - sign - 6);
+                if (prec)
+                    return new QoreNumberNode(val, prec);
+            }
+        }
+        return nullptr;
+    }
 
-   const char* p = strchr(val, '{');
-   if (p) {
-      unsigned prec = is_prec(p, len - (p - val));
-      //printd(5, "%s prec %d\n", val, prec);
-      if (prec)
-         return new QoreNumberNode(val, prec);
-   }
+    const char* p = strchr(val, '{');
+    if (p) {
+        unsigned prec = is_prec(p, len - (p - val));
+        //printd(5, "%s prec %d\n", val, prec);
+        if (prec)
+            return new QoreNumberNode(val, prec);
+    }
 
-   return new QoreNumberNode(val);
+    return new QoreNumberNode(val);
 }
 
 // FIXME: this is still capable of false positives
@@ -222,8 +223,8 @@ static QoreValue try_parse_number(const char* val, size_t len, bool no_simple_nu
     if (!strncasecmp(val + sign, "@nan@", 5) || !strncasecmp(val + sign, "@inf@", 5)) {
         if (len == static_cast<size_t>(5 + sign)) {
             if (val[1 + sign] == 'n' || val[1 + sign] == 'N')
-                return q_strtod("nan");
-            double d = q_strtod("inf");
+                return (double)NAN;
+            double d = (double)INFINITY;
             if (*val == '-')
                 d = -d;
             return d;
