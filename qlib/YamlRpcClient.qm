@@ -31,7 +31,7 @@
 # need mime definitions
 %requires Mime >= 1.0
 
-%requires(reexport) ConnectionProvider >= 1.1
+%requires(reexport) ConnectionProvider >= 1.2
 
 # do not use $ signs in declarations
 %new-style
@@ -43,7 +43,7 @@
 %strict-args
 
 module YamlRpcClient {
-    version = "1.2";
+    version = "1.3";
     desc = "YamlRpcClient module";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -139,6 +139,9 @@ Content-Length: 118
     @endcode
 
     @section yamlrpcclient_relnotes YamlRpcClient Module Release History
+
+    @subsection yrc_v_1_3 YamlRpcClient v1.3
+    - new AbstractConnection infrastructure 
 
     @subsection yrc_v_1_2 YamlRpcClient v1.2
     - the @ref YamlRpcConnection::YamlRpcConnection::getConstructorInfo() "YamlRpcConnection::getConstructorInfo()"
@@ -314,6 +317,7 @@ public namespace YamlRpcClient {
 
             @deprecated since Qore 0.9
         */
+        deprecated
         constructor(string name, string desc, string url, bool monitor, *hash opts, hash urlh)
             : HttpBasedConnection(name, desc, url, {"monitor": monitor}, opts ?? {}) {
             real_opts = ("url": real_url) + opts;
