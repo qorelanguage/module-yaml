@@ -28,7 +28,7 @@ class YamlRpcClientTest inherits QUnit::Test {
 
     testYamlRpcConnection() {
         string url = "yamlrpcs://localhost:8099/";
-        YamlRpcConnection conn("test", "test", url, False, NOTHING, parse_url(url));
+        YamlRpcConnection conn("test", "test", url, {"monitor": False});
         YamlRpcClient client = conn.get(False);
         string yurl = url;
         yurl =~ s/^yamlrpc/http/;
@@ -36,7 +36,7 @@ class YamlRpcClientTest inherits QUnit::Test {
 
         # test default path
         url = "yamlrpcs://localhost:8099";
-        conn = new YamlRpcConnection("test", "test", url, False, NOTHING, parse_url(url));
+        conn = new YamlRpcConnection("test", "test", url, {"monitor": False});
         client = conn.get(False);
         yurl = url;
         yurl =~ s/^yamlrpc/http/;
