@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # @file DataStreamClient.qm Qore user module implementing client support for the DataStream protocol: YAML-encoded HTTP chunked transfers where each chunk is a unique data entity
 
-/*  DataStreamClient.qm Copyright (C) 2014 - 2017 Qore Technologies, s.r.o.
+/*  DataStreamClient.qm Copyright (C) 2014 - 2019 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -40,7 +40,7 @@
 %new-style
 
 module DataStreamClient {
-    version = "1.1";
+    version = "1.2";
     desc = "user module implementing client support for the DataStream protocol: YAML-encoded HTTP chunked transfers where each chunk is a unique data entity";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -74,6 +74,10 @@ module DataStreamClient {
 
     @section datastreamclientrelnotes Release Notes
 
+    @subsection datastreamclient_v1_2 DataStreamClient v1.2
+    - fixed a bug where the \c "response-code" key of the output info hash could be missing in some cases
+      (<a href="https://github.com/qorelanguage/qore/issues/3237">issue 3237</a>)
+
     @subsection datastreamclient_v1_1 DataStreamClient v1.1
     - updated for internal RestClient API changes related to REST schema validation (<a href="https://github.com/qorelanguage/qore/issues/2072">issue 2072</a>)
 
@@ -90,17 +94,17 @@ public namespace DataStreamClient {
     public class DataStreamSendMessage {
         public {}
 
-	#! this method returns data to be returned to the server; when this method returns no value, it signifies the end of the streamed data transfer; this method calls sendDataImpl() to return the data
-	/** @return the data returned by this callback will be serialized to YAML and send via the @ref datastreamprotocol "DataStream protocol" to the remote HTTP REST server in HTTP chunked format; when all data has been send then this callback should return @ref nothing, which will close the chunked message and terminate the request
-	*/
-	any sendData() {
+        #! this method returns data to be returned to the server; when this method returns no value, it signifies the end of the streamed data transfer; this method calls sendDataImpl() to return the data
+        /** @return the data returned by this callback will be serialized to YAML and send via the @ref datastreamprotocol "DataStream protocol" to the remote HTTP REST server in HTTP chunked format; when all data has been send then this callback should return @ref nothing, which will close the chunked message and terminate the request
+        */
+        any sendData() {
             return sendDataImpl();
         }
 
-	#! reimplement this method in subclasses to support streamed data transfers; when this method returns no value, it signifies the end of the streamed data transfer
-	/** @return the data returned by this callback will be serialized to YAML and send via the @ref datastreamprotocol "DataStream protocol" to the remote HTTP REST server in HTTP chunked format; when all data has been send then this callback should return @ref nothing, which will close the chunked message and terminate the request
-	*/
-	private abstract any sendDataImpl();
+        #! reimplement this method in subclasses to support streamed data transfers; when this method returns no value, it signifies the end of the streamed data transfer
+        /** @return the data returned by this callback will be serialized to YAML and send via the @ref datastreamprotocol "DataStream protocol" to the remote HTTP REST server in HTTP chunked format; when all data has been send then this callback should return @ref nothing, which will close the chunked message and terminate the request
+        */
+        private abstract any sendDataImpl();
     }
 
     #! this class can be used to send and receive data using the @ref datastreamprotocol "DataStream protocol"
@@ -110,10 +114,10 @@ public namespace DataStreamClient {
             string err;
         }
 
-	#! receives decoded data from the remote end and calls recvDataImpl()
-	/** @param data the argument passed to this callback is the decoded and deserialized data in the message
-	*/
-	nothing recvData(any data) {
+        #! receives decoded data from the remote end and calls recvDataImpl()
+        /** @param data the argument passed to this callback is the decoded and deserialized data in the message
+        */
+        nothing recvData(any data) {
             recvDataImpl(data);
         }
 
@@ -130,10 +134,10 @@ public namespace DataStreamClient {
         private nothing recvDataDoneImpl(*string err) {
         }
 
-	#! reimplement this method in subclasses to receive decoded and deserialized data
-	/** @param data the argument passed to this callback is the decoded and deserialized data in the message
-	*/
-	private abstract nothing recvDataImpl(any data);
+        #! reimplement this method in subclasses to receive decoded and deserialized data
+        /** @param data the argument passed to this callback is the decoded and deserialized data in the message
+        */
+        private abstract nothing recvDataImpl(any data);
     }
 
     #! this class can be used to send and receive data using the @ref datastreamprotocol "DataStream protocol"
@@ -225,10 +229,10 @@ rest.recvDataStream(recvcallback, endcallback, "GET", "/orders/1", body);
             prepareMsg(method, path, \body, \hdr);
 
             on_exit if (exists body) {
-                info += (
+                info += {
                     "request-body": body,
                     "request-serialization": ds,
-                    );
+                };
             }
 
             # prepare path
@@ -638,12 +642,13 @@ rest.setContentEncoding("gzip");
             code dcb = sub (any d) {
                 if (exists d) {
                     if (chunked) {
-                        if (!rmd)
+                        if (!rmd) {
                             rmd = ();
+                        }
                         rmd += d;
-                    }
-                    else
+                    } else {
                         rmd = d;
+                    }
                 }
             };
             code ecb = sub () {};
@@ -651,10 +656,10 @@ rest.setContentEncoding("gzip");
             string rs;
             # raw response
             data rrs;
-            on_exit info += (
+            on_exit info += {
                 "response-body": rrs,
                 "response-serialization": rs,
-                );
+            };
             code bcb = sub (any b, string code) {
                 rrs += b;
                 rs = code;
@@ -678,6 +683,11 @@ rest.setContentEncoding("gzip");
                 dsrcb(h);
             };
 
+            # issue #3237: make sure to send the response-code key in all cases
+            on_exit if (rhdr.status_code) {
+                info."response-code" = rhdr.status_code;
+            }
+
             sendWithRecvCallback(rcb, body, m, path, hdr, 60s, False, \info);
 
             # we can get a binary response if we received a chunked non-DataStream message
@@ -688,8 +698,7 @@ rest.setContentEncoding("gzip");
                 if (chunked) {
                     ct = rhdr{DataStreamContentType.lwr()} ?? rhdr."content-type";
                     ce = rhdr{DataStreamContentEncoding.lwr()} ?? rhdr."content-encoding";
-                }
-                else {
+                } else {
                     ct = rhdr."content-type";
                     ce = rhdr."content-encoding";
                 }
