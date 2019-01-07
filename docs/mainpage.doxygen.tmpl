@@ -88,6 +88,9 @@ any data = parse_yaml(yaml_str);
 
     @subsection yaml07 yaml Module Version 0.7
 
+    - fixed a bug in the <a href="../../DataStreamClient/html/index.html">DataStreamClient</a> module where the
+      \c "response-code" key of the info output hash could be missing in some cases
+      (<a href="https://github.com/qorelanguage/qore/issues/3237">issue 3237</a>)
     - added optional support for serializing SQL NULL values with @ref Qore::YAML::EmitSqlNull "EmitSqlNull"
     - updated the <a href="../../YamlRpcClient/html/index.html">YamlRpcClient</a> module to support the updated
       abstract connection API (<a href="https://github.com/qorelanguage/qore/issues/2628">issue 2628</a>)
