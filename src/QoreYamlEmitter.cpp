@@ -2,7 +2,7 @@
 /*
   yaml Qore module
 
-  Copyright (C) 2010 - 2013 David Nichols, all rights reserved
+  Copyright (C) 2010 - 2017 Qore Technologies, s.r.o.
 
   This library is free software; you can redistribute it and/or
   modify it under the terms of the GNU Lesser General Public
@@ -31,6 +31,7 @@ QoreYamlEmitter::QoreYamlEmitter(QoreYamlWriteHandler &n_wh, int flags, int widt
    : QoreYamlBase(n_xsink), wh(n_wh), block(flags & QYE_BLOCK_STYLE),
      implicit_start_doc(!(flags & QYE_EXPLICIT_START_DOC)),
      implicit_end_doc(!(flags & QYE_EXPLICIT_END_DOC)),
+     emit_sqlnull(flags & QYE_EMIT_SQLNULL),
      yaml_ver(0) {
    if (!yaml_emitter_initialize(&emitter)) {
       err("unknown error initializing yaml emitter");
@@ -95,6 +96,10 @@ int QoreYamlEmitter::emit(const QoreValue& v) {
          return emitValue(*v.get<const BinaryNode>());
 
       case NT_NULL:
+         if (emit_sqlnull)
+            return emitSqlNull();
+         // fall down to nothing
+
       case NT_NOTHING:
          return emitNull();
 

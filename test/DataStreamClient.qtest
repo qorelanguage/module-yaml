@@ -6,22 +6,73 @@
 %strict-args
 %enable-all-warnings
 
+%requires HttpServer
+%requires Mime
 %requires ../qlib/DataStreamClient.qm
 %requires QUnit
 
 %exec-class DataStreamClientTest
 
+class ErrorHandler inherits AbstractHttpRequestHandler {
+    private {
+        *string m_data;
+        string m_mime;
+    }
+
+    constructor(string mime, *string str) {
+        m_mime = mime;
+        m_data = str;
+    }
+
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (hdr.method == "DELETE") {
+            return makeResponse(404, m_data ?? binary(body), {"Content-Type": m_mime});
+        } else {
+            return makeResponse(200, m_data ?? binary(body), {"Content-Type": m_mime});
+        }
+    }
+}
+
 class DataStreamClientTest inherits QUnit::Test {
+    private {
+        HttpServer m_http;
+        int port;
+    }
+
     constructor() : Test("DataStreamClient test", "1.0") {
         addTestCase("base test", \testDataStreamClient());
 
+        m_http = new HttpServer(\log(), \log());
+        m_http.setHandler("/api", "/api", MimeTypeText, new ErrorHandler(MimeTypeText));
+        port = m_http.addListener(0).port;
+
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
+
+        delete m_http;
     }
 
     testDataStreamClient() {
-        DataStreamClient client(("url": "http://localhost:80"), True);
+        DataStreamClient client(("url": "http://localhost:" + port), True);
 
         assertEq(True, client instanceof DataStreamClient);
+
+        hash<auto> info;
+        try {
+            # issue #3237: must throw an exception due to the 404 Not Found response
+            client.del("/api", NOTHING, \info);
+            assertTrue(False);
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        assertEq(404, info."response-code");
+
+        client.get("/api", NOTHING, \info);
+        assertEq(200, info."response-code");
+    }
+
+    log(string msg) {
+        if (m_options.verbose > 2) {
+            vprintf(msg + "\n", argv);
+        }
     }
 }
