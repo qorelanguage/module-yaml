@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file YamlRpcClient.qm @brief provides the definition for the YamlRpcClient class
 
-/*  YamlRpcClient.qm Copyright 2012 - 2016 Qore Technologies, s.r.o.
+/*  YamlRpcClient.qm Copyright 2012 - 2019 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -43,7 +43,7 @@
 %strict-args
 
 module YamlRpcClient {
-    version = "1.1";
+    version = "1.1.1";
     desc = "YamlRpcClient module";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -140,6 +140,10 @@ Content-Length: 118
 
     @section yamlrpcclient_relnotes YamlRpcClient Module Release History
 
+    @subsection yrc_v_1_1_1 YamlRpcClient v1.1.1
+    - fixed a bug handling default options including timeouts in @ref YamlRpcClient::YamlRpcConnection "YamlRpcConnection"
+      (<a href="https://github.com/qorelanguage/qore/issues/3321">issue 3321</a>)
+
     @subsection yrc_v_1_1 YamlRpcClient v1.1
     - added the @ref YamlRpcClient::YamlRpcConnection "YamlRpcConnection" class
 
@@ -163,29 +167,29 @@ public namespace YamlRpcClient {
         const Version = "1.0";
 
         #! default options for the YamlRpcClient::constructor()
-        const DefaultOptions = (
-            "protocols": (
-                "yamlrpc": (
+        const DefaultOptions = {
+            "protocols": {
+                "yamlrpc": {
                     "port": 80,
                     "ssl": False,
-                ),
-                "yamlrpcs": (
+                },
+                "yamlrpcs": {
                     "port": 443,
                     "ssl": True,
-                ),
-            ),
+                },
+            },
             "default_path": "YAML",
-            );
+        };
 
         #! YAML-RPC Client Version String
         const VersionString = sprintf("Qore-YAML-RPC-Client/%s", YamlRpcClient::Version);
 
         #! default HTTP headers
-        const DefaultHeaders = (
+        const DefaultHeaders = {
             "Content-Type": MimeTypeYamlRpc + ";charset=utf-8",
             "Accept": MimeTypeYamlRpc,
             "User-Agent": YamlRpcClient::VersionString,
-            );
+        };
 
         private {
             hash headers;
@@ -308,7 +312,7 @@ public namespace YamlRpcClient {
             @param urlh broken down URL hash (as returned by @ref Qore::parse_url())
         */
         constructor(string name, string desc, string url, bool monitor, *hash opts, hash urlh) : HttpBasedConnection(name, desc, url, monitor, opts, urlh) {
-            real_opts = ("url": real_url) + opts;
+            real_opts = ("url": real_url) + self.opts;
         }
 
         #! returns a @ref YamlRpcClient::YamlRpcClient object
