@@ -88,6 +88,8 @@ any data = parse_yaml(yaml_str);
 
     @subsection yaml06 yaml Module Version 0.6
 
+    - fixed a bug where strings with invalid encodings were being emitted as-is in exception strings
+      (<a href="https://github.com/qorelanguage/qore/issues/3394">issue 3394</a>)
     - improved the description for the \c DESERIALIZATION-ERROR exception for non-deserializable message bodies from HTTP servers with error responses (<a href="https://github.com/qorelanguage/qore/issues/1033">issue 1033</a>)
     - added the \c YamlRpcConnection class to the <a href="../../YamlRpcClient/html/index.html">YamlRpcClient</a> module
     - updated the <a href="../../DataStreamClient/html/index.html">DataStreamClient</a> module for complex types and new internal RestClient API changes (<a href="https://github.com/qorelanguage/qore/issues/2073">issue 2073</a>)
