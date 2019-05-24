@@ -57,6 +57,9 @@
 #define YAML_OMAP_TAG "tag:yaml.org,2002:omap"
 #endif
 
+// maximum length of a string value in an error msg
+#define YAML_MAX_ERR_STR_LEN 40
+
 DLLLOCAL extern const char* QORE_YAML_DURATION_TAG;
 DLLLOCAL extern const char* QORE_YAML_NUMBER_TAG;
 DLLLOCAL extern const char* QORE_YAML_SQLNULL_TAG;
@@ -211,6 +214,39 @@ public:
         return emit("map end");
     }
 
+    DLLLOCAL int doScalarEmissionError(const QoreString& str, const char* tag) {
+        // issue #3394: ensure that the string is a valid UTF-8 string before including in the exception output
+        // this is just to test for valid UTF-8 data
+        ExceptionSink xsink2;
+        str.getUnicodePoint(-1, &xsink2);
+
+        QoreString val;
+        if (xsink2) {
+            xsink2.clear();
+            val.clear();
+            size_t len = QORE_MIN(str.size(), YAML_MAX_ERR_STR_LEN);
+            val.concatHex(str.c_str(), len);
+            if (len != str.size()) {
+                val.concat("...");
+            }
+
+            return err("unknown error initializing yaml scalar output event for yaml type '%s'; value has invalid UTF-8 encoding: '<%s>'", tag, val.c_str());
+        }
+
+        size_t len = str.length();
+        size_t orig_len = len;
+        if (len > YAML_MAX_ERR_STR_LEN) {
+            len = YAML_MAX_ERR_STR_LEN;
+        }
+
+        val.concat(str, 0, YAML_MAX_ERR_STR_LEN, &xsink2);
+        assert(!xsink2);
+        if (len != orig_len) {
+            val.concat("...");
+        }
+        return err("unknown error initializing yaml scalar output event for yaml type '%s', value '%s'", tag, val.c_str());
+    }
+
     DLLLOCAL int emitScalar(const QoreString &value, const char *tag, const char *anchor = nullptr,
                         bool plain_implicit = true, bool quoted_implicit = true,
                         yaml_scalar_style_t style = YAML_ANY_SCALAR_STYLE) {
@@ -220,8 +256,10 @@ public:
 
         if (!yaml_scalar_event_initialize(&event, (yaml_char_t*)anchor, (yaml_char_t *)tag,
                                             (yaml_char_t*)str->c_str(), str->strlen(),
-                                            plain_implicit, quoted_implicit, style))
-            return err("unknown error initializing yaml scalar output event for yaml type '%s', value '%s'", tag, value.getBuffer());
+                                            plain_implicit, quoted_implicit, style)) {
+            // issue #3394: ensure that the string is a valid UTF-8 string before including in the exception output
+            return doScalarEmissionError(**str, tag);
+        }
 
         return emit("scalar", tag);
     }
@@ -232,7 +270,9 @@ public:
         if (!yaml_scalar_event_initialize(&event, (yaml_char_t *)anchor, (yaml_char_t *)tag,
                                             (yaml_char_t *)value, -1,
                                             plain_implicit, quoted_implicit, style)) {
-            return err("unknown error initializing yaml scalar output event for yaml type '%s', value '%s'", tag, value);
+            // issue #3394: ensure that the string is a valid UTF-8 string before including in the exception output
+            QoreString str(value);
+            return doScalarEmissionError(str, tag);
         }
 
         return emit("scalar", tag);
