@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file YamlRpcHandler.qm @brief YAML-RPC handler class definition for the HttpServer module
 
-/*  YamlRpcHandler.qm Copyright (C) 2012 - 2016 David Nichols
+/*  YamlRpcHandler.qm Copyright (C) 2012 - 2019 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -23,10 +23,10 @@
 */
 
 # minimum qore version
-%requires qore >= 0.8.11.1
+%requires qore >= 0.9
 
 # requires the binary yaml module
-%requires yaml >= 0.3
+%requires yaml >= 0.7
 
 # need mime definitions
 %requires Mime >= 1.0
@@ -41,7 +41,7 @@
 %new-style
 
 module YamlRpcHandler {
-    version = "1.2";
+    version = "1.4";
     desc = "YamlRpcHandler module for use with the HttpServer module";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -72,12 +72,13 @@ module YamlRpcHandler {
 %requires Mime
 
 const ApiMethods = (
-     ("name": "^sys\\.shutdown\$",
-      "text": "sys.shutdown",
-      "function": sub () { background http.stop();  return "OK"; },
-      "help": "shuts down this server",
-      "logopt": 0,
-      ),
+    {
+        "name": "^sys\\.shutdown\$",
+        "text": "sys.shutdown",
+        "function": sub () { background http.stop(); return "OK"; },
+        "help": "shuts down this server",
+        "logopt": 0,
+    },
 );
 
 # a logging closure
@@ -120,22 +121,25 @@ public namespace YamlRpcHandler {
 
         #! internal methods of the handler (introspection)
         const InternalMethods = (
-            ("function": "help",
-             "help"    : "shows a list of YAML-RPC methods registered with this handler",
-             "text"    : "help",
-             "logopt"  : 2
-            ),
-            ("function": "listMethods",
-             "help"    : "lists YAML-RPC method names registered with this handler",
-             "text"    : "system.listMethods",
-             "logopt"  : 2
-            ),
-            ("function": "system_describe",
-             "help"    : "returns a service description object, like the one specified by the JSON-RPC 1.1 spec (even though we use YAML instead of JSON)",
-             "text"    : "system.describe",
-             "logopt"  : 2
-            ),
-            );
+            {
+                "function": "help",
+                "help"    : "shows a list of YAML-RPC methods registered with this handler",
+                "text"    : "help",
+                "logopt"  : 2,
+            },
+            {
+                "function": "listMethods",
+                "help"    : "lists YAML-RPC method names registered with this handler",
+                "text"    : "system.listMethods",
+                "logopt"  : 2,
+            },
+            {
+                "function": "system_describe",
+                "help"    : "returns a service description object, like the one specified by the JSON-RPC 1.1 spec (even though we use YAML instead of JSON)",
+                "text"    : "system.describe",
+                "logopt"  : 2,
+            },
+        );
 
         #! @cond nodoc
         private {
@@ -179,8 +183,7 @@ public namespace YamlRpcHandler {
             clog = v_log;
 
             # add internal methods
-            foreach hash im in (YamlRpcHandler::InternalMethods)
-                addMethodInternal(im + ( "internal" : True ));
+            map addMethodInternal($1 + {"internal": True}), YamlRpcHandler::InternalMethods;
 
             foreach hash m in (v_methods) {
                 if (!exists m.name)
@@ -206,13 +209,14 @@ public namespace YamlRpcHandler {
             if (!exists func)
                 throw "YAML-RPC-HANDLER-ADD-METHOD-ERROR", "expecting function name and text name as hash key in argument";
 
-            addMethodInternal(("name"    : name,
-                                 "function": func,
-                                 "text"    : text,
-                                 "help"    : help,
-                                 "logopt"  : logopt,
-                                 "cmark"   : cmark,
-                                ));
+            addMethodInternal({
+                "name"    : name,
+                "function": func,
+                "text"    : text,
+                "help"    : help,
+                "logopt"  : logopt,
+                "cmark"   : cmark,
+            });
         }
 
         #! turns on or off debugging; when debugging is enabled more verbose error messages are reported
@@ -249,54 +253,58 @@ public namespace YamlRpcHandler {
             if (hdr.method == "GET") {
                 string path = substr(hdr.path, index(hdr.path, "/") + 1);
 
-                if (path.empty())
-                    return (
+                if (path.empty()) {
+                    return {
                         "code": 501,
-                        "desc": "invalid HTTP GET: no path/YAML-RPC method name given",
-                    );
+                        "body": "invalid HTTP GET: no path/YAML-RPC method name given",
+                    };
+                }
 
                 yamlrpc += parse_uri_query(path);
 
                 if (exists get_prefix && index(yamlrpc.method, ".") == -1)
                     yamlrpc.method = get_prefix + yamlrpc.method;
-            }
-            else {
-                if (hdr.method != "POST")
-                    return (
+            } else {
+                if (hdr.method != "POST") {
+                    return {
                         "code": 501,
                         "body": sprintf("don't know how to handle method %n", hdr.method),
-                    );
+                    };
+                }
 
                 try {
                     yamlrpc = parse_yaml(body);
-                }
-                catch (hash<ExceptionInfo> ex) {
+                } catch (hash<ExceptionInfo> ex) {
                     string estr = sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc);
-                    return (
+                    return {
                         "code": 500,
                         "errlog": estr,
                         "body": estr,
-                    );
+                    };
                 }
             }
-            cx += (
+            cx += {
                 "method": yamlrpc.method,
                 "yamlid": yamlrpc.id,
-            );
+            };
             try {
                 auto rh = callMethod(cx, yamlrpc.params);
                 #printf("msg=%s\nyamlrpc=%N\nans=%N\n", body, yamlrpc, rh);flush();
-                return ( "code" : 200, "hdr" : ( "Content-Type" : MimeTypeYamlRpc ) ) + rh;
-            }
-            catch (hash<ExceptionInfo> ex) {
+                return {
+                    "code": 200,
+                    "hdr": {"Content-Type": MimeTypeYamlRpc},
+                } + rh;
+            } catch (hash<ExceptionInfo> ex) {
                 # show complete exception trace if system debug option is enabled
                 string str = !debug
                     ? sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc)
                     : get_exception_string(ex);
-                return ( "code"   : 200,
-                         "errlog" : str,
-                         "hdr"    : ( "Content-Type" : MimeTypeYamlRpc ),
-                         "body"   : YamlRpcHandler::makeErrorResponse(104, str, ex.arg) );
+                return {
+                    "code"   : 200,
+                    "errlog" : str,
+                    "hdr"    : ( "Content-Type" : MimeTypeYamlRpc ),
+                    "body"   : YamlRpcHandler::makeErrorResponse(104, str, ex.arg)
+                };
             }
         }
 
@@ -317,23 +325,20 @@ public namespace YamlRpcHandler {
             foreach hash m in (methods) {
                 h.(m.text).description = m.help;
                 if (exists m.params)
-                    h.(m.text).params  = m.params;
+                    h.(m.text).params = m.params;
             }
             return h;
         }
 
         private hash system_describe() {
             string address = "http://localhost/YAML";
-            list procs = ();
+            # use parens instead of burly brackets to get a list off hashes
+            softlist<hash> procs = map (
+                "name": $1.text,
+                "summary": $1.help,
+            ), methods, $1.text != "service.describe";
 
-            foreach hash m in (methods)
-                if (m.text != "service.describe")
-            		procs += (
-                        "name": m.text,
-                        "summary": m.help,
-                    );
-
-            return (
+            return {
                 "sdversion": "1.0",
                 "name": "Qore YAML-RPC Handler",
                 "id": address,
@@ -341,14 +346,11 @@ public namespace YamlRpcHandler {
                 "summary": "provides a YAML-RPC handler to the HTTP server",
                 #"address": address,
                 "procs": procs,
-            );
+            };
         }
 
-        private list listMethods() {
-            list l = ();
-            foreach hash m in (methods)
-                l += m.text;
-            return l;
+        private softlist<string> listMethods() {
+            return map $1.text, methods;
         }
 
         private log(hash cx, string str) {
@@ -386,21 +388,25 @@ public namespace YamlRpcHandler {
                 auto rv;
                 try {
                     rv = found.internal ? call_object_method_args(self, found.function, params) : call_function_args(found.function, params);
-                }
-                catch (hash<ExceptionInfo> ex) {
+                } catch (hash<ExceptionInfo> ex) {
                     # issue #2573: provide a more user-friendly error when the argument cannot be matched to the closure/call ref
-                    if (ex.err == "RUNTIME-TYPE-ERROR" && (ex.callstack[1].file =~ /YamlRpcHandler.qm$/ && (ex.callstack[1].function == "call_function_args" || ex.callstack[1].function == "call_object_method_args")))
-                        throw "RPC-ARG-ERROR", sprintf("a call to YAML-RPC method %y is missing one or more required arguments; internal call error: %s: %s", method, ex.err, ex.desc);
+                    if (ex.err == "RUNTIME-TYPE-ERROR"
+                        && (ex.callstack[0].file =~ /YamlRpcHandler.qm$/
+                        && (ex.callstack[0].function == "call_function_args"
+                            || ex.callstack[0].function == "call_object_method_args")))
+                        throw "RPC-ARG-ERROR", sprintf("a call to YAML-RPC method %y is missing one or more required "
+                            "arguments; internal call error: %s: %s", method, ex.err, ex.desc);
                     rethrow;
                 }
                 hash h.body = YamlRpcHandler::makeResponse(rv);
                 return h;
-            }
-            else {
+            } else {
                 string err = sprintf("YAML-RPC-SERVER-UNKNOWN-METHOD: unknown method %n", method);
-                return ("code"   : 200,
-                        "hdr"    : ("Content-Type" : MimeTypeYamlRpc),
-                        "body"   : YamlRpcHandler::makeErrorResponse(105, err));
+                return {
+                    "code"   : 200,
+                    "hdr"    : {"Content-Type" : MimeTypeYamlRpc},
+                    "body"   : YamlRpcHandler::makeErrorResponse(105, err),
+                };
             }
         }
         #! @endcond

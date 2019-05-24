@@ -23,15 +23,15 @@
 */
 
 # minimum qore version
-%requires qore >= 0.8.13
+%requires qore >= 0.9
 
 # requires the binary yaml module
-%requires yaml >= 0.3
+%requires yaml >= 0.7
 
 # need mime definitions
 %requires Mime >= 1.0
 
-%requires(reexport) ConnectionProvider >= 1.0
+%requires(reexport) ConnectionProvider >= 1.2
 
 # do not use $ signs in declarations
 %new-style
@@ -43,7 +43,7 @@
 %strict-args
 
 module YamlRpcClient {
-    version = "1.1.1";
+    version = "1.3";
     desc = "YamlRpcClient module";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -139,6 +139,14 @@ Content-Length: 118
     @endcode
 
     @section yamlrpcclient_relnotes YamlRpcClient Module Release History
+
+    @subsection yrc_v_1_3 YamlRpcClient v1.3
+    - new AbstractConnection infrastructure
+
+    @subsection yrc_v_1_2 YamlRpcClient v1.2
+    - the @ref YamlRpcConnection::YamlRpcConnection::getConstructorInfo() "YamlRpcConnection::getConstructorInfo()"
+      method was added to allow connections to be created dynamically, potentially in another process from a network
+      call (<a href="https://github.com/qorelanguage/qore/issues/2628">issue 2628</a>)
 
     @subsection yrc_v_1_1_1 YamlRpcClient v1.1.1
     - fixed a bug handling default options including timeouts in @ref YamlRpcClient::YamlRpcConnection "YamlRpcConnection"
@@ -303,16 +311,34 @@ public namespace YamlRpcClient {
             hash real_opts;
         }
 
-        #! creates the YamlRpcConnection object
+        #! DEPRECATED: creates the YamlRpcConnection object
         /** @param name the name of the connection
             @param desc connection description
             @param url connection URL (potentially with password info)
             @param monitor monitoring flag
             @param opts connection options
             @param urlh broken down URL hash (as returned by @ref Qore::parse_url())
+
+            @deprecated since Qore 0.9
         */
-        constructor(string name, string desc, string url, bool monitor, *hash opts, hash urlh) : HttpBasedConnection(name, desc, url, monitor, opts, urlh) {
+        deprecated
+        constructor(string name, string desc, string url, bool monitor, *hash opts, hash urlh)
+            : HttpBasedConnection(name, desc, url, {"monitor": monitor}, opts ?? {}) {
             real_opts = ("url": real_url) + self.opts;
+        }
+
+        #! creates the YamlRpcConnection object
+        /** @param name the name of the connection
+            @param description connection description
+            @param url connection URL (potentially with password info)
+            @param attributes various attributes. See below
+            @param options connection options
+
+            See @ref AbstractConnection::constructor() for \c attributes and \c options reference.
+         */
+        constructor(string name, string description, string url, hash attributes = {}, hash options = {})
+            : HttpBasedConnection(name, description, url, attributes, options) {
+            real_opts = ("url": real_url) + opts;
         }
 
         #! returns a @ref YamlRpcClient::YamlRpcClient object
@@ -323,6 +349,18 @@ public namespace YamlRpcClient {
         */
         private YamlRpcClient getImpl(bool connect = True, *hash rtopts) {
             return new YamlRpcClient(real_opts, !connect);
+        }
+
+        #! returns a hash that can be used to contruct the object dynamically
+        /** @since %YamlRpcClient 1.2
+        */
+        private hash<ConnectionConstructorInfo> getConstructorInfoImpl() {
+            return new hash<ConnectionConstructorInfo>((
+                "module": "yaml",
+                "class_name": "YamlRpcClient",
+                "args": real_opts,
+                "pre_processing": "args[1] = !connect;",
+            ));
         }
 
         #! gets options
@@ -349,9 +387,16 @@ public namespace YamlRpcClient {
             return "yamlrpc";
         }
 
-        #! static constructor
+        #! DEPRECATED: static constructor
+        /** @deprecated since Qore 0.9 in favor of new constructor and Qore::Reflection
+         */
+        deprecated
         static YamlRpcConnection make(string name, string desc, string url, bool monitor, *hash opts, hash urlh) {
-            return new YamlRpcConnection(name, desc, url, monitor, opts, urlh);
+            hash attributes = {
+                "monitor": monitor,
+            };
+
+            return new YamlRpcConnection(name, desc, url, attributes, opts ?? {});
         }
     }
 }
