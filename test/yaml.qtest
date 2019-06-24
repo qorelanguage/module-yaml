@@ -60,6 +60,7 @@ const YAML_OPTIONS = (
 public class Main inherits QUnit::Test {
 
     constructor() : Test("yaml test", "1.0") {
+        addTestCase("issue 3394", \issue3394());
         addTestCase("base test", \testYaml());
         addTestCase("Options test", \testOptions());
         addTestCase("Skipped test", \testIndent());
@@ -71,6 +72,10 @@ public class Main inherits QUnit::Test {
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
+    }
+
+    issue3394() {
+        assertThrows("YAML-EMITTER-ERROR", "invalid UTF-8", \make_yaml(), binary_to_string(<e1e9edf6fc>, "utf-8"));
     }
 
     testYaml() {
