@@ -4,7 +4,7 @@
 
     yaml Qore module
 
-    Copyright (C) 2010 - 2018 Qore Technologies, s.r.o.
+    Copyright (C) 2010 - 2019 Qore Technologies, s.r.o.
 
     This library is free software; you can redistribute it and/or
     modify it under the terms of the GNU Lesser General Public
@@ -38,7 +38,7 @@ static QoreStringNode* q_make_yaml(QoreValue data, int64 flags, int64 width, int
 }
 
 static QoreHashNode* q_get_yaml_info() {
-   QoreHashNode *h = new QoreHashNode;
+   QoreHashNode *h = new QoreHashNode(autoTypeInfo);
 
    h->setKeyValue("version", new QoreStringNode(yaml_get_version_string()), 0);
 

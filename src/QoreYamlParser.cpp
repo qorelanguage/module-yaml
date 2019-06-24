@@ -2,7 +2,7 @@
 /*
     yaml Qore module
 
-    Copyright (C) 2010 - 2018 Qore Technologies, s.r.o.
+    Copyright (C) 2010 - 2019 Qore Technologies, s.r.o.
 
     This library is free software; you can redistribute it and/or
     modify it under the terms of the GNU Lesser General Public
@@ -84,7 +84,7 @@ QoreValue QoreYamlParser::parseNode(bool favor_string) {
 }
 
 QoreListNode* QoreYamlParser::parseSeq() {
-    ReferenceHolder<QoreListNode> l(new QoreListNode, xsink);
+    ReferenceHolder<QoreListNode> l(new QoreListNode(autoTypeInfo), xsink);
 
     while (true) {
         if (getEvent())
@@ -103,7 +103,7 @@ QoreListNode* QoreYamlParser::parseSeq() {
 }
 
 QoreHashNode* QoreYamlParser::parseMap() {
-    ReferenceHolder<QoreHashNode> h(new QoreHashNode, xsink);
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
 
     while (true) {
         if (getEvent())
