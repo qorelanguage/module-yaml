@@ -234,19 +234,25 @@ public namespace DataStreamUtil {
         "bzip2": True,
         "deflate": True,
         "identity": True,
-        );
+    );
     #@}
 
     public const DataStreamDeserializeYaml = (
         "code": "yaml",
         "in": \parse_yaml(),
-        );
+    );
 
 %ifndef NoXml
-    const DataStreamDeserializeXmlRpc = (
+    const DataStreamDeserializeXml = (
         "code": "xml",
-        "in": \parse_xmlrpc_value(),
-        );
+        "in": hash<auto> sub (string xml) {
+            try {
+                return parse_xmlrpc_value(xml);
+            } catch () {
+                return parse_xml(xml);
+            }
+        },
+    );
 %endif
 
     public const DataStreamDeserializationSupport = (
@@ -259,10 +265,10 @@ public namespace DataStreamUtil {
         ),
 %endif
 %ifndef NoXml
-        MimeTypeXml: DataStreamDeserializeXmlRpc,
-        MimeTypeXmlApp: DataStreamDeserializeXmlRpc,
+        MimeTypeXml: DataStreamDeserializeXml,
+        MimeTypeXmlApp: DataStreamDeserializeXml,
 %endif
-        );
+    );
 
     #! returns a @ref call_reference "call reference" (or @ref nothing) based on an optional \c "Content-Encoding" header value for decoding HTTP encoded data
     /** @par Example:
