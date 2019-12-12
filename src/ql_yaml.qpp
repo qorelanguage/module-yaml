@@ -24,32 +24,32 @@
 #include "yaml-module.h"
 
 static QoreStringNode* q_make_yaml(QoreValue data, int64 flags, int64 width, int64 indent, ExceptionSink* xsink) {
-   QoreYamlStringWriteHandler str;
-   {
-      QoreYamlEmitter emitter(str, flags, width, indent, xsink);
-      if (*xsink)
-	 return 0;
+    QoreYamlStringWriteHandler str;
+    {
+        QoreYamlEmitter emitter(str, flags, width, indent, xsink);
+        if (*xsink)
+            return nullptr;
 
-      if (emitter.emit(data))
-	 return 0;
-   }
+        if (emitter.emit(data))
+            return nullptr;
+    }
 
-   return str.take();
+    return str.take();
 }
 
 static QoreHashNode* q_get_yaml_info() {
-   QoreHashNode *h = new QoreHashNode(autoTypeInfo);
+    QoreHashNode *h = new QoreHashNode(autoTypeInfo);
 
-   h->setKeyValue("version", new QoreStringNode(yaml_get_version_string()), 0);
+    h->setKeyValue("version", new QoreStringNode(yaml_get_version_string()), 0);
 
-   int major, minor, patch;
-   yaml_get_version(&major, &minor, &patch);
+    int major, minor, patch;
+    yaml_get_version(&major, &minor, &patch);
 
-   h->setKeyValue("major", major, 0);
-   h->setKeyValue("minor", minor, 0);
-   h->setKeyValue("patch", patch, 0);
+    h->setKeyValue("major", major, 0);
+    h->setKeyValue("minor", minor, 0);
+    h->setKeyValue("patch", patch, 0);
 
-   return h;
+    return h;
 }
 
 /** @defgroup yaml_emitter_option_constants YAML Emitter Option Constants
@@ -113,7 +113,7 @@ string str = make_yaml(data, YAML::Canonical);
     @since yaml 0.5 as a replacement for deprecated camel-case makeYAML()
  */
 string make_yaml(auto data, int flags = {Qore::YAML::None}0, softint width = -1, softint indent = 2) [flags=RET_VALUE_ONLY] {
-   return q_make_yaml(data, flags, width, indent, xsink);
+    return q_make_yaml(data, flags, width, indent, xsink);
 }
 
 //! Creates a YAML string from Qore data
@@ -131,7 +131,7 @@ string make_yaml(auto data, int flags = {Qore::YAML::None}0, softint width = -1,
     @deprecated use make_yaml(); camel-case function names were deprecated in yaml 0.5
  */
 string makeYAML(auto data, int flags = {Qore::YAML::None}0, softint width = -1, softint indent = 2) [flags=RET_VALUE_ONLY,DEPRECATED] {
-   return q_make_yaml(data, flags, width, indent, xsink);
+    return q_make_yaml(data, flags, width, indent, xsink);
 }
 
 //! Parses a YAML string and returns the corresponding Qore value or data structure
@@ -153,8 +153,8 @@ auto data = parse_yaml(yaml_string);
     @see make_yaml()
  */
 auto parse_yaml(string yaml) [flags=RET_VALUE_ONLY] {
-   QoreYamlParser parser(*yaml, xsink);
-   return parser.parse();
+    QoreYamlParser parser(*yaml, xsink);
+    return parser.parse();
 }
 
 //! Parses a YAML string and returns the corresponding Qore value or data structure
@@ -169,8 +169,8 @@ auto parse_yaml(string yaml) [flags=RET_VALUE_ONLY] {
     @deprecated use parse_yaml(); camel-case function names were deprecated in yaml 0.5
  */
 auto parseYAML(string yaml) [flags=RET_VALUE_ONLY,DEPRECATED] {
-   QoreYamlParser parser(*yaml, xsink);
-   return parser.parse();
+    QoreYamlParser parser(*yaml, xsink);
+    return parser.parse();
 }
 
 //! Returns version information about libyaml being used by the yaml module
@@ -188,7 +188,7 @@ hash hash = get_yaml_info();
     @since yaml 0.5 as a replacement for deprecated camel-case getYAMLInfo()
 */
 hash get_yaml_info() [flags=CONSTANT] {
-   return q_get_yaml_info();
+    return q_get_yaml_info();
 }
 
 //! Returns version information about libyaml being used by the yaml module
@@ -201,6 +201,6 @@ hash get_yaml_info() [flags=CONSTANT] {
     @deprecated use get_yaml_info(); camel-case function names were deprecated in yaml 0.5
 */
 hash getYAMLInfo() [flags=CONSTANT,DEPRECATED] {
-   return q_get_yaml_info();
+    return q_get_yaml_info();
 }
 //@}
