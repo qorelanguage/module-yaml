@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright 2003 - 2018 Qore Technologies, s.r.o.
+    Copyright 2003 - 2019 Qore Technologies, s.r.o.
 
     This library is free software; you can redistribute it and/or
     modify it under the terms of the GNU Lesser General Public
@@ -102,16 +102,16 @@ public:
 class QoreYamlEmitter : public QoreYamlBase {
 protected:
     yaml_emitter_t emitter;
-    QoreYamlWriteHandler &wh;
+    QoreYamlWriteHandler& wh;
 
     bool block,
         implicit_start_doc,
         implicit_end_doc,
         emit_sqlnull;
 
-    yaml_version_directive_t *yaml_ver;
+    yaml_version_directive_t* yaml_ver;
 
-    DLLLOCAL int err(const char *fmt, ...) {
+    DLLLOCAL int err(const char* fmt, ...) {
         QoreStringNode *desc = new QoreStringNode;
         while (true) {
             va_list args;
@@ -131,7 +131,7 @@ protected:
         return -1;
     }
 
-    DLLLOCAL int emit(const char *event_str, const char *tag = 0) {
+    DLLLOCAL int emit(const char* event_str, const char* tag = nullptr) {
         if (!yaml_emitter_emit(&emitter, &event)) {
             if (tag)
                 return err("error emitting yaml %s %s event", event_str, tag);
@@ -156,7 +156,7 @@ protected:
     }
 
 public:
-    DLLLOCAL QoreYamlEmitter(QoreYamlWriteHandler &n_wh, int flags, int width, int indent, ExceptionSink *n_xsink);
+    DLLLOCAL QoreYamlEmitter(QoreYamlWriteHandler& n_wh, int flags, int width, int indent, ExceptionSink* n_xsink);
 
     DLLLOCAL ~QoreYamlEmitter() {
         if (valid) {
@@ -295,8 +295,11 @@ public:
         QoreString tmp;
         if (((double)((int64)f)) == f)
             tmp.sprintf("%g.0", f);
-        else
+        else {
             tmp.sprintf("%.25g", f);
+            // apply noise reduction algorithm
+            qore_apply_rounding_heuristic(tmp, 6, 8);
+        }
 
         if (tmp == "inf")
             tmp.set("@inf@");
