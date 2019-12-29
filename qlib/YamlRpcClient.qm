@@ -23,7 +23,7 @@
 */
 
 # minimum qore version
-%requires qore >= 0.9
+%requires qore >= 0.9.4
 
 # requires the binary yaml module
 %requires yaml >= 0.7
@@ -43,7 +43,7 @@
 %strict-args
 
 module YamlRpcClient {
-    version = "1.3";
+    version = "1.4";
     desc = "YamlRpcClient module";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -140,6 +140,11 @@ Content-Length: 118
 
     @section yamlrpcclient_relnotes YamlRpcClient Module Release History
 
+    @subsection yrc_v_1_4 YamlRpcClient v1.4
+    - removed the obsolete \c YamlRpcConnection::getConstructorInfo() method as connection serialization is a
+      much more elegant and maintainable solution
+      (<a href="https://github.com/qorelanguage/qore/issues/3696">issue 3696</a>)
+
     @subsection yrc_v_1_3 YamlRpcClient v1.3
     - new AbstractConnection infrastructure
 
@@ -228,7 +233,7 @@ public namespace YamlRpcClient {
             flags |= opts.flags;
 
             # set path
-            any v_path = parse_url(getURL()).path;
+            *string v_path = parse_url(getURL()).path;
             if (exists v_path)
                 path = v_path;
             else
@@ -251,7 +256,7 @@ public namespace YamlRpcClient {
             @param args the argument(s) to the call
             @return the value returned from the server; if an error response is returned, an exception is raised
         */
-        any callArgs(string method, any args) {
+        auto callArgs(string method, auto args) {
             # create outgoing message in YamlRpc Call format
             string msg = YamlRpcClient::makeRequest(method, args, flags);
             # send the message to the server and get the response as an YAML string
@@ -266,7 +271,7 @@ public namespace YamlRpcClient {
             @param args the argument(s) to the call
             @return the value returned from the server; if an error response is returned, an exception is raised
         */
-        any callArgsWithInfo(reference info, string method, any args) {
+        auto callArgsWithInfo(reference<auto> info, string method, auto args) {
             # create outgoing message in YamlRpc Call format
             string msg = YamlRpcClient::makeRequest(method, args, flags);
             trim msg;
@@ -286,13 +291,13 @@ public namespace YamlRpcClient {
         /** @param method the remote method to call
             @return the value returned from the server; if no error occurred, then a hash is returned with a \c result key (see @ref YAMLRPCResult), otherwise a hash is returned with an \c error key containing the error information (see @ref YAMLRPCError)
         */
-        any call(string method) {
+        auto call(string method) {
             return callArgs(method, argv);
         }
 
         #! makes a YAML-RPC request string
-        static string makeRequest(string method, any arg, int flags = YAML::None) {
-            return make_yaml(("method":method,"params":arg), flags);
+        static string makeRequest(string method, auto arg, int flags = YAML::None) {
+            return make_yaml({"method": method, "params": arg}, flags);
         }
     }
 
@@ -308,7 +313,7 @@ public namespace YamlRpcClient {
     */
     public class YamlRpcConnection inherits ConnectionProvider::HttpBasedConnection {
         public {
-            hash real_opts;
+            hash<auto> real_opts;
         }
 
         #! DEPRECATED: creates the YamlRpcConnection object
@@ -336,9 +341,9 @@ public namespace YamlRpcClient {
 
             See @ref AbstractConnection::constructor() for \c attributes and \c options reference.
          */
-        constructor(string name, string description, string url, hash attributes = {}, hash options = {})
+        constructor(string name, string description, string url, hash<auto> attributes = {}, hash<auto> options = {})
             : HttpBasedConnection(name, description, url, attributes, options) {
-            real_opts = ("url": real_url) + opts;
+            real_opts = {"url": real_url} + opts;
         }
 
         #! returns a @ref YamlRpcClient::YamlRpcClient object
@@ -347,20 +352,8 @@ public namespace YamlRpcClient {
 
             @return a @ref YamlRpcClient::YamlRpcClient object
         */
-        private YamlRpcClient getImpl(bool connect = True, *hash rtopts) {
+        private YamlRpcClient getImpl(bool connect = True, *hash<auto> rtopts) {
             return new YamlRpcClient(real_opts, !connect);
-        }
-
-        #! returns a hash that can be used to contruct the object dynamically
-        /** @since %YamlRpcClient 1.2
-        */
-        private hash<ConnectionConstructorInfo> getConstructorInfoImpl() {
-            return new hash<ConnectionConstructorInfo>((
-                "module": "yaml",
-                "class_name": "YamlRpcClient",
-                "args": real_opts,
-                "pre_processing": "args[1] = !connect;",
-            ));
         }
 
         #! gets options
@@ -373,12 +366,12 @@ public namespace YamlRpcClient {
 
             @see @ref YamlRpcClient::YamlRpcClient::constructor() "YamlRpcClient::constructor()" for more information on the above options
         */
-        hash getOptions() {
+        hash<auto> getOptions() {
             return HttpConnection::Options;
         }
 
         #! returns default options
-        *hash getDefaultOptions() {
+        *hash<auto> getDefaultOptions() {
             return HttpConnection::DefaultOptions;
         }
 

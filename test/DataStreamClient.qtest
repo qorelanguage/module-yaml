@@ -44,7 +44,7 @@ class DataStreamClientTest inherits QUnit::Test {
 
         m_http = new HttpServer(\log(), \log());
         m_http.setHandler("/api", "/api", MimeTypeText, new ErrorHandler(MimeTypeText));
-        port = m_http.addListener(0).port;
+        port = m_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -58,12 +58,7 @@ class DataStreamClientTest inherits QUnit::Test {
         assertEq(True, client instanceof DataStreamClient);
 
         hash<auto> info;
-        try {
-            # issue #3237: must throw an exception due to the 404 Not Found response
-            client.del("/api", NOTHING, \info);
-            assertTrue(False);
-        } catch (hash<ExceptionInfo> ex) {
-        }
+        assertThrows("DESERIALIZATION-ERROR", \client.del(), ("/api", "NOTHING", \info));
         assertEq(404, info."response-code");
 
         client.get("/api", NOTHING, \info);

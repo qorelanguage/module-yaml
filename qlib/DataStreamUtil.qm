@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # @file DataStreamUtil.qm Qore user module implementing support for the DataStream protocol: YAML-encoded HTTP chunked transfers where each chunk is a unique data entity
 
-/*  DataStreamUtil.qm Copyright (C) 2014 - 2017 Qore Technologies, s.r.o.
+/*  DataStreamUtil.qm Copyright (C) 2014 - 2019 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -355,8 +355,8 @@ httpclient.sendWithSendCallback(ds_get_send(scb, enc_func), method, path, hdr, t
         @note if using content encoding; the appropriate \c "DataStream-Content-Encoding" header will be added by @ref ds_set_chunked_headers() if the \a content_encoding argument is used
     */
     public code sub ds_get_send(code scb, *code enc_func) {
-        return any sub () {
-            any data;
+        return auto sub () {
+            auto data;
             try {
                 data = scb();
 
@@ -369,15 +369,14 @@ httpclient.sendWithSendCallback(ds_get_send(scb, enc_func), method, path, hdr, t
 
                 #printf("DBG ds_get_send() returning: %y\n", data);
                 return data;
-            }
-            catch (hash ex) {
+            } catch (hash<ExceptionInfo> ex) {
                 #printf("DBG ds_get_send() closure: %s: %s\n", ex.err, ex.desc);
                 string str = sprintf("%s: %s", ex.err, ex.desc);
                 # make sure there are no newlines in the string
                 str =~ s/[\r\n]/ /g;
-                return (
+                return {
                     DataStreamError: str,
-                    );
+                };
             }
         };
     }
@@ -418,7 +417,7 @@ httpclient.sendWithRecvCallback(ds_get_recv(rcb), body, method, path, hdr, timeo
         # content type received
         *string ct;
 
-        return sub (hash h) {
+        return sub (hash<auto> h) {
             #printf("DBG ds_get_recv() h: %y\n", h);
 
             # decode data received
@@ -496,7 +495,7 @@ httpclient.sendWithRecvCallback(ds_get_recv(rcb), body, method, path, hdr, timeo
                         default:
                             throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize request body; body type is %y", h.data.type());
                     }
-                    *hash ddc = DataStreamDeserializationSupport{ct};
+                    *hash<auto> ddc = DataStreamDeserializationSupport{ct};
                     if (!ddc) {
                         if (bcb && ct)
                             bcb(h.data, ct);
@@ -549,7 +548,7 @@ ds_set_chunked_headers(\hdr, "bzip");
         @param content_encoding an optional string giving the \c "DataStream-Content-Encoding" header to set (must be a recognized content encoding as recognized by @ref ds_get_content_encode())
         @param req set to @ref Qore::True "True" if the headers are required for a request
     */
-    public nothing sub ds_set_chunked_headers(reference<hash> hdr, *string content_encoding, *softbool req) {
+    public nothing sub ds_set_chunked_headers(reference<hash<auto>> hdr, *string content_encoding, *softbool req) {
         if (!hdr."Content-Type")
             hdr."Content-Type" = MimeTypeOctetStream;
 
@@ -564,10 +563,10 @@ ds_set_chunked_headers(\hdr, "bzip");
         if (content_encoding)
             hdr{DataStreamContentEncoding} = content_encoding;
 
-        hdr += (
+        hdr += {
             "Trailer": DataStreamError,
             "Transfer-Encoding": "chunked",
-            );
+        };
     }
 
     #! sets up HTTP headers for DataStream non-chunked data transfers
@@ -585,7 +584,7 @@ ds_set_non_chunked_headers(\hdr, "bzip");
         @param content_encoding an optional string giving the \c "Content-Encoding" header to set (must be a recognized content encoding as recognized by @ref ds_get_content_encode())
         @param req set to @ref Qore::True "True" if the headers are required for a request
     */
-    public nothing sub ds_set_non_chunked_headers(reference<hash> hdr, *string content_encoding, *softbool req) {
+    public nothing sub ds_set_non_chunked_headers(reference<hash<auto>> hdr, *string content_encoding, *softbool req) {
         if (!hdr."Content-Type")
             hdr."Content-Type" = MimeTypeYaml + ";charset=utf8";
         else if (hdr."Content-Type" !~ /; ?charset=utf-?8/i)
@@ -620,7 +619,7 @@ string dae = ds_get_ds_accept_enc_header(hdr."Accept-Encoding");
 # private namespace for non-exported definitions
 namespace DataStreamUtilPrivate {
     # private function
-    sub ds_do_request_headers(reference<hash> hdr) {
+    sub ds_do_request_headers(reference<hash<auto>> hdr) {
         if (!hdr.Accept)
             hdr.Accept = MimeTypeYaml + "," + MimeTypeOctetStream;
 

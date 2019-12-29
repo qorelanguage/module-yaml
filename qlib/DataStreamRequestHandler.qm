@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # @file DataStreamRequestHandler.qm Qore user module implementing client support for the DataStream protocol: YAML-encoded HTTP chunked transfers where each chunk is a unique data entity
 
-/*  DataStreamRequestHandler.qm Copyright (C) 2014 - 2017 Qore Technologies, s.r.o.
+/*  DataStreamRequestHandler.qm Copyright (C) 2014 - 2019 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -22,8 +22,8 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-# this module requires Qore 0.8.10 or better
-%requires qore >= 0.8.10
+# minimum Qore version
+%requires qore >= 0.9.4
 
 # require type definitions everywhere
 %require-types
@@ -89,76 +89,76 @@ public namespace DataStreamRequestHandler {
 	    #! the send callback as returned by the @ref datastreamutilintro "DataStreamUtil" module
 	    code scb;
 
-            #! flag for when all data has been received
-            bool recv_done = False;
+        #! flag for when all data has been received
+        bool recv_done = False;
 
-            #! flag for when all data has been sent
-            bool send_done = False;
+        #! flag for when all data has been sent
+        bool send_done = False;
 
-            #! HTTP status code for error response sent
-            int err;
+        #! HTTP status code for error response sent
+        int err;
 
-            #! send error string received
-            *string send_error;
+        #! send error string received
+        *string send_error;
 	}
 
 	#! creates the chunked request handler according to the arguments
-	constructor(hash cx, *hash ah) : AbstractRestStreamRequestHandler(cx, ah) {
+	constructor(hash<auto> cx, *hash<auto> ah) : AbstractRestStreamRequestHandler(cx, ah) {
 	    rcb = ds_get_recv(\recvData(), \recvDataDone());
 	    scb = ds_get_send(\sendData(), ds_get_content_encode(cx.encoding));
 
 	    # setup data stream with header
-	    call_function(rcb, ("hdr": cx.hdr, "obj": cx.socketobject));
+	    call_function(rcb, {"hdr": cx.hdr, "obj": cx.socketobject});
 	}
 
-        #! if an error occurred, then return a hash giving an error response, otherwise return @ref nothing
-        /** this method is meant to be called by getResponseHeaderMessageImpl()
-        */
-        *hash getErrorResponse() {
-            if (cx.hdr{DataStreamAccept.lwr()} != MimeTypeYaml)
-                return (
-                    "code": (err = 406),
-                    "body": sprintf("cannot accept DataStream request with header %s: %y; expecting %y", DataStreamAccept, cx.hdr{DataStreamAccept.lwr()}, MimeTypeYaml),
-                    "hdr": ("Content-Type": MimeTypeText),
-                    );
+    #! if an error occurred, then return a hash giving an error response, otherwise return @ref nothing
+    /** this method is meant to be called by getResponseHeaderMessageImpl()
+    */
+    *hash<auto> getErrorResponse() {
+        if (cx.hdr{DataStreamAccept.lwr()} != MimeTypeYaml)
+            return {
+                "code": (err = 406),
+                "body": sprintf("cannot accept DataStream request with header %s: %y; expecting %y", DataStreamAccept, cx.hdr{DataStreamAccept.lwr()}, MimeTypeYaml),
+                "hdr": {"Content-Type": MimeTypeText},
+            };
 
-            if (send_error)
-                return (
-                    "code": (err = 400),
-                    "body": "Sender reported a DataStream error in the request trailer",
-                    "hdr": ("Content-Type": MimeTypeText),
-                );
+        if (send_error)
+            return {
+                "code": (err = 400),
+                "body": "Sender reported a DataStream error in the request trailer",
+                "hdr": {"Content-Type": MimeTypeText},
+            };
 
-            if (ex)
-                return (
-                    "code": (err = 409),
-                    "body": make_yaml(ex),
-                    "hdr": ("Content-Type": MimeTypeYaml),
-                    "close": True,
-                );
-        }
+        if (ex)
+            return {
+                "code": (err = 409),
+                "body": make_yaml(ex),
+                "hdr": {"Content-Type": MimeTypeYaml},
+                "close": True,
+            };
+    }
 
 	#! returns the response header to the request
-        /**
-            @return a hash with the following keys:
-            - \c "code": the HTTP return code (see @ref HttpServer::HttpCodes)
-            - \c "body": the message body to return in the response; if this key is returned, then the reply is sent immediately; a chunked reply is not made, and send() and sendImpl() are not called
-            - \c "close": (optional) set this key to @ref Qore::True "True" if the connection should be unconditionally closed when the handler returns
-            - \c "hdr": (optional) set this key to a hash of extra header information to be returned with the response
+    /**
+        @return a hash with the following keys:
+        - \c "code": the HTTP return code (see @ref HttpServer::HttpCodes)
+        - \c "body": the message body to return in the response; if this key is returned, then the reply is sent immediately; a chunked reply is not made, and send() and sendImpl() are not called
+        - \c "close": (optional) set this key to @ref Qore::True "True" if the connection should be unconditionally closed when the handler returns
+        - \c "hdr": (optional) set this key to a hash of extra header information to be returned with the response
 
-            @note this method is called after the message body has been received
-        */
-	hash getResponseHeaderMessageImpl() {
-            *hash h = getErrorResponse();
-            if (h)
-                return h;
+        @note this method is called after the message body has been received
+    */
+	hash<auto> getResponseHeaderMessageImpl() {
+        *hash<auto> h = getErrorResponse();
+        if (h)
+            return h;
 
-	    hash hdr;
+	    hash<auto> hdr;
 	    ds_set_chunked_headers(\hdr, cx.encoding);
-	    return (
-		"code": 200,
-		"hdr": hdr,
-		);
+	    return {
+            "code": 200,
+            "hdr": hdr,
+        };
 	}
 
 	#! calls the receive callback as returned by the @ref datastreamutilintro "DataStreamUtil" module, which in turn calls @ref recvDataImpl() to deliver deserialized data
@@ -167,46 +167,46 @@ public namespace DataStreamRequestHandler {
 	}
 
 	#! calls the send callback as returned by the @ref datastreamutilintro "DataStreamUtil" module, which in turn calls @ref sendDataImpl() to get the data to serialize and encode and send as a response
-	any sendImpl() {
+	auto sendImpl() {
 	    return scb();
 	}
 
-        #! this method is called when all data has been received
-        private nothing recvDataDone(*string err) {
-            send_error = err;
-            recv_done = err ? False : True;
-            recvDataDoneImpl(err);
-        }
+    #! this method is called when all data has been received
+    private nothing recvDataDone(*string err) {
+        send_error = err;
+        recv_done = err ? False : True;
+        recvDataDoneImpl(err);
+    }
 
 	#! This is the concrete method called when data is received; it calls recvDataImpl() in turn
 	/** @param data the data received
 	*/
-	private nothing recvData(any data) {
-            recvDataImpl(data);
-        }
+	private nothing recvData(auto data) {
+        recvDataImpl(data);
+    }
 
 	#! This is the concrete method called when data is received; it calls recvDataImpl() in turn
 	/** @return data the data to be sent over the link
 	*/
-	private any sendData() {
-            any d = sendDataImpl();
-            if (!exists d)
-                send_done = True;
-            return d;
-        }
+	private auto sendData() {
+        auto d = sendDataImpl();
+        if (!exists d)
+            send_done = True;
+        return d;
+    }
 
-        #! this method is called when all data has been received
-        private nothing recvDataDoneImpl(*string err) {
-        }
+    #! this method is called when all data has been received
+    private nothing recvDataDoneImpl(*string err) {
+    }
 
 	#! reimplement this method in subclasses to receive decoded and deserialized data
 	/** @param data the argument passed to this callback is the decoded and deserialized data in the message
 	*/
-	private abstract nothing recvDataImpl(any data);
+	private abstract nothing recvDataImpl(auto data);
 
 	#! reimplement this method in subclasses to support streamed data transfers; when this method returns no value, it signifies the end of the streamed data transfer
 	/** @return the data returned by this callback will be serialized to YAML and send via the @ref datastreamprotocol "DataStream protocol" to the remote HTTP REST server in HTTP chunked format; when all data has been send then this callback should return @ref nothing, which will close the chunked message and terminate the request
 	*/
-	private abstract any sendDataImpl();
+	private abstract auto sendDataImpl();
     }
 }
