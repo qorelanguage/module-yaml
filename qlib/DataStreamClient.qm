@@ -718,13 +718,15 @@ rest.setContentEncoding("gzip");
                         decodeError(rmd.arg, \info);
                     throw rmd.err, rmd.desc, rmd.arg;
                 }
-                throw "DATASTREAM-CLIENT-RECEIVE-ERROR", sprintf("HTTP status code %d received: message: %y", rhdr.status_code, rhdr.status_message), rhdr + ("body": rmd);
+                throw "DATASTREAM-CLIENT-RECEIVE-ERROR", sprintf("HTTP status code %d received: message: %y",
+                    rhdr.status_code, rhdr.status_message), rhdr + ("body": rmd);
             }
 
             if (send_aborted)
-                throw "SEND-ABORTED", sprintf("receiver returned status code %d while sending chunked data; send was aborted", rhdr.status_code), ("hdr": rhdr, "data": rmd);
+                throw "SEND-ABORTED", sprintf("receiver returned status code %d while sending chunked data; send was "
+                    "aborted", rhdr.status_code), ("hdr": rhdr, "data": rmd);
 
-            return rhdr + ("body": rmd);
-        }
+            return rhdr + {"body": rmd};
+         }
     }
 }
