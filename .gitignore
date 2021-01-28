@@ -19,6 +19,7 @@ stamp-h1
 *~
 *.lo
 *.la
+/build
 autom4te.cache/
 m4/
 src/.deps/
