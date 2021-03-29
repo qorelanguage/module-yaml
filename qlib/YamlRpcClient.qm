@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file YamlRpcClient.qm @brief provides the definition for the YamlRpcClient class
 
-/*  YamlRpcClient.qm Copyright 2012 - 2020 Qore Technologies, s.r.o.
+/*  YamlRpcClient.qm Copyright 2012 - 2021 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -60,7 +60,8 @@ module YamlRpcClient {
 
     @section yamlrpcclientintro YamlRpcClient Module Introduction
 
-    This module implements client-side support for a proprietary RPC-based protocol using <a href="http://yaml.org">YAML</a> for serialization/deserialization of message data.
+    This module implements client-side support for a proprietary RPC-based protocol using
+    <a href="http://yaml.org">YAML</a> for serialization/deserialization of message data.
 
     The following classes are provided by this module:
     - @ref YamlRpcClient::YamlRpcClient "YamlRpcClient"
@@ -68,26 +69,38 @@ module YamlRpcClient {
 
     @section YAMLRPC YAML-RPC Protocol Implementation
 
-    YAML-RPC is an HTTP-based RPC protocol; it is not a standard protocol, however it is based on <a href="http://json-rpc.org/wd/JSON-RPC-1-1-WD-20060807.html">JSON-RPC 1.1</a> and similar in approach to <a href="http://xmlrpc.scripting.com/">XML-RPC</a>.
+    YAML-RPC is an HTTP-based RPC protocol; it is not a standard protocol, however it is based on
+    <a href="http://json-rpc.org/wd/JSON-RPC-1-1-WD-20060807.html">JSON-RPC 1.1</a> and similar in approach to
+    <a href="http://xmlrpc.scripting.com/">XML-RPC</a>.
 
     YAML-RPC has some technical advantages over JSON-RPC and XML-RPC when developing in Qore:
     - it is relatively fast
     - it supports the best data serialization for Qore data of all RPC protocols supported by Qore at the moment
     - it is concise while still being very easy to read.
 
-    The major drawback is that it is a proprietary protocol, which is why Qore will continue to support XML-RPC and JSON-RPC alongside YAML-RPC.
+    The major drawback is that it is a proprietary protocol, which is why Qore will continue to support XML-RPC and
+    JSON-RPC alongside YAML-RPC.
 
-    The information below provides technical information about how this proprietary YAML-RPC protocol is implemented; details which are not normally visible when using the @ref YamlRpcClient::YamlRpcClient "YamlRpcClient" class.
+    The information below provides technical information about how this proprietary YAML-RPC protocol is implemented;
+    details which are not normally visible when using the @ref YamlRpcClient::YamlRpcClient "YamlRpcClient" class.
 
-    Request messages are sent as a YAML-encoded request string as the message body of an HTTP POST message.  The \c "Content-Type" header should be set to \c MimeTypeYamlRpc (from Mime.qm), otherwise there are no special restrictions on the message headers.
+    Request messages are sent as a YAML-encoded request string as the message body of an HTTP POST message.  The
+    \c "Content-Type" header should be set to \c MimeTypeYamlRpc (from Mime.qm), otherwise there are no special
+    restrictions on the message headers.
 
     Request and response message bodies must always be encoded with UTF-8 encoding.
 
     YAML-RPC request strings are constructed as a simple YAML map with the following keys:
     - \c method: the string method name to call
-    - \c params: any value giving the arguments for the method; if the method takes more than one argument, then the \c "params" key will hold a list of the arguments.  The @ref YamlRpcClient::YamlRpcClient "YamlRpcClient" class will always package a single argument in a list.
+    - \c params: any value giving the arguments for the method; if the method takes more than one argument, then the
+      \c "params" key will hold a list of the arguments.  The @ref YamlRpcClient::YamlRpcClient "YamlRpcClient" class
+      will always package a single argument in a list.
 
-    Note that this YAML-RPC implementation uses the Qore YAML module to encode and decode YAML strings; this ensures maximum data fidelity when serializaing data; note that the Qore yaml module uses the proprietary \c !duration tag for durations, otherwise all other tags are standard YAML tags.  For details on how Qore data is serialized and deserialized by the yaml module, please see the <a href="../../yaml/html/index.html">yaml module documentation</a>.
+    Note that this YAML-RPC implementation uses the Qore YAML module to encode and decode YAML strings; this ensures
+    maximum data fidelity when serializaing data; note that the Qore yaml module uses the proprietary \c !duration tag
+    for durations, otherwise all other tags are standard YAML tags.  For details on how Qore data is serialized and
+    deserialized by the yaml module, please see the
+    <a href="../../yaml/html/index.html">yaml module documentation</a>.
 
     The following is an example of a simple request message with headers:
     @code
