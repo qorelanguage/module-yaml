@@ -4,21 +4,28 @@
 
     @section yamlintro Introduction
 
-    The yaml module provides <a href="http://www.yaml.org">YAML</a> functionality to Qore, allowing qore programs to read and write information in %YAML syntax.
+    The yaml module provides <a href="http://www.yaml.org">YAML</a> functionality to Qore, allowing qore programs to
+    read and write information in %YAML syntax.
 
-This module is released under a choice of two licenses:
+    This module is released under a choice of two licenses:
     - <a href="http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html">LGPL 2.1</a>
     - MIT (see COPYING.MIT in the source distribution for more information)
     .
-    The module is tagged as such in the module's header (meaning it can be loaded unconditionally regardless of how the %Qore library was initialized).
+    The module is tagged as such in the module's header (meaning it can be loaded unconditionally regardless of how
+    the %Qore library was initialized).
 
     Like all Qore components, the yaml module is thread-safe.
 
     The underlying %YAML functionality is provided by <a href="http://pyyaml.org/wiki/LibYAML">libyaml</a>.
 
     User modules implementing the following HTTP-based protocols using YAML for data serialization are included:
-    - YAML-RPC: similar to JSON-RPC but using YAML-serialized data (<a href="../../YamlRpcClient/html/index.html">YamlRpcClient</a>, <a href="../../YamlRpcHandler/html/index.html">YamlRpcHandler</a>)
-    - DataStream: allows for data streaming with HTTP 1.1 chunked data transfers where each chunk is a unique data entity (<a href="../../DataStreamUtil/html/index.html">DataStreamUtil</a>, <a href="../../DataStreamClient/html/index.html">DataStreamClient</a>, <a href="../../DataStreamRequestHandler/html/index.html">DataStreamRequestHandler</a>)
+    - YAML-RPC: similar to JSON-RPC but using YAML-serialized data
+      (<a href="../../YamlRpcClient/html/index.html">YamlRpcClient</a>,
+      <a href="../../YamlRpcHandler/html/index.html">YamlRpcHandler</a>)
+    - DataStream: allows for data streaming with HTTP 1.1 chunked data transfers where each chunk is a unique data
+      entity (<a href="../../DataStreamUtil/html/index.html">DataStreamUtil</a>,
+      <a href="../../DataStreamClient/html/index.html">DataStreamClient</a>,
+      <a href="../../DataStreamRequestHandler/html/index.html">DataStreamRequestHandler</a>)
 
     Also included with the binary yaml module:
     - <a href="../../DataStreamUtil/html/index.html">DataStreamUtil user module</a>
@@ -73,21 +80,41 @@ auto data = parse_yaml(yaml_str);
 
     |!QoreType|!YAML Tag|!Qore Example|!YAML Example|!Notes
     |int|\c !!int|\c 300|\c 300|direct serialization
-    |float|\c !!float|\c 3.5|\c 3.5|direct serialization; infinity is serialized as <tt>\@inf\@</tt>, "not a number" as <tt>\@nan\@</tt>
-    |number|\c !number|\c 3.5|<tt>3.5n{128}</tt>|String serialization in scientific notation (for brevity) with the number appended with an \c "n"; the number is serialized so that no precision is lost.<br><br>Infinity is serialized as <tt>\@inf\@n{128}</tt>, "not a number" as <tt>\@nan\@n{128}</tt><br><br>The precision is appended to the string in curly brackets (ex: \"1.1n{128}" means the number <tt>1.1</tt> with 128 bits of precision)<br><br>This tag is a custom tag used only by Qore to serialize Qore arbitrary-precision numeric values with YAML
-    |string|\c !!str|\c "hello"|\c "hello"|YAML strings are enclosed in double-quotes, and libyaml will perform escaping as necessary to form a proper YAML string
+    |float|\c !!float|\c 3.5|\c 3.5|direct serialization; infinity is serialized as <tt>\@inf\@</tt>, "not a number" \
+        as <tt>\@nan\@</tt>
+    |number|\c !number|\c 3.5|<tt>3.5n{128}</tt>|String serialization in scientific notation (for brevity) with the \
+        number appended with an \c "n"; the number is serialized so that no precision is lost.<br><br>Infinity is \
+        serialized as <tt>\@inf\@n{128}</tt>, "not a number" as <tt>\@nan\@n{128}</tt><br><br>The precision is \
+        appended to the string in curly brackets (ex: \"1.1n{128}" means the number <tt>1.1</tt> with 128 bits of \
+        precision)<br><br>This tag is a custom tag used only by Qore to serialize Qore arbitrary-precision numeric \
+        values with YAML
+    |string|\c !!str|\c "hello"|\c "hello"|YAML strings are enclosed in double-quotes, and libyaml will perform \
+        escaping as necessary to form a proper YAML string
     |bool|\c !!bool|\c True|\c true|direct serialization to \c true and \c false
-    |date (relative)|\c !duration|\c P2M3DT10H14u|\c P2M3DT10H14u|Relative date/time values (durations) are serialized with Qore's <a href="http://en.wikipedia.org/wiki/ISO_8601#Durations">ISO-8601</a>-based format.<br><br>This tag is a custom tag used only by Qore to serialize Qore relative date/time values with YAML
-    |date (absolute)|\c !!timestamp|\c 2010-05-05T15:35:02.100|\c 2010-05-05T15:35:02.1+02:00|Absolute date/time values are serialized with YAML's <a href="http://yaml.org/type/timestamp.html">timestamp</a> format.<br><br>Note that qore date/time values without an explicit time zone are assumed to be in the local time zone.<br><br>When converting a YAML timestamp to a Qore date, because Qore supports only up to microsecond resolution in date/time values, any digits after microseconds are lost.
+    |date (relative)|\c !duration|\c P2M3DT10H14u|\c P2M3DT10H14u|Relative date/time values (durations) are \
+        serialized with Qore's \
+        <a href="http://en.wikipedia.org/wiki/ISO_8601#Durations">ISO-8601</a>-based format.<br><br>This tag is a \
+        custom tag used only by Qore to serialize Qore relative date/time values with YAML
+    |date (absolute)|\c !!timestamp|\c 2010-05-05T15:35:02.100|\c 2010-05-05T15:35:02.1+02:00|Absolute date/time \
+        values are serialized with YAML's <a href="http://yaml.org/type/timestamp.html">timestamp</a> \
+        format.<br><br>Note that qore date/time values without an explicit time zone are assumed to be in the local \
+        time zone.<br><br>When converting a YAML timestamp to a Qore date, because Qore supports only up to \
+        microsecond resolution in date/time values, any digits after microseconds are lost.
     |NOTHING|\c !!null|\c NOTHING|\c null|direct serialization
-    |NULL|\c !!null or \c !sqlnull|\c NULL|\c null or \c !sqlnull|without @ref @ref Qore::YAML::EmitSqlNull "EmitSqlNull", serialization to YAML null, just like \c NOTHING; will be deserialized as \c NOTHING, with @ref Qore::YAML::EmitSqlNull "EmitSqlNull" will be deserialized to \c NULL.
+    |NULL|\c !!null or \c !sqlnull|\c NULL|\c null or \c !sqlnull|without \
+        @ref Qore::YAML::EmitSqlNull "EmitSqlNull", serialization to YAML null, just like \c NOTHING; will be \
+        deserialized as \c NOTHING, with @ref Qore::YAML::EmitSqlNull "EmitSqlNull" will be deserialized to \c NULL.
     |list|\c !!seq|\c (1, 2, "three")|\c [1, 2, "three"]|direct serialization
-    |hash|\c !!map|\c ("key" : 1, "other" : 2.0, "data" : "three")|\c {key: 1, other: 2.0, data: "three"}|direct serialization, although qore will maintain key order as well even though this property is only defined for an ordered map
+    |hash|\c !!map|\c ("key" : 1, "other" : 2.0, "data" : "three")|\c {key: 1, other: 2.0, data: "three"}|direct \
+        serialization, although qore will maintain key order as well even though this property is only defined for \
+        an ordered map
 
     @section yamlreleasenotes Release Notes
 
     @subsection yaml07 yaml Module Version 0.7
 
+    - fixed a bug where serialization errors in YAML-RPC responses would cause a confusing response to be returned
+      (<a href="https://github.com/qorelanguage/qore/issues/4194">issue 4194</a>)
     - implemented support for serializing connection objects
       (<a href="https://github.com/qorelanguage/qore/issues/3696">issue 3696</a>)
     - fixed parsing XML in XML encoded responses
@@ -107,51 +134,70 @@ auto data = parse_yaml(yaml_str);
 
     - fixed a bug where strings with invalid encodings were being emitted as-is in exception strings
       (<a href="https://github.com/qorelanguage/qore/issues/3394">issue 3394</a>)
-    - improved the description for the \c DESERIALIZATION-ERROR exception for non-deserializable message bodies from HTTP servers with error responses (<a href="https://github.com/qorelanguage/qore/issues/1033">issue 1033</a>)
-    - added the \c YamlRpcConnection class to the <a href="../../YamlRpcClient/html/index.html">YamlRpcClient</a> module
-    - updated the <a href="../../DataStreamClient/html/index.html">DataStreamClient</a> module for complex types and new internal RestClient API changes (<a href="https://github.com/qorelanguage/qore/issues/2073">issue 2073</a>)
+    - improved the description for the \c DESERIALIZATION-ERROR exception for non-deserializable message bodies from
+      HTTP servers with error responses (<a href="https://github.com/qorelanguage/qore/issues/1033">issue 1033</a>)
+    - added the \c YamlRpcConnection class to the <a href="../../YamlRpcClient/html/index.html">YamlRpcClient</a>
+      module
+    - updated the <a href="../../DataStreamClient/html/index.html">DataStreamClient</a> module for complex types and
+      new internal RestClient API changes (<a href="https://github.com/qorelanguage/qore/issues/2073">issue 2073</a>)
     - updated the <a href="../../DataStreamUtil/html/index.html">DataStreamUtil</a> module for complex types
-    - fixed a bug deserializing single-quoted strings; also serialized \c "!number" values will always include the tag to avoid
-      potential future ambiguity (<a href="https://github.com/qorelanguage/qore/issues/2343">issue 2343</a>)
-    - improved argument error messages with RPC calls in the <a href="../../YamlRpcHandler/html/index.html">YamlRpcHandler</a> module (<a href="https://github.com/qorelanguage/qore/issues/2573">issue 2573</a>)
+    - fixed a bug deserializing single-quoted strings; also serialized \c "!number" values will always include the tag
+      to avoid potential future ambiguity (<a href="https://github.com/qorelanguage/qore/issues/2343">issue 2343</a>)
+    - improved argument error messages with RPC calls in the
+      <a href="../../YamlRpcHandler/html/index.html">YamlRpcHandler</a> module
+      (<a href="https://github.com/qorelanguage/qore/issues/2573">issue 2573</a>)
 
     @subsection yaml051 yaml Module Version 0.5.1
 
     - <a href="../../DataStreamClient/html/index.html">DataStreamClient</a> update:
-      - fixed bugs handling chunked non-DataStream messages (<a href="https://github.com/qorelanguage/qore/issues/1438">issue 1438</a>)
+      - fixed bugs handling chunked non-DataStream messages
+        (<a href="https://github.com/qorelanguage/qore/issues/1438">issue 1438</a>)
     - <a href="../../DataStreamUtil/html/index.html">DataStreamUtil</a> update:
-      - fixed bugs handling chunked non-DataStream messages (<a href="https://github.com/qorelanguage/qore/issues/1438">issue 1438</a>)
+      - fixed bugs handling chunked non-DataStream messages
+        (<a href="https://github.com/qorelanguage/qore/issues/1438">issue 1438</a>)
 
     @subsection yaml05 yaml Module Version 0.5
 
     <b>New Features and Bug Fixes</b>
-    - new user modules for DataStream protocol support: YAML-encoded HTTP chunked transfers where each chunk is a unique data entity
+    - new user modules for DataStream protocol support: YAML-encoded HTTP chunked transfers where each chunk is a
+      unique data entity
       - <a href="../../DataStreamClient/html/index.html">DataStreamClient user module</a>
       - <a href="../../DataStreamRequestHandler/html/index.html">DataStreamRequestHandler user module</a>
       - <a href="../../DataStreamUtil/html/index.html">DataStreamUtil user module</a>
-    - user modules moved to top-level qore module directory from version-specific module directory since they are valid for multiple versions of qore
-    - date/time values (yaml \c !!timestamp type) are now always returned in the current time zone locale so that time zone rules can be applied to deserialized dates; previously time zone information was always lost which could cause errors when performing date arithmetic on deserialized yaml dates
-    - fixed bugs deserializing canonically-encoded YAML strings; arbitrary-precision numeric values were deserialized with their precision values ignored and floating point +/-inf were deserialized as zero
-    - deprecated old camel-case names and implemented new function names confirming to the standard naming convention for functions
+    - user modules moved to top-level qore module directory from version-specific module directory since they are
+      valid for multiple versions of qore
+    - date/time values (yaml \c !!timestamp type) are now always returned in the current time zone locale so that
+      time zone rules can be applied to deserialized dates; previously time zone information was always lost which
+      could cause errors when performing date arithmetic on deserialized yaml dates
+    - fixed bugs deserializing canonically-encoded YAML strings; arbitrary-precision numeric values were deserialized
+      with their precision values ignored and floating point +/-inf were deserialized as zero
+    - deprecated old camel-case names and implemented new function names confirming to the standard naming convention
+      for functions
 
     @subsection yaml04 yaml Module Version 0.4
 
     <b>New Features and Bug Fixes</b>
-    - fixed a problem serializing and deserializing 0-length durations; they were serialized as \c "P" and then deserialized as a string; now they are serialized as \c "P0D" and deserialized correctly as a zero-length duration
+    - fixed a problem serializing and deserializing 0-length durations; they were serialized as \c "P" and then
+      deserialized as a string; now they are serialized as \c "P0D" and deserialized correctly as a zero-length
+      duration
     - enhanced the YamlRpcHandler module for more flexible logging
     - added the MIT license as a source license option
 
     @subsection yaml03 yaml Module Version 0.3
 
     <b>New Features and Bug Fixes</b>
-    - fixed a problem where an exception was not raised with invalid YAML input when parsing, instead NOTHING was returned
-    - fixed a problem deserializing integers; the number was converted to a C++ double (floating-point type) first, causing precision to be lost with large numbers
+    - fixed a problem where an exception was not raised with invalid YAML input when parsing, instead NOTHING was
+      returned
+    - fixed a problem deserializing integers; the number was converted to a C++ double (floating-point type) first,
+      causing precision to be lost with large numbers
     - added support for Qore's new number type when compiled with Qore 0.8.6+
     - added support for serializing special floating point numbers (nan as <tt>\@nan\@</tt>, inf as <tt>\@inf\@</tt>)
 
     @subsection yaml02 yaml Module Version 0.2
 
     <b>New Features and Bug Fixes</b>
-    - fixed a problem with deserializing untagged and not double quoted integer and floating-point 0 and 0.0; they were incorrectly deserialized as strings
-    - added additional information to the exception when a scalar value cannot be serialized (normally this happens when a string has an encoding error)
+    - fixed a problem with deserializing untagged and not double quoted integer and floating-point 0 and 0.0; they
+      were incorrectly deserialized as strings
+    - added additional information to the exception when a scalar value cannot be serialized (normally this happens
+      when a string has an encoding error)
 */
