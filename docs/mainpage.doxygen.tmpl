@@ -88,6 +88,8 @@ auto data = parse_yaml(yaml_str);
 
     @subsection yaml07 yaml Module Version 0.7
 
+    - fixed a bug deserializing implicit string values in some cases
+      (<a href="https://github.com/qorelanguage/qore/issues/4241">issue 4241</a>)
     - implemented support for serializing connection objects
       (<a href="https://github.com/qorelanguage/qore/issues/3696">issue 3696</a>)
     - fixed parsing XML in XML encoded responses

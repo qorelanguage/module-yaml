@@ -2,7 +2,7 @@
 /*
     yaml Qore module
 
-    Copyright (C) 2010 - 2019 Qore Technologies, s.r.o.
+    Copyright (C) 2010 - 2021 Qore Technologies, s.r.o.
 
     This library is free software; you can redistribute it and/or
     modify it under the terms of the GNU Lesser General Public
@@ -271,18 +271,15 @@ static QoreValue try_parse_number(const char* val, size_t len, bool no_simple_nu
             if (dp || e || pm)
                 return QoreValue();
             dp = true;
-        }
-        else if (*str == 'e' || *str == 'E') {
+        } else if ((*str == 'e' || *str == 'E') && (isdigit(*(str + 1)) || *(str + 1) == '+' || *(str + 1) == '-')) {
             if (e || pm)
                 return QoreValue();
             e = true;
-        }
-        else if (*str == '+' || *str == '-') {
+        } else if ((*str == '+' || *str == '-') && isdigit(*(str + 1))) {
             if (pm || !e)
                 return QoreValue();
             pm = true;
-        }
-        else
+        } else
             return QoreValue();
         ++str;
     }
