@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright 2003 - 2019 Qore Technologies, s.r.o.
+    Copyright 2003 - 2021 Qore Technologies, s.r.o.
 
     This library is free software; you can redistribute it and/or
     modify it under the terms of the GNU Lesser General Public
@@ -431,7 +431,8 @@ protected:
 
         if (!yaml_parser_parse(&parser, &event)) {
             valid = false;
-        xsink->raiseException(QY_PARSE_ERR, "getEvent: unexpected event '%s' when parsing YAML document", get_event_name(event.type));
+            xsink->raiseException(QY_PARSE_ERR, "getEvent: unexpected event '%s' when parsing YAML document",
+                get_event_name(event.type));
             return -1;
         }
         //printd(5, "QoreYamlParser::getEvent() got %s event (%d)\n", get_event_name(event.type), event.type);
@@ -442,7 +443,8 @@ protected:
 
     DLLLOCAL int checkEvent(yaml_event_type_t type) {
         if (event.type != type) {
-            xsink->raiseException(QY_PARSE_ERR, "expecting '%s' event; got '%s' event instead", get_event_name(type), get_event_name(event.type));
+            xsink->raiseException(QY_PARSE_ERR, "expecting '%s' event; got '%s' event instead", get_event_name(type),
+                get_event_name(event.type));
             return -1;
         }
         return 0;
@@ -455,11 +457,11 @@ protected:
         return checkEvent(type);
     }
 
-    DLLLOCAL QoreListNode *parseSeq();
-    DLLLOCAL QoreHashNode *parseMap();
+    DLLLOCAL QoreListNode* parseSeq();
+    DLLLOCAL QoreHashNode* parseMap();
     DLLLOCAL QoreValue parseScalar(bool favor_string = false);
     DLLLOCAL QoreValue parseNode(bool favor_string = false);
-    DLLLOCAL DateTimeNode *parseAbsoluteDate();
+    DLLLOCAL DateTimeNode* parseAbsoluteDate();
     DLLLOCAL bool parseBool();
 
 public:
