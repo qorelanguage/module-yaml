@@ -519,9 +519,9 @@ find_qore() {
         return
     fi
 
-    AC_MSG_CHECKING([for qore include files])
+    AC_MSG_CHECKING([for qore include files in $a])
     # try to find include files
-    if test "$a" = "/"; then
+    if test "$a" = "/" -o -z "$a" ; then
         inc=/usr/include
     else
         inc=$a/include
