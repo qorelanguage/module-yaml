@@ -57,8 +57,14 @@ if (WIN32 AND MINGW AND MSYS)
     target_compile_definitions(${module_name} PUBLIC BUILDING_DLL)
 endif (WIN32 AND MINGW AND MSYS)
 
-qore_binary_module(${module_name} "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}" ${LIBYAML_LIBRARY})
+qore_external_binary_module(${module_name} "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}" ${LIBYAML_LIBRARY})
 qore_user_modules("${QMOD}")
+
+qore_external_user_module("qlib/DataStreamUtil.qm" "")
+qore_external_user_module("qlib/DataStreamClient.qm" "DataStreamUtil")
+qore_external_user_module("qlib/DataStreamRequestHandler.qm" "DataStreamUtil")
+qore_external_user_module("qlib/YamlRpcClient.qm" "")
+qore_external_user_module("qlib/YamlRpcHandler.qm" "")
 
 qore_dist("${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}")
 
