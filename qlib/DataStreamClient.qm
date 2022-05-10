@@ -273,15 +273,21 @@ rest.recvDataStream(reccallback, "GET", "/orders/1", body);
             recvDataStream(\dsm.recvData(), \dsm.recvDataDone(), method, path, body, timeout_ms, \info, hdr);
         }
 
-        #! Sends an HTTP request to an HTTP REST server supporting the @ref datastreamprotocol "DataStream protocol" with the specified method and chunked message body as given by a send callback and returns the deserialized body and response headers received as a response
-        /** If a connection has not already been established, an internal call to HTTPClient::connect() will be made before sending the message
+        #! Sends an HTTP request to an HTTP REST server using the DataStream protocol
+        /** The message is sent using the @ref datastreamprotocol "DataStream protocol" with the specified method and
+            chunked message body as given by a send callback and returns the deserialized body and response headers
+            received as a response.
+
+            If a connection has not already been established, an internal call to HTTPClient::connect() will be made
+            before sending the message.
 
             @par Example:
             @code{.py}
-hash h = rest.sendDataStream(callback, "POST", "/path");
+hash<auto> h = rest.sendDataStream(callback, "POST", "/path");
             @endcode
 
-            @param scb The callback giving the chunked HTTP data to send; the data returned by this callback will be serialized to YAML and send via the @ref datastreamprotocol "DataStream protocol" to the remote HTTP REST server in HTTP chunked format; when all data has been send then this callback should return @ref nothing, which will close the chunked message and terminate the request
+            @param scb The callback giving the chunked HTTP data to send; the data returned by this callback will be
+            serialized to YAML and send via the @ref datastreamprotocol "DataStream protocol" to the remote HTTP REST server in HTTP chunked format; when all data has been send then this callback should return @ref nothing, which will close the chunked message and terminate the request
             @param method The name of the HTTP method (\c "GET", \c "POST", \c "HEAD", \c "OPTIONS", \c "PUT", \c "DELETE", \c "TRACE", or \c "CONNECT").
             @param path the URI path to add (will be appended to any root path given in the constructor)
             @param timeout_ms the timeout in milliseconds for the socket I/O operations; 0 means use the default timeout value
@@ -308,7 +314,8 @@ hash h = rest.sendDataStream(callback, "POST", "/path");
             - this method can also be used when the server returns chunked @ref datastreamprotocol "DataStream protocol" data; in this case the chunked response is received in its entirity and returns in the return value's \c "body" key as a list where each list element is the data value of the respective DataStream chunk
             - the value of the return value's \c "body" key will be decoded and deserialized data
         */
-        hash<auto> sendDataStream(code scb, string method, string path, timeout timeout_ms = 0, *reference<hash<auto>> info, *hash<auto> hdr) {
+        hash<auto> sendDataStream(code scb, string method, string path, timeout timeout_ms = 0,
+                *reference<hash<auto>> info, *hash<auto> hdr) {
             hdr = headers + hdr;
 
             ds_set_chunked_headers(\hdr, seh.ce, True);
@@ -316,11 +323,11 @@ hash h = rest.sendDataStream(callback, "POST", "/path");
             # prepare path
             preparePath(\path);
 
-            /* we cannot just receive standard HTTP chunked data here since any Content-Encoding will not be respected,
-             * and any DataStream content encoding can only be applied to each chunk separately.  Therefore we have
-             * to intercept the chunked messages here to build the respose data and also capture the headers
-             * returned
-             */
+            /* we cannot just receive standard HTTP chunked data here since any Content-Encoding will not be
+               respected, and any DataStream content encoding can only be applied to each chunk separately.
+               Therefore we have to intercept the chunked messages here to build the respose data and also capture the
+               headers returned
+            */
 
             # received data
             auto rmd;
@@ -381,34 +388,54 @@ hash h = rest.sendDataStream(callback, "POST", "/path");
 hash<auto> h = rest.sendDataStream(callback, "POST", "/path");
             @endcode
 
-            @param dsm the @ref DataStreamSendMessage object providing the DataStreamSendMessage::sendData() method to be used as a callback
-            @param method The name of the HTTP method (\c "GET", \c "POST", \c "HEAD", \c "OPTIONS", \c "PUT", \c "DELETE", \c "TRACE", or \c "CONNECT").
+            @param dsm the @ref DataStreamSendMessage object providing the DataStreamSendMessage::sendData() method to
+            be used as a callback
+            @param method The name of the HTTP method (\c "GET", \c "POST", \c "HEAD", \c "OPTIONS", \c "PUT",
+            \c "DELETE", \c "TRACE", or \c "CONNECT").
             @param path the URI path to add (will be appended to any root path given in the constructor)
-            @param timeout_ms the timeout in milliseconds for the socket I/O operations; 0 means use the default timeout value
-            @param info An optional reference to an lvalue that will be used as an output variable giving a hash of request headers and other information about the HTTP request
-            @param hdr any headers to be sent with the request; headers here will override default headers for the object as well
+            @param timeout_ms the timeout in milliseconds for the socket I/O operations; 0 means use the default
+            timeout value
+            @param info An optional reference to an lvalue that will be used as an output variable giving a hash of
+            request headers and other information about the HTTP request
+            @param hdr any headers to be sent with the request; headers here will override default headers for the
+            object as well
 
-            @return The headers received from the HTTP server with all key names converted to lower-case. The message body (if any) will be decoded and deserialized and assigned to the value of the \c "body" key, and the HTTP status will be assigned to the \c "status_code" key.  In the case of a chunked DataStream response, the \c "body" key will be assigned a list where each list element is the data value of the respective DataStream chunk
+            @return The headers received from the HTTP server with all key names converted to lower-case. The message
+            body (if any) will be decoded and deserialized and assigned to the value of the \c "body" key, and the
+            HTTP status will be assigned to the \c "status_code" key.  In the case of a chunked DataStream response,
+            the \c "body" key will be assigned a list where each list element is the data value of the respective
+            DataStream chunk
 
             @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed
             @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote
             @throw HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED maximum redirect count exceeded
-            @throw HTTP-CLIENT-RECEIVE-ERROR unknown content encoding received or status error communicating with HTTP server (status code < 100 or > 299); in case of a status error the \c "arg" key of the exception hash will be set to a hash equal to the normal return value of this method including a \c "status_code" key (giving the status code) and a \c "body" key (giving the message body returned by the server)
-            @throw ENCODING-CONVERSION-ERROR the given string could not be converted to the socket's character encoding
+            @throw HTTP-CLIENT-RECEIVE-ERROR unknown content encoding received or status error communicating with HTTP
+            server (status code < 100 or > 299); in case of a status error the \c "arg" key of the exception hash will
+            be set to a hash equal to the normal return value of this method including a \c "status_code" key (giving
+            the status code) and a \c "body" key (giving the message body returned by the server)
+            @throw ENCODING-CONVERSION-ERROR the given string could not be converted to the socket's character
+            encoding
             @throw SOCKET-SEND-ERROR There was an error sending the data
             @throw SOCKET-CLOSED The remote end closed the connection
             @throw SOCKET-RECV-ERROR There was an error receiving the data
-            @throw SOCKET-TIMEOUT Data transmission or reception for a single send() or recv() action exceeded the timeout period
+            @throw SOCKET-TIMEOUT Data transmission or reception for a single send() or recv() action exceeded the
+            timeout period
             @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
             @throw SOCKET-HTTP-ERROR Invalid HTTP data was received
 
             @note
-            - The \c "Transfer-Encoding: chunked" header is automatically set with this method if no \c "Transfer-Encoding" header is already present
-            - For possible exceptions when implicitly establishing a connection, see the Socket::connect() method (or Socket::connectSSL() for secure connections)
-            - this method can also be used when the server returns chunked @ref datastreamprotocol "DataStream protocol" data; in this case the chunked response is received in its entirity and returns in the return value's \c "body" key as a list where each list element is the data value of the respective DataStream chunk
+            - The \c "Transfer-Encoding: chunked" header is automatically set with this method if no
+              \c "Transfer-Encoding" header is already present
+            - For possible exceptions when implicitly establishing a connection, see the Socket::connect() method (or
+              Socket::connectSSL() for secure connections)
+            - this method can also be used when the server returns chunked
+              @ref datastreamprotocol "DataStream protocol" data; in this case the chunked response is received in its
+              entirity and returns in the return value's \c "body" key as a list where each list element is the data
+              value of the respective DataStream chunk
             - the value of the return value's \c "body" key will be decoded and deserialized data
         */
-        hash<auto> sendDataStream(DataStreamSendMessage dsm, string method, string path, timeout timeout_ms = 0, *reference<hash<auto>> info, *hash<auto> hdr) {
+        hash<auto> sendDataStream(DataStreamSendMessage dsm, string method, string path, timeout timeout_ms = 0,
+                *reference<hash<auto>> info, *hash<auto> hdr) {
             return sendDataStream(\dsm.sendData(), method, path, timeout_ms, \info, hdr);
         }
 
@@ -675,7 +702,7 @@ rest.setContentEncoding("gzip");
                 rs = code;
             };
             # get DataStream receive callback using our local data callback closure
-            code dsrecv_callback = ds_get_recv(recv_data_callback, eod_callback, body_callback);
+            code dsrecv_callback = ds_get_recv(recv_data_callback, eod_callback, body_callback, True);
             # save response header
             hash<auto> rhdr;
             # send aborted flag
