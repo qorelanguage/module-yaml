@@ -318,7 +318,8 @@ public namespace DataStreamUtil {
         - \c "bzip2": returns a call reference to @ref Qore::bzip2() "bzip2()"
         - \c "identity", @ref nothing: returns @ref nothing
 
-        @return a @ref call_reference "call reference" (or @ref nothing) based on an optional \c "Content-Encoding" header value for encoding HTTP encoded data
+        @return a @ref call_reference "call reference" (or @ref nothing) based on an optional \c "Content-Encoding"
+        header value for encoding HTTP encoded data
 
         @throw SERIALIZATION-ERROR this exception is thrown if the content encoding is not recognized
     */
@@ -334,7 +335,8 @@ public namespace DataStreamUtil {
             case NOTHING:
                 return;
         }
-        throw "SERIALIZATION-ERROR", sprintf("cannot serialize data stream request body with unknown content-encoding %y", ce);
+        throw "SERIALIZATION-ERROR", sprintf("cannot serialize data stream request body with unknown content-encoding "
+            "%y", ce);
     }
 
     #! returns a @ref call_reference "call reference" useful for sending HTTP chunked data with %Qore methods taking send callbacks; data is encoded with YAML and optionally a @ref ds_get_content_encode "content encoding" @ref call_reference "call reference" or @ref closure "closure"
@@ -534,7 +536,7 @@ httpclient.sendWithRecvCallback(ds_get_recv(recv_callback), body, method, path, 
                     if (body_callback) {
                         body_callback(h."data", ddc."code");
                     }
-                    if (!chunked && datastream) {
+                    if (datastream) {
                         h."data" = ddc.in(h."data");
                     }
                 }
