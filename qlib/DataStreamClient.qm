@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # @file DataStreamClient.qm Qore user module implementing client support for the DataStream protocol: YAML-encoded HTTP chunked transfers where each chunk is a unique data entity
 
-/*  DataStreamClient.qm Copyright (C) 2014 - 2019 Qore Technologies, s.r.o.
+/*  DataStreamClient.qm Copyright (C) 2014 - 2022 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -22,8 +22,8 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-# this module requires Qore 0.8.13 or better
-%requires qore >= 0.8.13
+# minimum Qore version
+%requires qore >= 1.7.3
 
 # require type definitions everywhere
 %require-types
@@ -200,8 +200,8 @@ DataStreamClient ds(("url": "http://localhost:8001/rest"));
 rest.recvDataStream(recvcallback, endcallback, "GET", "/orders/1", body);
             @endcode
 
-            @param rcb The receive callback for the data received; the argument passed to this callback is the decoded and deserialized data in the message
-            @param ecb When the chunked transfer has completed; this must accept a @ref string_or_nothing "*string" argument; this is called with no arguments once all data has been received if the sender does not report a send error, otherwise it's called with a single string giving the send error reported by the sending side in the \c DataStream-Error trailer record
+            @param recv_callback The receive callback for the data received; the argument passed to this callback is the decoded and deserialized data in the message
+            @param eod_callback When the chunked transfer has completed; this must accept a @ref string_or_nothing "*string" argument; this is called with no arguments once all data has been received if the sender does not report a send error, otherwise it's called with a single string giving the send error reported by the sending side in the \c DataStream-Error trailer record
             @param method the HTTP method to be used; case is ignored (if not a valid method an \c HTTP-CLIENT-METHOD-ERROR exception is raised)
             @param path the URI path to add (will be appended to any root path given in the constructor)
             @param body an optional message body to be included in the request; if a value for this parameter is passed to the method, then the body will be serialized with YAML serialization
@@ -224,7 +224,7 @@ rest.recvDataStream(recvcallback, endcallback, "GET", "/orders/1", body);
 
             @note this method can also be used if the server returns a non-chunked response; the response body will be decoded, deserialized, and passed to the receive callback as if a chunked body were received, additionally the terminating call with no arguments is also made to signal the end of the chunked data
          */
-        recvDataStream(code rcb, code ecb, string method, string path, auto body, timeout timeout_ms = 0, *reference<hash<auto>> info, *hash<auto> hdr) {
+        recvDataStream(code recv_callback, code eod_callback, string method, string path, auto body, timeout timeout_ms = 0, *reference<hash<auto>> info, *hash<auto> hdr) {
             prepareMsg(method, path, \body, \hdr);
 
             on_exit if (exists body) {
@@ -237,7 +237,7 @@ rest.recvDataStream(recvcallback, endcallback, "GET", "/orders/1", body);
             # prepare path
             preparePath(\path);
 
-            sendWithRecvCallback(ds_get_recv(rcb, ecb), body, method, path, hdr, timeout_ms, False, \info);
+            sendWithRecvCallback(ds_get_recv(recv_callback, eod_callback), body, method, path, hdr, timeout_ms, False, \info);
         }
 
         #! sends an HTTP request to an HTTP REST server supporting the @ref datastreamprotocol "DataStream protocol" and returns the decoded and deserialized response in the given callback as each HTTP chunk is received
@@ -327,7 +327,7 @@ hash h = rest.sendDataStream(callback, "POST", "/path");
             # chunked response flag (determines if rmd is a list or not)
             bool chunked;
             # define data callback to build response msg data
-            code dcb = sub (auto d) {
+            code recv_data_callback = sub (auto d) {
                 if (exists d) {
                     if (chunked) {
                         if (!rmd)
@@ -338,15 +338,15 @@ hash h = rest.sendDataStream(callback, "POST", "/path");
                         rmd = d;
                 }
             };
-            code ecb = sub () {};
+            code eod_callback = sub () {};
             # get DataStream receive callback using our local data callback closure
-            code dsrcb = ds_get_recv(dcb, ecb);
+            code dsrecv_callback = ds_get_recv(recv_data_callback, eod_callback);
             # save response header
             hash<auto> rhdr;
             # send aborted flag
             bool send_aborted;
             # our top-level receive callback to save the header and set the chunked flag
-            code rcb = sub (hash<auto> h) {
+            code recv_callback = sub (hash<auto> h) {
                 if (h.hdr) {
                     rhdr = h.hdr;
                     if (h.hdr."transfer-encoding" == "chunked")
@@ -355,17 +355,20 @@ hash h = rest.sendDataStream(callback, "POST", "/path");
                         send_aborted = True;
                 }
                 # call DataStream callback
-                dsrcb(h);
+                dsrecv_callback(h);
             };
 
-            sendWithCallbacks(ds_get_send(scb, seh.func), rcb, method, path, hdr, timeout_ms, False, \info);
+            sendWithCallbacks(ds_get_send(scb, seh.func), recv_callback, method, path, hdr, timeout_ms, False, \info);
 
             # rethrow exceptions returned from the sender
-            if (rhdr.status_code >= 300 && rmd.err && rmd.desc)
+            if (rhdr.status_code >= 300 && rmd.err && rmd.desc) {
                 throw rmd.err, rmd.desc, rmd.arg;
+            }
 
-            if (send_aborted)
-                throw "SEND-ABORTED", sprintf("receiver returned status code %d while sending chunked data; send was aborted", rhdr.status_code), ("hdr": rhdr, "data": rmd);
+            if (send_aborted) {
+                throw "SEND-ABORTED", sprintf("receiver returned status code %d while sending chunked data; send was "
+                    "aborted", rhdr.status_code), ("hdr": rhdr, "data": rmd);
+            }
 
             return rhdr + ("body": rmd);
         }
@@ -420,8 +423,8 @@ rest.sendRecvDataStream(send_callback, reccallback, "POST", "/path");
             @endcode
 
             @param scb The callback giving the chunked HTTP data to send; the data returned by this callback will be serialized to YAML and send via the @ref datastreamprotocol "DataStream protocol" to the remote HTTP REST server in HTTP chunked format; when all data has been send then this callback should return @ref nothing, which will close the chunked message and terminate the request
-            @param rcb The receive callback for the data received; the argument passed to this callback is the decoded and deserialized data in the message
-            @param ecb When the chunked transfer has completed; this must accept a @ref string_or_nothing "*string" argument; this is called with no arguments once all data has been received if the sender does not report a send error, otherwise it's called with a single string giving the send error reported by the sending side in the \c DataStream-Error trailer record
+            @param recv_callback The receive callback for the data received; the argument passed to this callback is the decoded and deserialized data in the message
+            @param eod_callback When the chunked transfer has completed; this must accept a @ref string_or_nothing "*string" argument; this is called with no arguments once all data has been received if the sender does not report a send error, otherwise it's called with a single string giving the send error reported by the sending side in the \c DataStream-Error trailer record
             @param method The name of the HTTP method (\c "GET", \c "POST", \c "HEAD", \c "OPTIONS", \c "PUT", \c "DELETE", \c "TRACE", or \c "CONNECT").
             @param path The path for the message (i.e. \c "/path/resource?method&param=value")
             @param timeout_ms the timeout in milliseconds for the socket I/O operations; 0 means use the default timeout value
@@ -446,7 +449,9 @@ rest.sendRecvDataStream(send_callback, reccallback, "POST", "/path");
 
             @note this method can also be used if the server returns a non-chunked response; the response body will be decoded, deserialized, and passed to the receive callback as if a chunked body were received, additionally the terminating call with no arguments is also made to signal the end of the chunked data
         */
-        sendRecvDataStream(code scb, code rcb, code ecb, string method, string path, timeout timeout_ms = 0, *reference<hash<auto>> info, *hash<auto> hdr) {
+        sendRecvDataStream(code scb, code recv_callback, code eod_callback, string method, string path,
+                timeout timeout_ms = 0,
+                *reference<hash<auto>> info, *hash<auto> hdr) {
             hdr = headers + hdr;
 
             ds_set_chunked_headers(\hdr, seh.ce, True);
@@ -454,7 +459,8 @@ rest.sendRecvDataStream(send_callback, reccallback, "POST", "/path");
             # prepare path
             preparePath(\path);
 
-            sendWithCallbacks(ds_get_send(scb, seh.func), ds_get_recv(rcb, ecb), method, path, hdr, timeout_ms, False, \info);
+            sendWithCallbacks(ds_get_send(scb, seh.func), ds_get_recv(recv_callback, eod_callback), method, path, hdr,
+                timeout_ms, False, \info);
         }
 
         #! Sends an HTTP request an HTTP REST server supporting the @ref datastreamprotocol "DataStream protocol" with the specified method and serialized and encoded chunked message body as given by a send callback; decoded and deserialized data received from the HTTP server are returned through a receive callback
@@ -492,8 +498,10 @@ rest.sendRecvDataStream(send_callback, reccallback, "POST", "/path");
 
             @note this method can also be used if the server returns a non-chunked response; the response body will be decoded, deserialized, and passed to the receive callback as if a chunked body were received, additionally the terminating call with no arguments is also made to signal the end of the chunked data
         */
-        sendRecvDataStream(DataStreamMessage dsm, string method, string path, timeout timeout_ms = 0, *reference<hash<auto>> info, *hash<auto> hdr) {
-            sendRecvDataStream(\dsm.sendData(), \dsm.recvData(), \dsm.recvDataDone(), method, path, timeout_ms, \info, hdr);
+        sendRecvDataStream(DataStreamMessage dsm, string method, string path, timeout timeout_ms = 0,
+                *reference<hash<auto>> info, *hash<auto> hdr) {
+            sendRecvDataStream(\dsm.sendData(), \dsm.recvData(), \dsm.recvDataDone(), method, path, timeout_ms, \info,
+                hdr);
         }
 
         #! send raw chunked data to the client and expect a YAML-formatted response
@@ -525,7 +533,8 @@ hash<auto> h = rest.sendRawStream(sender, "POST", uri_path, 20s);
             @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
             @throw SOCKET-HTTP-ERROR Invalid HTTP data was received
         */
-        hash<auto> sendRawStream(code scb, string method, *string path, timeout timeout_ms = 0, *reference<hash<auto>> info, *hash<auto> hdr) {
+        hash<auto> sendRawStream(code scb, string method, *string path, timeout timeout_ms = 0,
+                *reference<hash<auto>> info, *hash<auto> hdr) {
             if (!hdr.Accept)
                 hdr.Accept = MimeTypeYaml;
             hash<auto> h = sendWithSendCallback(scb, method, path, hdr, timeout_ms, False, \info);
@@ -542,7 +551,7 @@ hash<auto> h = rest.getRawStream(recv, "GET", uri_path, 20s);
 
             Any message body will be serialized as YAML and the \c "Content-Type" header will be set to \c "application/x-yaml".
 
-            @param rcb The receive callback for the data received; first this method is called with a hash of the message headers, and then with any message body; if a chunked HTTP message is received, then the callback is called once for each chunk; when the message has been received, then the receive callback is called with a hash representing any trailer data received in a chunked transfer or @ref nothing if the data was received in a normal message body or if there was no trailer data in a chunked transfer.  The argument to this callback is always a hash; data calls have the following keys:
+            @param recv_callback The receive callback for the data received; first this method is called with a hash of the message headers, and then with any message body; if a chunked HTTP message is received, then the callback is called once for each chunk; when the message has been received, then the receive callback is called with a hash representing any trailer data received in a chunked transfer or @ref nothing if the data was received in a normal message body or if there was no trailer data in a chunked transfer.  The argument to this callback is always a hash; data calls have the following keys:
             - \c "data": the string or binary data
             - \c "chunked": True if the data was received with chunked transfer encoding, False if not
             .
@@ -570,18 +579,19 @@ hash<auto> h = rest.getRawStream(recv, "GET", uri_path, 20s);
 
             @note For possible exceptions when implicitly establishing a connection, see the Socket::connect() method (or Socket::connectSSL() for secure connections)
         */
-        hash<auto> getRawStream(code rcb, string method, *string path, auto body, timeout timeout_ms = 0, *reference<hash<auto>> info, *hash<auto> hdr) {
+        hash<auto> getRawStream(code recv_callback, string method, *string path, auto body, timeout timeout_ms = 0,
+                *reference<hash<auto>> info, *hash<auto> hdr) {
             hash<auto> rvhdr;
-            code mrcb = sub (hash<auto> h) {
+            code mrecv_callback = sub (hash<auto> h) {
                 if (h.hdr && !rvhdr)
                     rvhdr = h.hdr;
-                rcb(h);
+                recv_callback(h);
             };
             if (exists body) {
                 body = make_yaml(body);
                 hdr."Content-Type" = MimeTypeYaml;
             }
-            sendWithRecvCallback(mrcb, body, method, path, hdr, timeout_ms, False, \info);
+            sendWithRecvCallback(mrecv_callback, body, method, path, hdr, timeout_ms, False, \info);
             return rvhdr;
         }
 
@@ -620,25 +630,26 @@ rest.setContentEncoding("gzip");
         }
 
         #! sets up headers and encodes any body for sending
-        private nothing prepareMsg(string method, string path, reference<auto> body, reference<hash<auto>> hdr, string ct = "Content-Type") {
+        private nothing prepareMsg(string method, string path, reference<auto> body, reference<hash<auto>> hdr,
+                string ct = "Content-Type") {
             RestClient::prepareMsg(method, path, \body, \hdr, ct);
             ds_set_non_chunked_headers(\hdr, seh.ce, True);
         }
 
         #! sends the outgoing HTTP message and recodes the response to data
-        hash<auto> sendAndDecodeResponse(*data body, string m, string path, hash<auto> hdr, *reference<hash<auto>> info, *softbool decode_errors) {
-            /* we cannot just receive standard HTTP chunked data here since any Content-Encoding will not be respected,
-             * and any DataStream content encoding can only be applied to each chunk separately.  Therefore we have
-             * to intercept the chunked messages here to build the respose data and also capture the headers
-             * returned
-             */
-
+        hash<auto> sendAndDecodeResponse(*data body, string m, string path, hash<auto> hdr,
+                *reference<hash<auto>> info, *softbool decode_errors) {
+            /* we cannot just receive standard HTTP chunked data here since any Content-Encoding will not be
+               respected, and any DataStream content encoding can only be applied to each chunk separately.  Therefore
+               we have to intercept the chunked messages here to build the respose data and also capture the headers
+               returned
+            */
             # received data
             auto rmd;
             # chunked response flag (determines if rmd is a list or not)
             bool chunked;
             # define data callback to build response msg data
-            code dcb = sub (auto d) {
+            code recv_data_callback = sub (auto d) {
                 if (exists d) {
                     if (chunked) {
                         if (!rmd) {
@@ -650,7 +661,7 @@ rest.setContentEncoding("gzip");
                     }
                 }
             };
-            code ecb = sub () {};
+            code eod_callback = sub () {};
             # response serialization
             string rs;
             # raw response
@@ -659,27 +670,28 @@ rest.setContentEncoding("gzip");
                 "response-body": rrs,
                 "response-serialization": rs,
             };
-            code bcb = sub (auto b, string code) {
+            code body_callback = sub (auto b, string code) {
                 rrs += b;
                 rs = code;
             };
             # get DataStream receive callback using our local data callback closure
-            code dsrcb = ds_get_recv(dcb, ecb, bcb);
+            code dsrecv_callback = ds_get_recv(recv_data_callback, eod_callback, body_callback);
             # save response header
             hash<auto> rhdr;
             # send aborted flag
             bool send_aborted;
             # our top-level receive callback to save the header and set the chunked flag
-            code rcb = sub (hash<auto> h) {
+            code recv_callback = sub (hash<auto> h) {
                 if (h.hdr) {
                     rhdr = h.hdr;
-                    if (h.hdr."transfer-encoding" == "chunked")
+                    if (h.hdr."transfer-encoding" == "chunked") {
                         chunked = True;
-                    else if (h.send_aborted)
+                    } else if (h.send_aborted) {
                         send_aborted = True;
+                    }
                 }
                 # call DataStream callback
-                dsrcb(h);
+                dsrecv_callback(h);
             };
 
             # issue #3237: make sure to send the response-code key in all cases
@@ -687,7 +699,7 @@ rest.setContentEncoding("gzip");
                 info."response-code" = rhdr.status_code;
             }
 
-            sendWithRecvCallback(rcb, body, m, path, hdr, 60s, False, \info);
+            sendWithRecvCallback(recv_callback, body, m, path, hdr, 60s, False, \info);
 
             # we can get a binary response if we received a chunked non-DataStream message
             # in which case we need to decode it here (issue 1438)
@@ -706,27 +718,35 @@ rest.setContentEncoding("gzip");
                 }
                 if (rmd.typeCode() == NT_STRING && ct) {
                     *hash<auto> ddc = DataStreamDeserializationSupport{ct};
-                    if (ddc)
+                    if (ddc) {
                         rmd = ddc.in(rrs);
+                    }
                 }
             }
 
             # rethrow exceptions returned from the sender
             if (rhdr.status_code >= 300) {
                 if (rmd.err && rmd.desc) {
-                    if (decode_errors && rmd.arg.body)
+                    if (decode_errors && rmd.arg.body) {
                         decodeError(rmd.arg, \info);
+                    }
                     throw rmd.err, rmd.desc, rmd.arg;
                 }
                 throw "DATASTREAM-CLIENT-RECEIVE-ERROR", sprintf("HTTP status code %d received: message: %y",
                     rhdr.status_code, rhdr.status_message), rhdr + ("body": rmd);
             }
 
-            if (send_aborted)
+            if (send_aborted) {
                 throw "SEND-ABORTED", sprintf("receiver returned status code %d while sending chunked data; send was "
                     "aborted", rhdr.status_code), ("hdr": rhdr, "data": rmd);
+            }
+
+            bool datastream = chunked && rhdr.hasKey(DataStreamContentType.lwr());
+            if (!datastream) {
+                return processRestResponse(rhdr + {"body": rmd}, m, path, \info);
+            }
 
             return rhdr + {"body": rmd};
-         }
+        }
     }
 }
