@@ -550,8 +550,7 @@ httpclient.sendWithRecvCallback(ds_get_recv(recv_callback), body, method, path, 
                             throw "SEND-ABORTED", sprintf("receiver sent status code %d before chunked send was "
                                 "complete", status_code), h."data";
                         } else {
-                            throw "SEND-ABORTED", sprintf("receiver sent a reply before chunked send was complete"),
-                                h."data";
+                            throw "SEND-ABORTED", "receiver sent a reply before chunked send was complete", h."data";
                         }
                     }
                 }

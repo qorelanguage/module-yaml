@@ -724,29 +724,30 @@ rest.setContentEncoding("gzip");
                 }
             }
 
-            # rethrow exceptions returned from the sender
-            if (rhdr.status_code >= 300) {
-                if (rmd.err && rmd.desc) {
-                    if (decode_errors && rmd.arg.body) {
-                        decodeError(rmd.arg, \info);
-                    }
-                    throw rmd.err, rmd.desc, rmd.arg;
-                }
-                throw "DATASTREAM-CLIENT-RECEIVE-ERROR", sprintf("HTTP status code %d received: message: %y",
-                    rhdr.status_code, rhdr.status_message), rhdr + ("body": rmd);
-            }
-
             if (send_aborted) {
                 throw "SEND-ABORTED", sprintf("receiver returned status code %d while sending chunked data; send was "
                     "aborted", rhdr.status_code), ("hdr": rhdr, "data": rmd);
             }
 
+            hash<auto> rv = rhdr + {"body": rmd};
             bool datastream = chunked && rhdr.hasKey(DataStreamContentType.lwr());
             if (!datastream) {
-                return processRestResponse(rhdr + {"body": rmd}, m, path, \info);
+                rv = processRestResponse(rv, m, path, \info);
             }
 
-            return rhdr + {"body": rmd};
+            # rethrow exceptions returned from the sender
+            if (rv.status_code >= 300 && !getErrorPassthru()) {
+                if (rv.body.err && rv.body.desc) {
+                    if (decode_errors && rv.body.arg.body) {
+                        decodeError(rv.body.arg, \info);
+                    }
+                    throw rv.body.err, rv.body.desc, rv.body.arg;
+                }
+                throw "DATASTREAM-CLIENT-RECEIVE-ERROR", sprintf("HTTP status code %d received: message: %y",
+                    rhdr.status_code, rhdr.status_message), rv;
+            }
+
+            return rv;
         }
     }
 }
