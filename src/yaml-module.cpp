@@ -1,22 +1,22 @@
 /* indent-tabs-mode: nil -*- */
 /*
-  yaml Qore module
+    yaml Qore module
 
-  Copyright (C) 2010 - 2021 Qore Technologies, s.r.o.
+    Copyright (C) 2010 - 2022 Qore Technologies, s.r.o.
 
-  This library is free software; you can redistribute it and/or
-  modify it under the terms of the GNU Lesser General Public
-  License as published by the Free Software Foundation; either
-  version 2.1 of the License, or (at your option) any later version.
+    This library is free software; you can redistribute it and/or
+    modify it under the terms of the GNU Lesser General Public
+    License as published by the Free Software Foundation; either
+    version 2.1 of the License, or (at your option) any later version.
 
-  This library is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-  Lesser General Public License for more details.
+    This library is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+    Lesser General Public License for more details.
 
-  You should have received a copy of the GNU Lesser General Public
-  License along with this library; if not, write to the Free Software
-  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+    You should have received a copy of the GNU Lesser General Public
+    License along with this library; if not, write to the Free Software
+    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 #include "yaml-module.h"
@@ -58,37 +58,37 @@ event_map_t event_map;
 DLLLOCAL void init_yaml_functions(QoreNamespace& ns);
 DLLLOCAL void init_yaml_constants(QoreNamespace& ns);
 
-const char *get_event_name(yaml_event_type_t type) {
-   event_map_t::iterator i = event_map.find(type);
-   return i != event_map.end() ? i->second : "unknown";
+const char* get_event_name(yaml_event_type_t type) {
+    event_map_t::iterator i = event_map.find(type);
+    return i != event_map.end() ? i->second : "unknown";
 }
 
 QoreNamespace YNS("Qore::YAML");
 
 static QoreStringNode* yaml_module_init() {
-   // add functions
-   init_yaml_functions(YNS);
-   // add constants
-   init_yaml_constants(YNS);
+    // add functions
+    init_yaml_functions(YNS);
+    // add constants
+    init_yaml_constants(YNS);
 
-   // setup event map
-   event_map[YAML_NO_EVENT] = "empty";
-   event_map[YAML_STREAM_START_EVENT] = "stream-start";
-   event_map[YAML_STREAM_END_EVENT] = "stream-end";
-   event_map[YAML_DOCUMENT_START_EVENT] = "document-start";
-   event_map[YAML_DOCUMENT_END_EVENT] = "document-end";
-   event_map[YAML_ALIAS_EVENT] = "alias";
-   event_map[YAML_SCALAR_EVENT] = "scalar";
-   event_map[YAML_SEQUENCE_START_EVENT] = "sequence-start";
-   event_map[YAML_SEQUENCE_END_EVENT] = "sequence-end";
-   event_map[YAML_MAPPING_START_EVENT] = "mapping-start";
-   event_map[YAML_MAPPING_END_EVENT] = "mapping-end";
+    // setup event map
+    event_map[YAML_NO_EVENT] = "empty";
+    event_map[YAML_STREAM_START_EVENT] = "stream-start";
+    event_map[YAML_STREAM_END_EVENT] = "stream-end";
+    event_map[YAML_DOCUMENT_START_EVENT] = "document-start";
+    event_map[YAML_DOCUMENT_END_EVENT] = "document-end";
+    event_map[YAML_ALIAS_EVENT] = "alias";
+    event_map[YAML_SCALAR_EVENT] = "scalar";
+    event_map[YAML_SEQUENCE_START_EVENT] = "sequence-start";
+    event_map[YAML_SEQUENCE_END_EVENT] = "sequence-end";
+    event_map[YAML_MAPPING_START_EVENT] = "mapping-start";
+    event_map[YAML_MAPPING_END_EVENT] = "mapping-end";
 
-   return 0;
+    return 0;
 }
 
 static void yaml_module_ns_init(QoreNamespace *rns, QoreNamespace *qns) {
-   qns->addNamespace(YNS.copy());
+    qns->addNamespace(YNS.copy());
 }
 
 static void yaml_module_delete() {

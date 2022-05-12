@@ -4,7 +4,7 @@
 
     yaml Qore module
 
-    Copyright (C) 2010 - 2019 Qore Technologies, s.r.o.
+    Copyright (C) 2010 - 2022 Qore Technologies, s.r.o.
 
     This library is free software; you can redistribute it and/or
     modify it under the terms of the GNU Lesser General Public
@@ -27,11 +27,13 @@ static QoreStringNode* q_make_yaml(QoreValue data, int64 flags, int64 width, int
     QoreYamlStringWriteHandler str;
     {
         QoreYamlEmitter emitter(str, flags, width, indent, xsink);
-        if (*xsink)
+        if (*xsink) {
             return nullptr;
+        }
 
-        if (emitter.emit(data))
+        if (emitter.emit(data)) {
             return nullptr;
+        }
     }
 
     return str.take();
@@ -40,14 +42,14 @@ static QoreStringNode* q_make_yaml(QoreValue data, int64 flags, int64 width, int
 static QoreHashNode* q_get_yaml_info() {
     QoreHashNode *h = new QoreHashNode(autoTypeInfo);
 
-    h->setKeyValue("version", new QoreStringNode(yaml_get_version_string()), 0);
+    h->setKeyValue("version", new QoreStringNode(yaml_get_version_string()), nullptr);
 
     int major, minor, patch;
     yaml_get_version(&major, &minor, &patch);
 
-    h->setKeyValue("major", major, 0);
-    h->setKeyValue("minor", minor, 0);
-    h->setKeyValue("patch", patch, 0);
+    h->setKeyValue("major", major, nullptr);
+    h->setKeyValue("minor", minor, nullptr);
+    h->setKeyValue("patch", patch, nullptr);
 
     return h;
 }
@@ -97,7 +99,8 @@ namespace Qore::YAML;
     @param data Qore data to convert; cannot contain any objects or a \c YAML-EMITTER-ERROR exception will be raised
     @param flags binary OR'ed @ref yaml_emitter_option_constants
     @param width default line width for output, -1 = no line length limit
-    @param indent the number of spaces to use for indentation when outputting block format or multiple lines; note that libyaml seems to be ignoring this parameter for now, so it may not have any effect
+    @param indent the number of spaces to use for indentation when outputting block format or multiple lines; note
+    that libyaml seems to be ignoring this parameter for now, so it may not have any effect
 
     @return the YAML string corresponding to the input
 
@@ -122,7 +125,8 @@ string make_yaml(auto data, int flags = {Qore::YAML::None}0, softint width = -1,
     @param data Qore data to convert; cannot contain any objects or a \c YAML-EMITTER-ERROR exception will be raised
     @param flags binary OR'ed @ref yaml_emitter_option_constants
     @param width default line width for output, -1 = no line length limit
-    @param indent the number of spaces to use for indentation when outputting block format or multiple lines; note that libyaml seems to be ignoring this parameter for now, so it may not have any effect
+    @param indent the number of spaces to use for indentation when outputting block format or multiple lines; note
+    that libyaml seems to be ignoring this parameter for now, so it may not have any effect
 
     @return the YAML string corresponding to the input
 
@@ -182,12 +186,12 @@ auto parseYAML(string yaml) [flags=RET_VALUE_ONLY,DEPRECATED] {
 
     @par Example:
     @code
-hash hash = get_yaml_info();
+hash<auto> h = get_yaml_info();
     @endcode
 
     @since yaml 0.5 as a replacement for deprecated camel-case getYAMLInfo()
 */
-hash get_yaml_info() [flags=CONSTANT] {
+hash<auto> get_yaml_info() [flags=CONSTANT] {
     return q_get_yaml_info();
 }
 

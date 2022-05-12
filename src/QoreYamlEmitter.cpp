@@ -1,38 +1,37 @@
 /* indent-tabs-mode: nil -*- */
 /*
-  yaml Qore module
+    yaml Qore module
 
-  Copyright (C) 2010 - 2017 Qore Technologies, s.r.o.
+    Copyright (C) 2010 - 2022 Qore Technologies, s.r.o.
 
-  This library is free software; you can redistribute it and/or
-  modify it under the terms of the GNU Lesser General Public
-  License as published by the Free Software Foundation; either
-  version 2.1 of the License, or (at your option) any later version.
+    This library is free software; you can redistribute it and/or
+    modify it under the terms of the GNU Lesser General Public
+    License as published by the Free Software Foundation; either
+    version 2.1 of the License, or (at your option) any later version.
 
-  This library is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-  Lesser General Public License for more details.
+    This library is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+    Lesser General Public License for more details.
 
-  You should have received a copy of the GNU Lesser General Public
-  License along with this library; if not, write to the Free Software
-  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+    You should have received a copy of the GNU Lesser General Public
+    License along with this library; if not, write to the Free Software
+    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 #include "yaml-module.h"
 
-const char *QY_EMIT_ERR = "YAML-EMITTER-ERROR";
+const char* QY_EMIT_ERR = "YAML-EMITTER-ERROR";
 
-static int qore_yaml_write_handler(QoreYamlWriteHandler *wh, unsigned char *buffer, size_t size) {
-   return wh->write(buffer, size);
+static int qore_yaml_write_handler(QoreYamlWriteHandler* wh, unsigned char* buffer, size_t size) {
+    return wh->write(buffer, size);
 }
 
-QoreYamlEmitter::QoreYamlEmitter(QoreYamlWriteHandler &n_wh, int flags, int width, int indent, ExceptionSink *n_xsink)
-   : QoreYamlBase(n_xsink), wh(n_wh), block(flags & QYE_BLOCK_STYLE),
-     implicit_start_doc(!(flags & QYE_EXPLICIT_START_DOC)),
-     implicit_end_doc(!(flags & QYE_EXPLICIT_END_DOC)),
-     emit_sqlnull(flags & QYE_EMIT_SQLNULL),
-     yaml_ver(0) {
+QoreYamlEmitter::QoreYamlEmitter(QoreYamlWriteHandler& wh, int flags, int width, int indent, ExceptionSink* xsink)
+        : QoreYamlBase(xsink), wh(wh), block(flags & QYE_BLOCK_STYLE),
+            implicit_start_doc(!(flags & QYE_EXPLICIT_START_DOC)),
+            implicit_end_doc(!(flags & QYE_EXPLICIT_END_DOC)),
+            emit_sqlnull(flags & QYE_EMIT_SQLNULL) {
     if (!yaml_emitter_initialize(&emitter)) {
         err("unknown error initializing yaml emitter");
         return;
@@ -49,12 +48,13 @@ QoreYamlEmitter::QoreYamlEmitter(QoreYamlWriteHandler &n_wh, int flags, int widt
     if (!(flags & QYE_ESCAPE_UNICODE))
         setUnicode();
 
-    if (flags & QYE_VER_1_2)
+    if (flags & QYE_VER_1_2) {
         yaml_ver = &yaml_ver_1_2;
-    else if (flags & QYE_VER_1_1)
+    } else if (flags & QYE_VER_1_1) {
         yaml_ver = &yaml_ver_1_1;
-    else if (flags & QYE_VER_1_0)
+    } else if (flags & QYE_VER_1_0) {
         yaml_ver = &yaml_ver_1_0;
+    }
 
     yaml_emitter_set_output(&emitter, (yaml_write_handler_t*)qore_yaml_write_handler, &wh);
 
@@ -62,8 +62,9 @@ QoreYamlEmitter::QoreYamlEmitter(QoreYamlWriteHandler &n_wh, int flags, int widt
     yaml_emitter_set_indent(&emitter, indent);
     yaml_emitter_set_width(&emitter, width);
 
-    if (!streamStart() && !docStart())
+    if (!streamStart() && !docStart()) {
         valid = true;
+    }
 }
 
 int QoreYamlEmitter::emit(const QoreValue& v) {
@@ -96,8 +97,9 @@ int QoreYamlEmitter::emit(const QoreValue& v) {
             return emitValue(*v.get<const BinaryNode>());
 
         case NT_NULL:
-            if (emit_sqlnull)
+            if (emit_sqlnull) {
                 return emitSqlNull();
+            }
             // fall down to nothing
 
         case NT_NOTHING:
@@ -135,27 +137,28 @@ int QoreYamlEmitter::emitValue(const DateTime &d) {
             }
             if (info.minute) {
                 if (!has_t) {
-                str.concat('T');
-                has_t = true;
+                    str.concat('T');
+                    has_t = true;
                 }
                 str.sprintf("%dM", info.minute);
             }
             if (info.second) {
                 if (!has_t) {
-                str.concat('T');
-                has_t = true;
+                    str.concat('T');
+                    has_t = true;
                 }
                 str.sprintf("%dS", info.second);
             }
             if (info.us) {
                 if (!has_t) {
-                str.concat('T');
-                has_t = true;
+                    str.concat('T');
+                    has_t = true;
                 }
                 str.sprintf("%du", info.us);
             }
-        } else
+        } else {
             str.concat("0D");
+        }
 
         return emitScalar(str, QORE_YAML_DURATION_TAG);
     }
@@ -167,12 +170,13 @@ int QoreYamlEmitter::emitValue(const DateTime &d) {
         d.format(str, "YYYY-MM-DD");
         if (!info.isTimeNull() || info.secsEast()) {
             // use spaces for enhanced readability
-            if (!info.us)
+            if (!info.us) {
                 d.format(str, " HH:mm:SS.");
-            else if (!(info.us % 1000))
+            } else if (!(info.us % 1000)) {
                 d.format(str, " HH:mm:SS.ms");
-            else
+            } else {
                 d.format(str, " HH:mm:SS.xx");
+            }
         }
     }
 
@@ -189,8 +193,9 @@ int QoreYamlEmitter::emitValue(const DateTime &d) {
             // add time zone offset (or "Z")
             d.format(str, "Z");
         }
-    } else
+    } else {
         d.format(str, "Z");
+    }
 
     // issue #2343: to avoid ambiguity with single quoted strings, we always use the tag here
     return emitScalar(str, YAML_TIMESTAMP_TAG);

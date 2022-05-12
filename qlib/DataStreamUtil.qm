@@ -570,7 +570,8 @@ httpclient.sendWithRecvCallback(ds_get_recv(recv_callback), body, method, path, 
 ds_set_chunked_headers(\hdr, "bzip");
         @endcode
 
-        @param hdr a reference to a hash of message headers when sending chunked DataStream data; the following headers are set:
+        @param hdr a reference to a hash of message headers when sending chunked DataStream data; the following
+        headers are set:
         - \c "Content-Type: application/octet-stream" (set if header not already present in hash)
         - \c "DataStream-Content-Type: text/x-yaml;charset=utf8" (set if header not already present in hash)
         - \c "DataStream-Content-Encoding": set to the \c content_encoding argument, if present
@@ -579,7 +580,8 @@ ds_set_chunked_headers(\hdr, "bzip");
         For requests, the following headers are processed:
         - \c "Accept: text/x-yaml,application/octet-stream" (set if header not already present in hash)
         - \c "DataStream-Accept: text/x-yaml" (set if header not already present in hash)
-        @param content_encoding an optional string giving the \c "DataStream-Content-Encoding" header to set (must be a recognized content encoding as recognized by @ref ds_get_content_encode())
+        @param content_encoding an optional string giving the \c "DataStream-Content-Encoding" header to set (must be
+        a recognized content encoding as recognized by @ref ds_get_content_encode())
         @param req set to @ref Qore::True "True" if the headers are required for a request
     */
     public nothing sub ds_set_chunked_headers(reference<hash<auto>> hdr, *string content_encoding, *softbool req) {
@@ -609,13 +611,15 @@ ds_set_chunked_headers(\hdr, "bzip");
 ds_set_non_chunked_headers(\hdr, "bzip");
         @endcode
 
-        @param hdr a reference to a hash of message headers when sending chunked DataStream data; the following headers are set:
+        @param hdr a reference to a hash of message headers when sending chunked DataStream data; the following
+        headers are set:
         - \c "Content-Type: text/x-yaml" (set if header not already present in hash)
         .
         For requests, the following headers are processed:
         - \c "Accept: text/x-yaml,application/octet-stream" (set if header not already present in hash)
         - \c "DataStream-Accept: text/x-yaml" (set if header not already present in hash)
-        @param content_encoding an optional string giving the \c "Content-Encoding" header to set (must be a recognized content encoding as recognized by @ref ds_get_content_encode())
+        @param content_encoding an optional string giving the \c "Content-Encoding" header to set (must be a
+        recognized content encoding as recognized by @ref ds_get_content_encode())
         @param req set to @ref Qore::True "True" if the headers are required for a request
     */
     public nothing sub ds_set_non_chunked_headers(reference<hash<auto>> hdr, *string content_encoding, *softbool req) {
@@ -631,19 +635,21 @@ ds_set_non_chunked_headers(\hdr, "bzip");
             hdr."Content-Encoding" = content_encoding;
     }
 
-    #! returns the \c "DataStream-Accept-Encoding" header value corresponding to the \c "Accept-Encoding" header passed as an argument, or \c "identity" if none present
+    #! returns the \c "DataStream-Accept-Encoding" header value or a default value
     /** @par Example:
         @code{.py}
 string dae = ds_get_ds_accept_enc_header(hdr."Accept-Encoding");
         @endcode
 
-        @param ae the value of the \c "Accept-Encoding" header or \c "identity" if not present
+        @param ae the value of the \c "Accept-Encoding" header
 
-        @return the \c "DataStream-Accept-Encoding" value corresponding to the \c "Accept-Encoding" header passed as an argument, or @ref nothing if none should be sent
+        @return the \c "DataStream-Accept-Encoding" value corresponding to the \c "Accept-Encoding" header passed as
+        an argument; if no value is passed, then the default value \c "gzip,bzip2,deflate" is returned
     */
-    public string sub ds_get_ds_accept_enc_header(*string ae) {
-        if (!ae)
+    public *string sub ds_get_ds_accept_enc_header(*string ae) {
+        if (!ae) {
             return "gzip,bzip2,deflate";
+        }
         # we return the recognized encodings in the same order as in the accept header
         string dae = (select ae.split(","), DataStreamContentEncodingHash.$1).join(",");
         return dae ? dae : NOTHING;
