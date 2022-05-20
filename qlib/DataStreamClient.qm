@@ -768,7 +768,8 @@ rest.setContentEncoding("gzip");
                     if (decode_errors && rv.body.arg.body) {
                         decodeError(rv.body.arg, \info);
                     }
-                    throw rv.body.err, rv.body.desc, rv.body.arg;
+                    throw rv.body.err, sprintf("server-side error: %s: %s", get_ex_pos(rv.body), rv.body.desc),
+                        rv.body.arg;
                 }
                 throw "DATASTREAM-CLIENT-RECEIVE-ERROR", sprintf("HTTP status code %d received: message: %y",
                     rhdr.status_code, rhdr.status_message), rv;
