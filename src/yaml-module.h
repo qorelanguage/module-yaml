@@ -172,7 +172,7 @@ public:
         ExceptionSink xsink2;
         str.getUnicodePoint(-1, &xsink2);
 
-        QoreString val;
+        QoreString val(QCS_UTF8);
         if (xsink2) {
             xsink2.clear();
             val.clear();
@@ -204,7 +204,7 @@ public:
     DLLLOCAL int emitScalar(const QoreString& value, const char* tag, const char* anchor = nullptr,
             bool plain_implicit = true, bool quoted_implicit = true,
             yaml_scalar_style_t style = YAML_ANY_SCALAR_STYLE) {
-        TempEncodingHelper str(&value, QCS_UTF8, xsink);
+        TempEncodingHelper str(value, QCS_UTF8, xsink);
         if (*xsink)
             return -1;
 
@@ -231,21 +231,17 @@ public:
     }
 
     DLLLOCAL int emitValue(const QoreString& str) {
-        TempEncodingHelper tmp(&str, QCS_UTF8, xsink);
-        if (!tmp) {
-            return -1;
-        }
-        return emitScalar(**tmp, YAML_STR_TAG, 0, true, true, YAML_DOUBLE_QUOTED_SCALAR_STYLE);
+        return emitScalar(str, YAML_STR_TAG, 0, true, true, YAML_DOUBLE_QUOTED_SCALAR_STYLE);
     }
 
     DLLLOCAL int emitValue(int64 i) {
-        QoreString tmp;
+        QoreString tmp(QCS_UTF8);
         tmp.sprintf("%lld", i);
         return emitScalar(tmp, YAML_INT_TAG);
     }
 
     DLLLOCAL int emitValue(double f) {
-        QoreString tmp;
+        QoreString tmp(QCS_UTF8);
         if (((double)((int64)f)) == f)
             tmp.sprintf("%g.0", f);
         else {
@@ -266,7 +262,7 @@ public:
     }
 
     DLLLOCAL int emitValue(const QoreNumberNode& n) {
-        QoreString tmp;
+        QoreString tmp(QCS_UTF8);
         n.toString(tmp, QORE_NF_SCIENTIFIC|QORE_NF_RAW);
         if (tmp == "inf")
             tmp.set("@inf@n");
@@ -284,7 +280,7 @@ public:
     }
 
     DLLLOCAL int emitValue(bool b) {
-        QoreString tmp;
+        QoreString tmp(QCS_UTF8);
         tmp.sprintf("%s", b ? "true" : "false");
         return emitScalar(tmp, YAML_BOOL_TAG);
     }
@@ -360,7 +356,7 @@ protected:
     yaml_version_directive_t* yaml_ver = nullptr;
 
     DLLLOCAL int err(const char* fmt, ...) {
-        QoreStringNode *desc = new QoreStringNode;
+        QoreStringNode* desc = new QoreStringNode(QCS_UTF8);
         while (true) {
             va_list args;
             va_start(args, fmt);
@@ -410,7 +406,7 @@ protected:
 
 class QoreYamlStringWriteHandler : public QoreYamlWriteHandler {
 protected:
-    QoreStringNode *str;
+    QoreStringNode* str;
 
 public:
     DLLLOCAL QoreYamlStringWriteHandler() : str(new QoreStringNode(QCS_UTF8)) {
