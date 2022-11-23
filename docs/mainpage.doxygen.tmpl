@@ -111,6 +111,11 @@ auto data = parse_yaml(yaml_str);
 
     @section yamlreleasenotes Release Notes
 
+    @subsection yaml072 yaml Module Version 0.7.2
+    - improved deserialization of date/time values; fixed a bug where a random string could be deserialized as a
+      duration
+      (<a href="https://github.com/qorelanguage/qore/issues/4642">issue 4642</a>)
+
     @subsection yaml071 yaml Module Version 0.7.1
     - fixed a bug where REST schema validation was not applied in the
       <a href="../../DataStreamClient/html/index.html">DataStreamClient</a> module with non-DataStream messages

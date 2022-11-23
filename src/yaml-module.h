@@ -432,6 +432,21 @@ public:
 };
 
 class QoreYamlParser : public QoreYamlBase {
+public:
+    DLLLOCAL QoreYamlParser(const QoreString& str, ExceptionSink* xsink) : QoreYamlBase(xsink), discard(false) {
+        yaml_parser_initialize(&parser);
+        yaml_parser_set_input_string(&parser, (const unsigned char*)str.c_str(), str.strlen());
+        yaml_parser_set_encoding(&parser, YAML_UTF8_ENCODING);
+        valid = true;
+    }
+
+    DLLLOCAL QoreValue parse();
+
+    DLLLOCAL ~QoreYamlParser() {
+        discardEvent();
+        yaml_parser_delete(&parser);
+    }
+
 protected:
     yaml_parser_t parser;
     bool discard;
@@ -479,22 +494,11 @@ protected:
     DLLLOCAL QoreValue parseScalar(bool favor_string = false);
     DLLLOCAL QoreValue parseNode(bool favor_string = false);
     DLLLOCAL DateTimeNode* parseAbsoluteDate();
+    DLLLOCAL DateTimeNode* parseDuration();
     DLLLOCAL bool parseBool();
 
-public:
-    DLLLOCAL QoreYamlParser(const QoreString& str, ExceptionSink* xsink) : QoreYamlBase(xsink), discard(false) {
-        yaml_parser_initialize(&parser);
-        yaml_parser_set_input_string(&parser, (const unsigned char*)str.c_str(), str.strlen());
-        yaml_parser_set_encoding(&parser, YAML_UTF8_ENCODING);
-        valid = true;
-    }
-
-    DLLLOCAL QoreValue parse();
-
-    DLLLOCAL ~QoreYamlParser() {
-        discardEvent();
-        yaml_parser_delete(&parser);
-    }
+    DLLLOCAL static bool checkAbsoluteDate(size_t len, const char* val);
+    DLLLOCAL static bool checkDuration(const char* val);
 };
 
 #endif

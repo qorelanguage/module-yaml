@@ -31,15 +31,20 @@ const DATA = (
     P2M3DT10H14u,
     now_us(),
     binary("hello, how's it going, this is a long string, you know XXXXXXXXXXXXXXXXXXXXXXXX"),
-    ("a" : 2.0,
-        "b" : "hello",
-        "key" : True),
+    {
+        "a": 2.0,
+        "b": "hello",
+        "key": True,
+        "data": "P1YszUFKs8XtFOK",
+    },
     @inf@n,
     -@inf@n,
     @inf@,
     -@inf@,
     "'single quoted string'",
     "'1234'",
+    "P1YszUFKs8XtFOK",
+    "\"P1YszUFKs8XtFOK\"",
 );
 
 const DATA2 = (
@@ -59,6 +64,7 @@ const YAML_OPTIONS = (
 
 public class Main inherits QUnit::Test {
     constructor() : Test("yaml test", "1.0") {
+        addTestCase("issue 4642", \issue4642());
         addTestCase("number test", \numberTest());
         addTestCase("float rounding test", \floatRoundingTest());
         addTestCase("issue 3394", \issue3394());
@@ -73,6 +79,17 @@ public class Main inherits QUnit::Test {
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
+    }
+
+    issue4642() {
+        string val = "P1YszUFKs8XtFOK";
+        assertEq(val, parse_yaml(val));
+        assertEq(P1Y, parse_yaml("P1Y"));
+        assertEq("P1Y", parse_yaml("'P1Y'"));
+        assertEq("P1Y", parse_yaml("\"P1Y\""));
+        assertEq(P2M3DT10H14u, parse_yaml("P2M3DT10H14u"));
+        assertEq("P2M3DT10H14u", parse_yaml("'P2M3DT10H14u'"));
+        assertEq("P2M3DT10H14u", parse_yaml("\"P2M3DT10H14u\""));
     }
 
     numberTest() {
@@ -98,7 +115,7 @@ public class Main inherits QUnit::Test {
         ListIterator it(YAML_OPTIONS);
         while (it.next()) {
             string s = make_yaml(DATA, it.getValue());
-            any l = parse_yaml(s);
+            auto l = parse_yaml(s);
             assertEq(DATA, l, sprintf("option: %y", it.getValue()));
         }
     }
