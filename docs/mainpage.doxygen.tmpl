@@ -85,7 +85,7 @@ auto data = parse_yaml(yaml_str);
     |number|\c !number|\c 3.5|<tt>3.5n{128}</tt>|String serialization in scientific notation (for brevity) with the \
         number appended with an \c "n"; the number is serialized so that no precision is lost.<br><br>Infinity is \
         serialized as <tt>\@inf\@n{128}</tt>, "not a number" as <tt>\@nan\@n{128}</tt><br><br>The precision is \
-        appended to the string in curly brackets (ex: \"1.1n{128}" means the number <tt>1.1</tt> with 128 bits of \
+        appended to the string in curly brackets (ex: "1.1n{128}" means the number <tt>1.1</tt> with 128 bits of \
         precision)<br><br>This tag is a custom tag used only by Qore to serialize Qore arbitrary-precision numeric \
         values with YAML
     |string|\c !!str|\c "hello"|\c "hello"|YAML strings are enclosed in double-quotes, and libyaml will perform \
