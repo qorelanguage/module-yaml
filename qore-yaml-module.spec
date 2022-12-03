@@ -42,7 +42,7 @@ Summary: YAML module for Qore
 Name: qore-yaml-module
 Version: %{mod_ver}
 Release: 1%{dist}
-License: LGPL
+License: LGPL-2.1-or-later
 Group: Development/Languages
 URL: http://qore.org
 Source: http://prdownloads.sourceforge.net/qore/%{name}-%{version}.tar.bz2
@@ -90,6 +90,7 @@ yaml module.
 export CXXFLAGS="%{?optflags}"
 cmake -DCMAKE_INSTALL_PREFIX=%{_prefix} -DCMAKE_BUILD_TYPE=RELWITHDEBINFO -DCMAKE_SKIP_RPATH=1 -DCMAKE_SKIP_INSTALL_RPATH=1 -DCMAKE_SKIP_BUILD_RPATH=1 -DCMAKE_PREFIX_PATH=${_prefix}/lib64/cmake/Qore .
 make %{?_smp_mflags}
+sed -i 's/#!\/usr\/bin\/env qore/#!\/usr\/bin\/qore/' test/*.qtest
 
 %install
 make DESTDIR=%{buildroot} install %{?_smp_mflags}
