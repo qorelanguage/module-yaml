@@ -56,7 +56,7 @@ static QoreHashNode* q_get_yaml_info() {
 
 /** @defgroup yaml_emitter_option_constants YAML Emitter Option Constants
  */
-//@{
+///@{
 namespace Qore::YAML;
 //! emitter constant: No option (= default output)
 const None = QYE_NONE;
@@ -86,11 +86,11 @@ const Yaml1_1 = QYE_VER_1_1;
 
 //const Yaml1_2 = QYE_VER_1_2;
 //YNS.addConstant("Yaml1_2", QYE_VER_1_2);
-//@}
+///@}
 
 /** @defgroup yaml_functions YAML Functions
  */
-//@{
+///@{
 namespace Qore::YAML;
 
 //! Creates a YAML string from Qore data
@@ -207,4 +207,4 @@ hash<auto> get_yaml_info() [flags=CONSTANT] {
 hash getYAMLInfo() [flags=CONSTANT,DEPRECATED] {
     return q_get_yaml_info();
 }
-//@}
+///@}

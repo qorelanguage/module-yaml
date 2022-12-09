@@ -212,7 +212,7 @@ public namespace DataStreamUtil {
     #! @defgroup DataStramHeaders Data Stream Headers
     /** These are the data stream header values for HTTP chunked transfers where each chunk is encoded separately
     */
-    #@{
+    #/@{
     #! HTTP header for the data stream Content-Type header equivalent where each HTTP chunk is encoded/decoded separately
     public const DataStreamContentType = "DataStream-Content-Type";
 
@@ -235,7 +235,7 @@ public namespace DataStreamUtil {
         "deflate": True,
         "identity": True,
     );
-    #@}
+    #/@}
 
     public const DataStreamDeserializeYaml = (
         "code": "yaml",
