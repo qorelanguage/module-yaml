@@ -1,4 +1,4 @@
-%global mod_ver 0.7.2
+%global mod_ver 0.7.3
 
 %{?_datarootdir: %global mydatarootdir %_datarootdir}
 %{!?_datarootdir: %global mydatarootdir /usr/share}
@@ -19,10 +19,8 @@
 # get *suse release minor version without trailing zeros
 %global os_min %(echo %suse_version|rev|cut -b-2|rev|sed s/0*$//)
 
-%if %suse_version > 1010
+%if %suse_version
 %global dist .opensuse%{os_maj}_%{os_min}
-%else
-%global dist .suse%{os_maj}_%{os_min}
 %endif
 
 %endif
@@ -43,20 +41,22 @@ Name: qore-yaml-module
 Version: %{mod_ver}
 Release: 1%{dist}
 License: LGPL-2.1-or-later
-Group: Development/Languages
+Group: Development/Languages/Other
 URL: http://qore.org
 Source: http://prdownloads.sourceforge.net/qore/%{name}-%{version}.tar.bz2
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
 Requires: /usr/bin/env
 Requires: qore-module(abi)%{?_isa} = %{module_api}
 BuildRequires: gcc-c++
-BuildRequires: qore-devel >= 0.9
+BuildRequires: qore-devel >= 1.12.4
+BuildRequires: qore-stdlib >= 1.12.4
 BuildRequires: libyaml-devel
-BuildRequires: qore
+BuildRequires: qore >= 1.12.4
 %if 0%{?el7}
 BuildRequires:  devtoolset-7-gcc-c++
 %endif
 BuildRequires: cmake >= 3.5
+BuildRequires: doxygen
 
 %description
 This package contains the yaml module for the Qore Programming Language.
@@ -90,6 +90,7 @@ yaml module.
 export CXXFLAGS="%{?optflags}"
 cmake -DCMAKE_INSTALL_PREFIX=%{_prefix} -DCMAKE_BUILD_TYPE=RELWITHDEBINFO -DCMAKE_SKIP_RPATH=1 -DCMAKE_SKIP_INSTALL_RPATH=1 -DCMAKE_SKIP_BUILD_RPATH=1 -DCMAKE_PREFIX_PATH=${_prefix}/lib64/cmake/Qore .
 make %{?_smp_mflags}
+make %{?_smp_mflags} docs
 sed -i 's/#!\/usr\/bin\/env qore/#!\/usr\/bin\/qore/' test/*.qtest examples/*
 
 %install
@@ -104,7 +105,18 @@ rm -rf $RPM_BUILD_ROOT
 %{user_module_dir}
 %doc COPYING.LGPL COPYING.MIT README RELEASE-NOTES AUTHORS
 
+%check
+export QORE_MODULE_DIR=$QORE_MODULE_DIR:qlib
+qore -l ./yaml-api-1.3.qmod test/DataStreamClient.qtest -v
+qore -l ./yaml-api-1.3.qmod test/DataStreamHandler.qtest -v
+qore -l ./yaml-api-1.3.qmod test/DataStreamUtil.qtest -v
+qore -l ./yaml-api-1.3.qmod test/YamlRpcHandler.qtest -v
+qore -l ./yaml-api-1.3.qmod test/yaml.qtest -v
+
 %changelog
+* Mon Dec 19 2022 David Nichols <david@qore.org> 0.7.3
+- updated to version 0.7.3
+
 * Wed Nov 23 2022 David Nichols <david@qore.org> 0.7.2
 - updated to version 0.7.2
 - updated to use cmake

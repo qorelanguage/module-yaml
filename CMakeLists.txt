@@ -4,7 +4,7 @@ project(qore-yaml-module)
 
 set (VERSION_MAJOR 0)
 set (VERSION_MINOR 7)
-set (VERSION_PATCH 2)
+set (VERSION_PATCH 3)
 
 # where to look first for cmake modules, before ${CMAKE_ROOT}/Modules/ is checked
 set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake )
