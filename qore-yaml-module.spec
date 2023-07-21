@@ -107,11 +107,11 @@ rm -rf $RPM_BUILD_ROOT
 
 %check
 export QORE_MODULE_DIR=$QORE_MODULE_DIR:qlib
-qore -l ./yaml-api-1.3.qmod test/DataStreamClient.qtest -v
-qore -l ./yaml-api-1.3.qmod test/DataStreamHandler.qtest -v
-qore -l ./yaml-api-1.3.qmod test/DataStreamUtil.qtest -v
-qore -l ./yaml-api-1.3.qmod test/YamlRpcHandler.qtest -v
-qore -l ./yaml-api-1.3.qmod test/yaml.qtest -v
+qore -l ./yaml-api-%{module_api}.qmod test/DataStreamClient.qtest -v
+qore -l ./yaml-api-%{module_api}.qmod test/DataStreamHandler.qtest -v
+qore -l ./yaml-api-%{module_api}.qmod test/DataStreamUtil.qtest -v
+qore -l ./yaml-api-%{module_api}.qmod test/YamlRpcHandler.qtest -v
+qore -l ./yaml-api-%{module_api}.qmod test/yaml.qtest -v
 
 %changelog
 * Mon Dec 19 2022 David Nichols <david@qore.org> 0.7.3
