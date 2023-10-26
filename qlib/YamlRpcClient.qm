@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file YamlRpcClient.qm @brief provides the definition for the YamlRpcClient class
 
-/*  YamlRpcClient.qm Copyright 2012 - 2021 Qore Technologies, s.r.o.
+/*  YamlRpcClient.qm Copyright 2012 - 2023 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -235,13 +235,17 @@ public class YamlRpcClient inherits Qore::HTTPClient {
     /** @param opts valid options are:
     - \c url: A string giving the URL to connect to
         - \c default_port: The default port number to connect to if none is given in the URL
-        - \c http_version: Either '1.0' or '1.1' for the claimed HTTP protocol version compliancy in outgoing message headers
-        - \c default_path: The default path to use for new connections if a path is not otherwise specified in the connection URL
+        - \c http_version: Either '1.0' or '1.1' for the claimed HTTP protocol version compliancy in outgoing message
+          headers
+        - \c default_path: The default path to use for new connections if a path is not otherwise specified in the
+          connection URL
         - \c max_redirects: The maximum number of redirects before throwing an exception (the default is 5)
         - \c proxy: The proxy URL for connecting through a proxy
         - \c timeout: The timeout value in milliseconds (also can be a relative date-time value for clarity, ex: 5m)
-        - \c connect_timeout: The timeout value in milliseconds for establishing a new socket connection (also can be a relative date-time value for clarity, ex: 30s)
-        @param do_not_connect if \c False (the default), then a connection will be immediately established to the remote server
+        - \c connect_timeout: The timeout value in milliseconds for establishing a new socket connection (also can be
+          a relative date-time value for clarity, ex: 30s)
+        @param do_not_connect if \c False (the default), then a connection will be immediately established to the
+        remote server
     */
     constructor(hash opts = hash(), bool do_not_connect = False) : HTTPClient(YamlRpcClient::DefaultOptions + opts) {
         # unconditionally set the encoding to utf-8
@@ -342,6 +346,14 @@ public class YamlRpcConnection inherits ConnectionProvider::HttpBasedConnection 
             "short_desc": "A connection to an YAML-RPC server",
             "desc": "A connection to an YAML-RPC server",
             "cls": Class::forName("YamlRpcConnection"),
+            "schemes": {
+                "yamlrpcs": True,
+                "yamlrpc": True,
+            },
+            "base_scheme_map": {
+                "https": "yamlrpcs",
+                "http": "yamlrpc",
+            },
             "options": HttpConnection::ConnectionScheme.options,
         };
     }
@@ -356,7 +368,7 @@ public class YamlRpcConnection inherits ConnectionProvider::HttpBasedConnection 
         See @ref AbstractConnection::constructor() for \c attributes and \c options reference.
     */
     constructor(string name, string description, string url, hash<auto> attributes = {}, hash<auto> options = {})
-        : HttpBasedConnection(name, description, url, attributes, options) {
+            : HttpBasedConnection(name, description, url, attributes, options) {
         real_opts = {"url": real_url} + opts;
     }
 
