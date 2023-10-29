@@ -342,18 +342,8 @@ public class YamlRpcConnection inherits ConnectionProvider::HttpBasedConnection 
 
         #! Connection entry info
         const ConnectionScheme = <ConnectionSchemeInfo>{
-            "display_name": "YAML-RPC Connection",
-            "short_desc": "A connection to an YAML-RPC server",
             "desc": "A connection to an YAML-RPC server",
             "cls": Class::forName("YamlRpcConnection"),
-            "schemes": {
-                "yamlrpcs": True,
-                "yamlrpc": True,
-            },
-            "base_scheme_map": {
-                "https": "yamlrpcs",
-                "http": "yamlrpc",
-            },
             "options": HttpConnection::ConnectionScheme.options,
         };
     }
