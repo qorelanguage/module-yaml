@@ -23,7 +23,7 @@
 */
 
 # minimum qore version
-%requires qore >= 2.0
+%requires qore >= 1.19.2
 
 # requires the binary yaml module
 %requires yaml >= 0.7
