@@ -249,6 +249,11 @@ static QoreNumberNode* parseNumber(const char* val, size_t len) {
 // FIXME: this is still capable of false positives
 static QoreValue try_parse_number(const char* val, size_t len, bool no_simple_numeric = false) {
     //printd(5, "try_parse_number() val: \"%s\" len: %d\n", val, (int)len);
+    // issue #4893: parsing 'n' -> 0n instead of "n"
+    if (len == 1 && *val == 'n') {
+        return QoreValue();
+    }
+
     bool sign = (*val == '-' || *val == '+');
 
     // check for @inf@ and @nan@

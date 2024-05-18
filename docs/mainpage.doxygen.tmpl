@@ -112,6 +112,8 @@ auto data = parse_yaml(yaml_str);
     @section yamlreleasenotes Release Notes
 
     @subsection yaml_1_0_0 yaml Module Version 1.0.0
+    - fixed a bug parsing <tt>'n'</tt>; was parsed to \c 0n before, now parsed correctly
+      (<a href="https://github.com/qorelanguage/qore/issues/4894">issue 4893</a>)
     - fixed a bug where aliases in YAML caused parsing to fail
       (<a href="https://github.com/qorelanguage/qore/issues/4891">issue 4891</a>)
 

@@ -12,7 +12,8 @@
 %exec-class Main
 
 const DATA = (
-    1, "two",
+    1,
+    "two",
     NOTHING,
     0,
     0.0,
@@ -124,6 +125,8 @@ public class Main inherits QUnit::Test {
 
     testYaml() {
         assertEq(DATA, parse_yaml(make_yaml(DATA)));
+
+        assertEq("n", parse_yaml("'n'"));
     }
 
     testOptions() {
