@@ -2,9 +2,9 @@ cmake_minimum_required(VERSION 2.8.3)
 
 project(qore-yaml-module)
 
-set (VERSION_MAJOR 0)
-set (VERSION_MINOR 7)
-set (VERSION_PATCH 3)
+set (VERSION_MAJOR 1)
+set (VERSION_MINOR 0)
+set (VERSION_PATCH 0)
 
 # where to look first for cmake modules, before ${CMAKE_ROOT}/Modules/ is checked
 set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake )

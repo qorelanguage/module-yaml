@@ -1,4 +1,4 @@
-%global mod_ver 0.7.3
+%global mod_ver 1.0.0
 
 %{?_datarootdir: %global mydatarootdir %_datarootdir}
 %{!?_datarootdir: %global mydatarootdir /usr/share}
@@ -114,6 +114,9 @@ qore -l ./yaml-api-%{module_api}.qmod test/YamlRpcHandler.qtest -v
 qore -l ./yaml-api-%{module_api}.qmod test/yaml.qtest -v
 
 %changelog
+* Sat May 18 2022 David Nichols <david@qore.org> 1.0.0
+- updated to version 1.0.0
+
 * Mon Dec 19 2022 David Nichols <david@qore.org> 0.7.3
 - updated to version 0.7.3
 

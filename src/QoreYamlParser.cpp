@@ -66,22 +66,41 @@ QoreValue QoreYamlParser::parse() {
 }
 
 QoreValue QoreYamlParser::parseNode(bool favor_string) {
+    QoreValue rv;
+    std::string anchor;
+    if (event.data.scalar.anchor) {
+        anchor = (const char*)event.data.scalar.anchor;
+    }
     switch (event.type) {
         case YAML_SCALAR_EVENT:
-            return parseScalar(favor_string);
+            rv = parseScalar(favor_string);
+            break;
 
         case YAML_SEQUENCE_START_EVENT:
-            return parseSeq();
+            rv = parseSeq();
+            break;
 
         case YAML_MAPPING_START_EVENT:
-            return parseMap();
+            rv = parseMap();
+            break;
+
+        case YAML_ALIAS_EVENT:
+            return parseAlias();
 
         default:
-            xsink->raiseException(QY_PARSE_ERR, "unexpected event '%s' when parsing YAML document",
+            xsink->raiseException(QY_PARSE_ERR, "Unexpected event '%s' when parsing YAML document",
                 get_event_name(event.type));
+            return QoreValue();
     }
 
-    return QoreValue();
+    if (!anchor.empty()) {
+        alias_map_t::iterator i = alias_map.lower_bound(anchor);
+        if (i != alias_map.end() && i->first == anchor) {
+            i->second.discard(xsink);
+        }
+        alias_map.insert(i, alias_map_t::value_type(anchor, rv.refSelf()));
+    }
+    return rv;
 }
 
 QoreListNode* QoreYamlParser::parseSeq() {
@@ -95,8 +114,9 @@ QoreListNode* QoreYamlParser::parseSeq() {
             break;
 
         QoreValue rv = parseNode();
-        if (*xsink)
+        if (*xsink) {
             return nullptr;
+        }
         l->push(rv, nullptr);
     }
 
@@ -139,6 +159,16 @@ QoreHashNode* QoreYamlParser::parseMap() {
     }
 
     return h.release();
+}
+
+QoreValue QoreYamlParser::parseAlias() {
+    std::string anchor((const char*)event.data.alias.anchor);
+    alias_map_t::iterator i = alias_map.find(anchor);
+    if (i == alias_map.end()) {
+        xsink->raiseException(QY_PARSE_ERR, "Reference to unknown anchor '%s' in alias", anchor.c_str());
+        return QoreValue();
+    }
+    return i->second.refSelf();
 }
 
 static DateTimeNode* dt_err(ExceptionSink* xsink, const char* val, const char* msg) {
@@ -318,11 +348,14 @@ QoreValue QoreYamlParser::parseScalar(bool favor_string) {
     const char* val = (const char*)event.data.scalar.value;
     size_t len = event.data.scalar.length;
 
-    //printd(5, "QoreYamlParser::parseScalar() anchor=%s tag=%s value=%s len=%d plain_implicit=%d quoted_implicit=%d style=%d\n", event.data.scalar.anchor ? event.data.scalar.anchor : (yaml_char_t*)"n/a", event.data.scalar.tag ? event.data.scalar.tag : (yaml_char_t*)"n/a", val, len, event.data.scalar.plain_implicit, event.data.scalar.quoted_implicit, event.data.scalar.style);
+    //printd(5, "QoreYamlParser::parseScalar() anchor=%s tag=%s value=%s len=%d plain_implicit=%d quoted_implicit=%d "
+    //    "style=%d\n", event.data.scalar.anchor ? event.data.scalar.anchor : (yaml_char_t*)"n/a",
+    //    event.data.scalar.tag ? event.data.scalar.tag : (yaml_char_t*)"n/a", val, len,
+    //    event.data.scalar.plain_implicit, event.data.scalar.quoted_implicit, event.data.scalar.style);
 
     if (!event.data.scalar.tag) {
         if (favor_string || (event.data.scalar.quoted_implicit
-                            && (event.data.scalar.style == YAML_DOUBLE_QUOTED_SCALAR_STYLE))) {
+            && (event.data.scalar.style == YAML_DOUBLE_QUOTED_SCALAR_STYLE))) {
             // assume it's a string
             return new QoreStringNode(val, len, QCS_UTF8);
         }

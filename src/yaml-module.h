@@ -445,11 +445,18 @@ public:
     DLLLOCAL ~QoreYamlParser() {
         discardEvent();
         yaml_parser_delete(&parser);
+
+        for (auto& i : alias_map) {
+            i.second.discard(nullptr);
+        }
     }
 
 protected:
     yaml_parser_t parser;
     bool discard;
+
+    typedef std::map<std::string, QoreValue> alias_map_t;
+    alias_map_t alias_map;
 
     DLLLOCAL void discardEvent() {
         if (discard) {
@@ -491,6 +498,7 @@ protected:
 
     DLLLOCAL QoreListNode* parseSeq();
     DLLLOCAL QoreHashNode* parseMap();
+    DLLLOCAL QoreValue parseAlias();
     DLLLOCAL QoreValue parseScalar(bool favor_string = false);
     DLLLOCAL QoreValue parseNode(bool favor_string = false);
     DLLLOCAL DateTimeNode* parseAbsoluteDate();

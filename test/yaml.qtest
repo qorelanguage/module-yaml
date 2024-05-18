@@ -62,8 +62,13 @@ const YAML_OPTIONS = (
     #YAML::Yaml1_0,
 );
 
+const YamlWithAlias = "user: &user_def
+    type: string
+    example: user-1234";
+
 public class Main inherits QUnit::Test {
     constructor() : Test("yaml test", "1.0") {
+        addTestCase("aliases", \testAliases());
         addTestCase("issue 4642", \issue4642());
         addTestCase("number test", \numberTest());
         addTestCase("float rounding test", \floatRoundingTest());
@@ -79,6 +84,15 @@ public class Main inherits QUnit::Test {
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
+    }
+
+    testAliases() {
+        assertEq({
+            "user": {
+                "type": "string",
+                "example": "user-1234",
+            },
+        }, parse_yaml(YamlWithAlias));
     }
 
     issue4642() {
