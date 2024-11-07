@@ -505,7 +505,7 @@ protected:
     DLLLOCAL DateTimeNode* parseDuration();
     DLLLOCAL bool parseBool();
 
-    DLLLOCAL static bool checkAbsoluteDate(size_t len, const char* val);
+    DLLLOCAL static bool checkAbsoluteDate(size_t len, const char* val, bool quoted = false);
     DLLLOCAL static bool checkDuration(const char* val);
 };
 

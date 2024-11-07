@@ -365,9 +365,10 @@ QoreValue QoreYamlParser::parseScalar(bool favor_string) {
             return new QoreStringNode(val, len, QCS_UTF8);
         }
 
-        // issue #2343: could be a string, arbitrary-precision numeric or special floating-point value, an ISO-8601 date/time value, or a relative date/time value
+        // issue #2343: could be a string, arbitrary-precision numeric or special floating-point value, an ISO-8601
+        // date/time value, or a relative date/time value
         if (event.data.scalar.quoted_implicit && event.data.scalar.style == YAML_SINGLE_QUOTED_SCALAR_STYLE) {
-            if (checkAbsoluteDate(len, val)) {
+            if (checkAbsoluteDate(len, val, true)) {
                 return parseAbsoluteDate();
             }
 
@@ -654,13 +655,30 @@ DateTimeNode* QoreYamlParser::parseDuration() {
     return new DateTimeNode(val);
 }
 
-bool QoreYamlParser::checkAbsoluteDate(size_t len, const char* val) {
-    return (len > 9 && isdigit(val[0]) && isdigit(val[1]) && isdigit(val[2]) && isdigit(val[3])
-        && val[4] == '-'
-        && ((val[5] == '0' && isdigit(val[6])) || (val[5] == '1' && (val[6] >= '0' && val[6] <= '2')))
-        && val[7] == '-'
-        && (((val[8] >= '0' && val[8] <= '2') && isdigit(val[9]))
-            || (val[8] == '3' && (val[9] == '0' || val[9] == '1'))));
+bool QoreYamlParser::checkAbsoluteDate(size_t len, const char* val, bool quoted) {
+    if (quoted) {
+        // we expect a full date when single quoted
+        return (len >= 19 && isdigit(val[0]) && isdigit(val[1]) && isdigit(val[2]) && isdigit(val[3])
+            && val[4] == '-'
+            && ((val[5] == '0' && isdigit(val[6])) || (val[5] == '1' && (val[6] >= '0' && val[6] <= '2')))
+            && val[7] == '-'
+            && (((val[8] >= '0' && val[8] <= '2') && isdigit(val[9]))
+                || (val[8] == '3' && (val[9] == '0' || val[9] == '1')))
+            && val[10] == ' '
+            && (((val[11] == '0' || (val[11] == '1')) && isdigit(val[12]))
+                || (val[11] == '2' && (val[12] >= '0' && val[12] <= '3')))
+            && val[13] == ':'
+            && ((val[14] >= '0' && val[14] <= '5') && isdigit(val[15]))
+            && val[16] == ':'
+            && ((val[17] >= '0' && val[17] <= '5') && isdigit(val[18])));
+    } else {
+        return (len >= 9 && isdigit(val[0]) && isdigit(val[1]) && isdigit(val[2]) && isdigit(val[3])
+            && val[4] == '-'
+            && ((val[5] == '0' && isdigit(val[6])) || (val[5] == '1' && (val[6] >= '0' && val[6] <= '2')))
+            && val[7] == '-'
+            && (((val[8] >= '0' && val[8] <= '2') && isdigit(val[9]))
+                || (val[8] == '3' && (val[9] == '0' || val[9] == '1'))));
+    }
 }
 
 bool QoreYamlParser::checkDuration(const char* val) {
