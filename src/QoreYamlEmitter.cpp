@@ -105,8 +105,12 @@ int QoreYamlEmitter::emit(const QoreValue& v) {
         case NT_NOTHING:
             return emitNull();
 
+        case NT_OBJECT:
+            err("Cannot convert object of class '%s' to YAML", v.get<const QoreObject>()->getClassName());
+            return -1;
+
         default:
-            err("cannot convert Qore type '%s' to YAML", v.getTypeName());
+            err("cannot convert Qore type '%s' to YAML", v.getFullTypeName());
             return -1;
     }
 
