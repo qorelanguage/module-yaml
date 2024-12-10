@@ -308,6 +308,7 @@ public:
                 return -1;
             }
             if (emit(hi.get())) {
+                xsink->appendLastDescription(" (while serializing hash key '%s')", hi.getKey());
                 return -1;
             }
         }
