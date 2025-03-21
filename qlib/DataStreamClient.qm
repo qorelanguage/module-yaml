@@ -665,7 +665,8 @@ rest.setContentEncoding("gzip");
 
         #! sends the outgoing HTTP message and recodes the response to data
         hash<auto> sendAndDecodeResponse(*data body, string m, string path, hash<auto> hdr,
-                *reference<hash<auto>> info, *softbool decode_errors) {
+                *reference<hash<auto>> info, *softbool decode_errors, *string assume_content_type, *string shdr,
+                *code signer) {
             /* we cannot just receive standard HTTP chunked data here since any Content-Encoding will not be
                respected, and any DataStream content encoding can only be applied to each chunk separately.  Therefore
                we have to intercept the chunked messages here to build the respose data and also capture the headers
@@ -724,6 +725,14 @@ rest.setContentEncoding("gzip");
             # issue #3237: make sure to send the response-code key in all cases
             on_exit if (rhdr.status_code) {
                 info."response-code" = rhdr.status_code;
+            }
+
+            if (signer && shdr.val()) {
+                hdr{shdr} = signer({
+                    "path": path,
+                    "body": body,
+                    "hdr": hdr - shdr,
+                });
             }
 
             sendWithRecvCallback(recv_callback, body, m, path, hdr, 60s, False, \info);
