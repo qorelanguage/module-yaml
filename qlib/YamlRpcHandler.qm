@@ -416,7 +416,7 @@ public namespace YamlRpcHandler {
                 } catch (hash<ExceptionInfo> ex) {
                     # issue #2573: provide a more user-friendly error when the argument cannot be matched to the
                     # closure/call ref
-                    if (ex.err == "RUNTIME-TYPE-ERROR"
+                    if ((ex.err == "RUNTIME-TYPE-ERROR" || ex.err == "RUNTIME-OVERLOAD-ERROR")
                         && (ex.callstack[0].file =~ /YamlRpcHandler.qm$/
                         && (ex.callstack[0].function == "call_function_args"
                             || ex.callstack[0].function == "call_object_method_args")))
