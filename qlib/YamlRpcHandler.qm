@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file YamlRpcHandler.qm @brief YAML-RPC handler class definition for the HttpServer module
 
-/*  YamlRpcHandler.qm Copyright (C) 2012 - 2021 Qore Technologies, s.r.o.
+/*  YamlRpcHandler.qm Copyright (C) 2012 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -39,9 +39,15 @@
 
 # do not use $ signs in declarations
 %new-style
+# require type declarations
+%require-types
+# enable all warnings
+%enable-all-warnings
+# strict argument handling
+%strict-args
 
 module YamlRpcHandler {
-    version = "1.4";
+    version = "1.5";
     desc = "YamlRpcHandler module for use with the HttpServer module";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -98,6 +104,11 @@ http.waitStop();
 
     @section ymlarpchandler_relnotes YamlRpcHandler Release Notes
 
+    @subsection yamlrpchandler_v1_5 YamlRpcHandler v1.5
+    - added module-level compile-time requirements: \c %strict-args, \c %require-types, \c %enable-all-warnings
+    - added debug logging support
+    - updated copyright year to 2025
+
     @subsection yamlrpchandler_v1_2 YamlRpcHandler v1.2
     - fixed a bug where serialization errors would result in confusing responses
       (<a href="https://github.com/qorelanguage/qore/issues/4194">issue 4194</a>)
@@ -105,10 +116,10 @@ http.waitStop();
     - updated minimum qore version to 0.8.12 for get_ex_pos()
     - updated for new YAML function names (removed references to deprecated camel-case functions)
 
-    @subsection yamlrpchandler_v1_1 YamlRpcHAndler v1.1
-    * added optional log closure to constructor
+    @subsection yamlrpchandler_v1_1 YamlRpcHandler v1.1
+    - added optional log closure to constructor
 
-    @subsection yamlrpchandler_v1_0 YamlRpcHAndler v1.0
+    @subsection yamlrpchandler_v1_0 YamlRpcHandler v1.0
     - updated to a user module
 */
 
@@ -268,7 +279,10 @@ public namespace YamlRpcHandler {
         # method called by HttpServer to handle a request
         # don't reimplement this method; fix/enhance it in the module
         final hash handleRequest(hash cx, hash<auto> hdr, *data body) {
-            #printf("yamlrpc handler context=%y hdr=%y body=%y\n", cx, hdr, body);
+            @debug(1) {
+                log(cx, "handleRequest: method=%y path=%y body_size=%d", hdr.method, hdr.path,
+                    body.size());
+            }
 
             hash yamlrpc;
 
@@ -387,6 +401,7 @@ public namespace YamlRpcHandler {
 
         # don't reimplement this method; fix/enhance it in the module
         final private hash<auto> callMethod(hash cx, auto params) {
+            @assert(cx.method);
             string method = cx.method;
             # find method function
             hash<auto> found;
@@ -398,6 +413,9 @@ public namespace YamlRpcHandler {
             }
 
             if (found) {
+                @debug(2) {
+                    log(cx, "callMethod: found method=%y text=%y internal=%y", method, found.text, found.internal);
+                }
                 # add context marker, if any
                 cx.cmark = found.cmark;
                 cx.function = found.function;
@@ -406,8 +424,6 @@ public namespace YamlRpcHandler {
                 if (msg)
                     log(cx, msg);
 
-                #printf("found: %y (getLogMessage: %y method: %s params: %y)\n", getLogMessage, found.text, method,
-                #   params);
                 auto rv;
                 try {
                     rv = found.internal

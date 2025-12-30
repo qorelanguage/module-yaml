@@ -7,20 +7,36 @@
 %enable-all-warnings
 
 %requires ../qlib/DataStreamUtil.qm
+%requires yaml
 %requires Mime
 %requires QUnit
 
-%exec-class DataStreamutilTest
+%exec-class DataStreamUtilTest
 
-class DataStreamutilTest inherits QUnit::Test {
-    constructor() : Test("DataStreamutil test", "1.0") {
-        addTestCase("base test", \testDataStreamutil());
+class DataStreamUtilTest inherits QUnit::Test {
+    constructor() : Test("DataStreamUtil test", "1.0") {
+        addTestCase("base test", \testDataStreamUtil());
+        addTestCase("content encoding", \testContentEncoding());
+        addTestCase("content decoding", \testContentDecoding());
+        addTestCase("x-prefix decoding", \testXPrefixDecoding());
+        addTestCase("identity encoding", \testIdentityEncoding());
+        addTestCase("header setup", \testHeaderSetup());
+        addTestCase("send callback", \testSendCallback());
+        addTestCase("send callback with data", \testSendCallbackWithData());
+        addTestCase("send callback error handling", \testSendCallbackErrorHandling());
+        addTestCase("receive callback", \testReceiveCallback());
+        addTestCase("receive callback with data", \testReceiveCallbackWithData());
+        addTestCase("accept encoding header", \testAcceptEncodingHeader());
+        addTestCase("serialization support", \testSerializationSupport());
+        addTestCase("compression roundtrip", \testCompressionRoundtrip());
+        addTestCase("edge cases", \testEdgeCases());
+        addTestCase("request headers", \testRequestHeaders());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
     }
 
-    testDataStreamutil() {
+    testDataStreamUtil() {
         *code c = ds_get_content_decode();
         assertEq(NOTHING, c);
         c = ds_get_content_encode();
@@ -40,5 +56,378 @@ class DataStreamutilTest inherits QUnit::Test {
         assertEq(True, regex(hdr."Content-Type", MimeTypeYaml));
 
         assertEq(True, ds_get_ds_accept_enc_header() =~ /deflate/);
+    }
+
+    testContentEncoding() {
+        # Test getting encode functions for different encodings
+        *code gzip_encode = ds_get_content_encode("gzip");
+        if (gzip_encode) {
+            assertTrue(gzip_encode.callp());
+        }
+
+        *code deflate_encode = ds_get_content_encode("deflate");
+        if (deflate_encode) {
+            assertTrue(deflate_encode.callp());
+        }
+
+        *code bzip2_encode = ds_get_content_encode("bzip2");
+        if (bzip2_encode) {
+            assertTrue(bzip2_encode.callp());
+        }
+
+        # Test with unknown encoding - throws exception
+        assertThrows("SERIALIZATION-ERROR", \ds_get_content_encode(), ("unknown",));
+
+        # Test with no encoding
+        *code no_encode = ds_get_content_encode();
+        assertEq(NOTHING, no_encode);
+    }
+
+    testContentDecoding() {
+        # Test getting decode functions for different encodings
+        *code gzip_decode = ds_get_content_decode("gzip");
+        if (gzip_decode) {
+            assertTrue(gzip_decode.callp());
+        }
+
+        *code deflate_decode = ds_get_content_decode("deflate");
+        if (deflate_decode) {
+            assertTrue(deflate_decode.callp());
+        }
+
+        *code bzip2_decode = ds_get_content_decode("bzip2");
+        if (bzip2_decode) {
+            assertTrue(bzip2_decode.callp());
+        }
+
+        # Test with unknown encoding - throws exception
+        assertThrows("DESERIALIZATION-ERROR", \ds_get_content_decode(), ("unknown",));
+
+        # Test with no encoding
+        *code no_decode = ds_get_content_decode();
+        assertEq(NOTHING, no_decode);
+    }
+
+    testHeaderSetup() {
+        # Test chunked headers
+        hash<auto> hdr = {};
+        ds_set_chunked_headers(\hdr);
+        assertEq("chunked", hdr."Transfer-Encoding");
+        assertEq(DataStreamError, hdr.Trailer);
+        assertTrue(hdr{DataStreamContentType} =~ /yaml/);
+
+        # Test chunked headers with encoding
+        hdr = {};
+        ds_set_chunked_headers(\hdr, "gzip");
+        assertEq("gzip", hdr{DataStreamContentEncoding});
+
+        # Test non-chunked headers
+        hdr = {};
+        ds_set_non_chunked_headers(\hdr);
+        assertTrue(hdr."Content-Type" =~ /yaml/);
+
+        # Test non-chunked headers with encoding
+        hdr = {};
+        ds_set_non_chunked_headers(\hdr, "gzip");
+        assertEq("gzip", hdr."Content-Encoding");
+
+        # Test accept encoding header
+        string accept = ds_get_ds_accept_enc_header();
+        assertTrue(accept =~ /deflate/);
+        assertTrue(accept =~ /gzip/);
+        assertTrue(accept =~ /bzip2/);
+    }
+
+    testSendCallback() {
+        # Test send callback creation
+        int counter = 0;
+        code data_callback = auto sub () {
+            if (counter < 3) {
+                return {"item": counter++};
+            }
+            return NOTHING;
+        };
+
+        code send_cb = ds_get_send(data_callback);
+        assertEq(Type::Closure, send_cb.type());
+
+        # Test with encoding
+        *code encode_func = ds_get_content_encode("gzip");
+        if (encode_func) {
+            send_cb = ds_get_send(data_callback, encode_func);
+            assertEq(Type::Closure, send_cb.type());
+        }
+    }
+
+    testReceiveCallback() {
+        # Test receive callback creation
+        list<auto> received_data = ();
+        bool done = False;
+
+        code recv_callback = sub (auto data) {
+            received_data += data;
+        };
+
+        code done_callback = sub (*string err) {
+            done = True;
+        };
+
+        code recv_cb = ds_get_recv(recv_callback, done_callback);
+        assertEq(Type::Closure, recv_cb.type());
+
+        # Test with body callback
+        data raw_body;
+        code body_callback = sub (auto b, string code) {
+            raw_body = b;
+        };
+
+        recv_cb = ds_get_recv(recv_callback, done_callback, body_callback);
+        assertEq(Type::Closure, recv_cb.type());
+    }
+
+    testSerializationSupport() {
+        # Test YAML serialization roundtrip using make_yaml/parse_yaml
+        hash<auto> test_data = {"key": "value", "number": 42};
+        string serialized = make_yaml(test_data);
+        hash<auto> deserialized = parse_yaml(serialized);
+        assertEq(test_data, deserialized);
+
+        # Test with list
+        list<auto> test_list = (1, 2, 3, "test");
+        serialized = make_yaml(test_list);
+        list<auto> deserialized_list = parse_yaml(serialized);
+        assertEq(test_list, deserialized_list);
+    }
+
+    testCompressionRoundtrip() {
+        string test_data = "This is test data that should be compressed and decompressed correctly";
+
+        # Test gzip if available
+        *code gzip_encode = ds_get_content_encode("gzip");
+        *code gzip_decode = ds_get_content_decode("gzip");
+        if (gzip_encode && gzip_decode) {
+            binary compressed = gzip_encode(test_data);
+            assertTrue(compressed.size() > 0);
+            string decompressed = gzip_decode(compressed);
+            assertEq(test_data, decompressed);
+        }
+
+        # Test deflate if available
+        *code deflate_encode = ds_get_content_encode("deflate");
+        *code deflate_decode = ds_get_content_decode("deflate");
+        if (deflate_encode && deflate_decode) {
+            binary compressed = deflate_encode(test_data);
+            assertTrue(compressed.size() > 0);
+            string decompressed = deflate_decode(compressed);
+            assertEq(test_data, decompressed);
+        }
+
+        # Test bzip2 if available
+        *code bzip2_encode = ds_get_content_encode("bzip2");
+        *code bzip2_decode = ds_get_content_decode("bzip2");
+        if (bzip2_encode && bzip2_decode) {
+            binary compressed = bzip2_encode(test_data);
+            assertTrue(compressed.size() > 0);
+            string decompressed = bzip2_decode(compressed);
+            assertEq(test_data, decompressed);
+        }
+    }
+
+    testEdgeCases() {
+        # Test with empty data
+        hash<auto> hdr = {};
+        ds_set_chunked_headers(\hdr);
+        assertEq("chunked", hdr."Transfer-Encoding");
+
+        # Test with client flag
+        hdr = {};
+        ds_set_chunked_headers(\hdr, NOTHING, True);
+        assertTrue(hdr.hasKey(DataStreamAccept));
+
+        hdr = {};
+        ds_set_non_chunked_headers(\hdr, NOTHING, True);
+        assertTrue(hdr.hasKey(DataStreamAccept));
+    }
+
+    testXPrefixDecoding() {
+        # Test x-prefix variants for backward compatibility (receiving)
+        *code x_deflate = ds_get_content_decode("x-deflate");
+        assertTrue(x_deflate.callp());
+
+        *code x_gzip = ds_get_content_decode("x-gzip");
+        assertTrue(x_gzip.callp());
+
+        *code x_bzip2 = ds_get_content_decode("x-bzip2");
+        assertTrue(x_bzip2.callp());
+
+        # Verify they actually work
+        string test_data = "test data for x-prefix encoding";
+        binary compressed = compress(test_data);
+        string decompressed = x_deflate(compressed);
+        assertEq(test_data, decompressed);
+    }
+
+    testIdentityEncoding() {
+        # Test identity encoding returns NOTHING (no transformation)
+        *code identity_encode = ds_get_content_encode("identity");
+        assertEq(NOTHING, identity_encode);
+
+        *code identity_decode = ds_get_content_decode("identity");
+        assertEq(NOTHING, identity_decode);
+    }
+
+    testSendCallbackWithData() {
+        # Test that ds_get_send() actually produces YAML
+        list<auto> data_to_send = (
+            {"item": 1, "name": "first"},
+            {"item": 2, "name": "second"},
+        );
+        int index = 0;
+
+        code data_provider = auto sub () {
+            if (index < data_to_send.size()) {
+                return data_to_send[index++];
+            }
+            return NOTHING;
+        };
+
+        code send_cb = ds_get_send(data_provider);
+
+        # First call should return YAML-encoded first item
+        auto result = send_cb();
+        assertTrue(result.typeCode() == NT_STRING);
+        hash<auto> parsed = parse_yaml(result);
+        assertEq(data_to_send[0], parsed);
+
+        # Second call should return YAML-encoded second item
+        result = send_cb();
+        parsed = parse_yaml(result);
+        assertEq(data_to_send[1], parsed);
+
+        # Third call should return NOTHING (end of data)
+        result = send_cb();
+        assertEq(NOTHING, result);
+    }
+
+    testSendCallbackErrorHandling() {
+        # Test that ds_get_send() catches exceptions and returns DataStreamError trailer
+        code error_provider = auto sub () {
+            throw "TEST-ERROR", "Test error message";
+        };
+
+        code send_cb = ds_get_send(error_provider);
+        auto result = send_cb();
+
+        # Should return a hash with DataStreamError key
+        assertTrue(result.typeCode() == NT_HASH);
+        assertTrue(result.hasKey(DataStreamError));
+        assertTrue(result{DataStreamError} =~ /TEST-ERROR/);
+        assertTrue(result{DataStreamError} =~ /Test error message/);
+    }
+
+    testReceiveCallbackWithData() {
+        # Test ds_get_recv() processes simulated HTTP data
+        list<auto> received_items = ();
+        bool end_called = False;
+        *string end_error;
+
+        code recv_callback = sub (auto data) {
+            push received_items, data;
+        };
+
+        code eod_callback = sub (*string err) {
+            end_called = True;
+            end_error = err;
+        };
+
+        code recv_cb = ds_get_recv(recv_callback, eod_callback);
+
+        # Create a mock socket object
+        MockSocket sock();
+
+        # Simulate receiving headers (non-chunked YAML response)
+        recv_cb({
+            "hdr": {
+                "content-type": MimeTypeYaml,
+                "status_code": 200,
+            },
+            "obj": sock,
+        });
+
+        # Simulate receiving data
+        string yaml_data = make_yaml({"key": "value", "num": 42});
+        recv_cb({
+            "data": yaml_data,
+            "deserialized": False,
+        });
+
+        # Verify data was received and parsed
+        assertEq(1, received_items.size());
+        assertEq("value", received_items[0].key);
+        assertEq(42, received_items[0].num);
+    }
+
+    testAcceptEncodingHeader() {
+        # Test ds_get_ds_accept_enc_header with various inputs
+        # Default (no input)
+        string result = ds_get_ds_accept_enc_header();
+        assertTrue(result =~ /gzip/);
+        assertTrue(result =~ /bzip2/);
+        assertTrue(result =~ /deflate/);
+
+        # Filter to only recognized encodings
+        result = ds_get_ds_accept_enc_header("gzip,deflate,unknown,identity");
+        assertTrue(result =~ /gzip/);
+        assertTrue(result =~ /deflate/);
+        assertTrue(result =~ /identity/);
+        assertFalse(result =~ /unknown/);
+
+        # All unrecognized encodings should return NOTHING
+        *string empty = ds_get_ds_accept_enc_header("unknown,invalid");
+        assertEq(NOTHING, empty);
+
+        # Preserve order from input
+        result = ds_get_ds_accept_enc_header("deflate,gzip");
+        int deflate_pos = result.find("deflate");
+        int gzip_pos = result.find("gzip");
+        assertTrue(deflate_pos < gzip_pos);
+    }
+
+    testRequestHeaders() {
+        # Test that request headers are set correctly
+        hash<auto> hdr = {};
+        ds_set_chunked_headers(\hdr, NOTHING, True);
+
+        # Check Accept header
+        assertTrue(hdr.Accept =~ /text\/x-yaml/);
+        assertTrue(hdr.Accept =~ /application\/octet-stream/);
+
+        # Check DataStream-Accept header
+        assertEq(MimeTypeYaml, hdr{DataStreamAccept});
+
+        # Check DataStream-Accept-Encoding header
+        assertTrue(hdr{DataStreamAcceptEncoding} =~ /gzip/);
+        assertTrue(hdr{DataStreamAcceptEncoding} =~ /bzip2/);
+        assertTrue(hdr{DataStreamAcceptEncoding} =~ /deflate/);
+
+        # Test non-chunked request headers
+        hdr = {};
+        ds_set_non_chunked_headers(\hdr, NOTHING, True);
+        assertEq(MimeTypeYaml, hdr{DataStreamAccept});
+    }
+}
+
+# Mock socket class for testing
+class MockSocket {
+    private {
+        string encoding = "UTF-8";
+    }
+
+    setEncoding(string enc) {
+        encoding = enc;
+    }
+
+    string encoding() {
+        return encoding;
     }
 }

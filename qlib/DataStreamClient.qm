@@ -38,9 +38,11 @@
 
 # do not use $ signs in declarations
 %new-style
+# strict argument handling
+%strict-args
 
 module DataStreamClient {
-    version = "1.3";
+    version = "1.4";
     desc = "user module implementing client support for the DataStream protocol: YAML-encoded HTTP chunked transfers "
         "where each chunk is a unique data entity";
     author = "David Nichols <david@qore.org>";
@@ -78,6 +80,11 @@ module DataStreamClient {
     @note Most of the underlying functionality is provided by the @ref datastreamutilintro "DataStreamUtil" module
 
     @section datastreamclientrelnotes Release Notes
+
+    @subsection datastreamclient_v1_4 DataStreamClient v1.4
+    - added \c %strict-args compile-time requirement
+    - added debug logging support
+    - updated copyright year to 2025
 
     @subsection datastreamclient_v1_3 DataStreamClient v1.3
     - added a connection class
@@ -256,6 +263,9 @@ rest.recvDataStream(recvcallback, endcallback, "GET", "/orders/1", body);
         */
     recvDataStream(code recv_callback, code eod_callback, string method, string path, auto body,
             timeout timeout_ms = 0, *reference<hash<auto>> info, *hash<auto> hdr) {
+        @debug(1) {
+            printf("DataStreamClient::recvDataStream() method=%y path=%y\n", method, path);
+        }
         prepareMsg(method, path, \body, \hdr);
 
         on_exit if (exists body) {
@@ -349,6 +359,9 @@ hash<auto> h = rest.sendDataStream(callback, "POST", "/path");
     */
     hash<auto> sendDataStream(code scb, string method, string path, timeout timeout_ms = 0,
             *reference<hash<auto>> info, *hash<auto> hdr) {
+        @debug(1) {
+            printf("DataStreamClient::sendDataStream() method=%y path=%y\n", method, path);
+        }
         hdr = headers + hdr;
 
         ds_set_chunked_headers(\hdr, seh.ce, True);
@@ -512,6 +525,9 @@ rest.sendRecvDataStream(send_callback, reccallback, "POST", "/path");
     sendRecvDataStream(code scb, code recv_callback, code eod_callback, string method, string path,
             timeout timeout_ms = 0,
             *reference<hash<auto>> info, *hash<auto> hdr) {
+        @debug(1) {
+            printf("DataStreamClient::sendRecvDataStream() method=%y path=%y\n", method, path);
+        }
         hdr = headers + hdr;
 
         ds_set_chunked_headers(\hdr, seh.ce, True);

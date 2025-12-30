@@ -9,10 +9,39 @@
 %requires HttpServer
 %requires Logger
 %requires Mime
+%requires yaml
 %requires ../qlib/DataStreamClient.qm
+%requires ../qlib/DataStreamUtil.qm
 %requires QUnit
 
 %exec-class DataStreamClientTest
+
+class YamlHandler inherits AbstractHttpRequestHandler {
+    private {
+        *string m_data;
+        string m_mime;
+    }
+
+    constructor(string mime, *string str) {
+        m_mime = mime;
+        m_data = str;
+    }
+
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (hdr.method == "DELETE") {
+            return makeResponse(404, m_data ?? make_yaml({"error": "not found"}),
+                {"Content-Type": m_mime});
+        } else if (hdr.method == "POST") {
+            # Echo back the parsed body
+            auto parsed = body ? parse_yaml(body) : {};
+            return makeResponse(200, make_yaml({"received": parsed}),
+                {"Content-Type": m_mime});
+        } else {
+            return makeResponse(200, m_data ?? make_yaml({"status": "ok"}),
+                {"Content-Type": m_mime});
+        }
+    }
+}
 
 class ErrorHandler inherits AbstractHttpRequestHandler {
     private {
@@ -42,6 +71,11 @@ class DataStreamClientTest inherits QUnit::Test {
 
     constructor() : Test("DataStreamClient test", "1.0") {
         addTestCase("base test", \testDataStreamClient());
+        addTestCase("constructor options", \testConstructorOptions());
+        addTestCase("connection test", \testConnection());
+        addTestCase("message classes", \testMessageClasses());
+        addTestCase("content encoding", \testContentEncoding());
+        addTestCase("error handling", \testErrorHandling());
 
         Logger logger("test", LoggerLevel::getLevelInfo());
         if (m_options.verbose > 2) {
@@ -53,6 +87,7 @@ class DataStreamClientTest inherits QUnit::Test {
         };
         m_http = new HttpServer(http_opts);
         m_http.setHandler("/api", "/api", MimeTypeText, new ErrorHandler(MimeTypeText));
+        m_http.setHandler("/yaml", "/yaml", MimeTypeYaml, new YamlHandler(MimeTypeYaml));
         port = m_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
 
         # Return for compatibility with test harness that checks return value.
@@ -62,7 +97,7 @@ class DataStreamClientTest inherits QUnit::Test {
     }
 
     testDataStreamClient() {
-        DataStreamClient client(("url": "http://localhost:" + port), True);
+        DataStreamClient client({"url": "http://localhost:" + port}, True);
 
         assertEq(True, client instanceof DataStreamClient);
 
@@ -74,10 +109,159 @@ class DataStreamClientTest inherits QUnit::Test {
         assertEq(200, info."response-code");
     }
 
+    testConstructorOptions() {
+        # Test with various options
+        hash<auto> opts = {
+            "url": "http://localhost:" + port,
+            "connect_timeout": 5000,
+            "timeout": 30000,
+        };
+
+        DataStreamClient client(opts, True);
+        assertEq(True, client instanceof DataStreamClient);
+
+        # Test default headers
+        client.addDefaultHeaders({"X-Custom": "value"});
+    }
+
+    testConnection() {
+        # Test DataStreamConnection
+        string url = "ds://localhost:" + port + "/";
+        DataStreamConnection conn("test", "test", url, {"monitor": False});
+        DataStreamClient client = conn.get(False);
+        assertEq(True, client instanceof DataStreamClient);
+
+        # Test dss scheme
+        url = "dss://localhost:" + port + "/";
+        conn = new DataStreamConnection("test", "test", url, {"monitor": False});
+        client = conn.get(False);
+        assertEq(True, client instanceof DataStreamClient);
+
+        # Test connection type
+        assertEq("dss", conn.getType());
+
+        # Test connection serialization
+        DataStreamConnection conn2 = Serializable::deserialize(conn.serialize());
+        assertEq(conn.url, conn2.url);
+    }
+
+    testMessageClasses() {
+        # Test DataStreamSendMessage
+        TestSendMessage send_msg();
+        int count = 0;
+        while (True) {
+            auto data = send_msg.sendData();
+            if (!exists data) break;
+            count++;
+            assertTrue(count <= 3);
+        }
+        assertEq(3, count);
+
+        # Test DataStreamRecvMessage
+        TestRecvMessage recv_msg();
+        recv_msg.recvData({"item": 1});
+        recv_msg.recvData({"item": 2});
+        recv_msg.recvDataDone();
+        assertEq(2, recv_msg.getReceivedCount());
+        assertTrue(recv_msg.isDone());
+
+        # Test with error
+        TestRecvMessage recv_msg2();
+        recv_msg2.recvDataDone("test error");
+        assertTrue(recv_msg2.isDone());
+        assertEq("test error", recv_msg2.getError());
+
+        # Test DataStreamMessage (combined send/recv)
+        TestMessage msg();
+        assertEq(True, msg instanceof DataStreamSendMessage);
+        assertEq(True, msg instanceof DataStreamRecvMessage);
+    }
+
+    testContentEncoding() {
+        DataStreamClient client({"url": "http://localhost:" + port}, True);
+
+        # Test setting content encoding
+        client.setContentEncoding("gzip");
+        client.setContentEncoding("auto");
+    }
+
+    testErrorHandling() {
+        DataStreamClient client({"url": "http://localhost:" + port});
+
+        hash<auto> info;
+
+        # Test 404 response
+        try {
+            client.del("/api", NOTHING, \info);
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq(404, info."response-code");
+        }
+    }
+
     log(string msg) {
         if (m_options.verbose > 2) {
             vprintf(msg + "\n", argv);
         }
+    }
+}
+
+class TestSendMessage inherits DataStreamSendMessage {
+    private {
+        int count = 0;
+    }
+
+    private auto sendDataImpl() {
+        if (count < 3) {
+            return {"item": count++};
+        }
+        return NOTHING;
+    }
+}
+
+class TestRecvMessage inherits DataStreamRecvMessage {
+    private {
+        int received_count = 0;
+        bool done = False;
+        *string error;
+    }
+
+    private nothing recvDataImpl(auto data) {
+        received_count++;
+    }
+
+    private nothing recvDataDoneImpl(*string err) {
+        done = True;
+        error = err;
+    }
+
+    int getReceivedCount() {
+        return received_count;
+    }
+
+    bool isDone() {
+        return done;
+    }
+
+    *string getError() {
+        return error;
+    }
+}
+
+class TestMessage inherits DataStreamMessage {
+    private {
+        int send_count = 0;
+        int recv_count = 0;
+    }
+
+    private auto sendDataImpl() {
+        if (send_count < 2) {
+            return {"item": send_count++};
+        }
+        return NOTHING;
+    }
+
+    private nothing recvDataImpl(auto data) {
+        recv_count++;
     }
 }
 

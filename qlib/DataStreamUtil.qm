@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # @file DataStreamUtil.qm Qore user module implementing support for the DataStream protocol: YAML-encoded HTTP chunked transfers where each chunk is a unique data entity
 
-/*  DataStreamUtil.qm Copyright (C) 2014 - 2022 Qore Technologies, s.r.o.
+/*  DataStreamUtil.qm Copyright (C) 2014 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -44,9 +44,11 @@
 
 # do not use $ signs in declarations
 %new-style
+# strict argument handling
+%strict-args
 
 module DataStreamUtil {
-    version = "1.1";
+    version = "1.2";
     desc = "user module supporting YAML-encoded HTTP chunked transfers where each chunk is a unique data entity";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -197,6 +199,10 @@ Server: Qorus-HTTP-Server/0.3.7
 
     @section datastreamutilrelnotes Release Notes
 
+    @subsection datastreamutil_v1_2 DataStreamUtil v1.2
+    - added \c %strict-args compile-time requirement
+    - updated copyright year to 2025
+
     @subsection datastreamutil_v1_1 DataStreamUtil v1.1
     - minor updates for complex types
 
@@ -229,21 +235,35 @@ public namespace DataStreamUtil {
     public const DataStreamError = "DataStream-Error";
 
     #! supported values for the DataStream-Accept-Encoding header
-    public const DataStreamContentEncodingHash = (
+    public const DataStreamContentEncodingHash = {
         "gzip": True,
         "bzip2": True,
         "deflate": True,
         "identity": True,
-    );
+    };
     #/@}
 
-    public const DataStreamDeserializeYaml = (
+    #! @defgroup DataStreamDeserialization DataStream Deserialization Support
+    /** These constants provide deserialization support for various content types in DataStream responses
+    */
+    #/@{
+    #! YAML deserialization support hash
+    /** Contains:
+        - \c code: "yaml" - the serialization code
+        - \c in: a call reference to @ref Qore::parse_yaml() for deserializing YAML data
+    */
+    public const DataStreamDeserializeYaml = {
         "code": "yaml",
         "in": \parse_yaml(),
-    );
+    };
 
 %ifndef NoXml
-    const DataStreamDeserializeXml = (
+    #! XML deserialization support hash (only available if the xml module is present)
+    /** Contains:
+        - \c code: "xml" - the serialization code
+        - \c in: a closure that tries @ref Qore::parse_xmlrpc_value() first, then falls back to @ref Qore::parse_xml()
+    */
+    const DataStreamDeserializeXml = {
         "code": "xml",
         "in": hash<auto> sub (string xml) {
             try {
@@ -252,23 +272,36 @@ public namespace DataStreamUtil {
                 return parse_xml(xml);
             }
         },
-    );
+    };
 %endif
 
-    public const DataStreamDeserializationSupport = (
+    #! Hash mapping content-types to deserialization support
+    /** Keys are MIME content-type strings, values are hashes with:
+        - \c code: a string identifying the serialization format
+        - \c in: a call reference or closure for deserializing the data
+
+        Supported content types:
+        - \c "application/x-yaml": YAML deserialization
+        - \c "text/x-yaml": YAML deserialization
+        - \c "application/json": JSON deserialization (if json module is available)
+        - \c "text/xml": XML deserialization (if xml module is available)
+        - \c "application/xml": XML deserialization (if xml module is available)
+    */
+    public const DataStreamDeserializationSupport = {
         MimeTypeYamlRpc: DataStreamDeserializeYaml,
         MimeTypeYaml: DataStreamDeserializeYaml,
 %ifndef NoJson
-        MimeTypeJson: (
+        MimeTypeJson: {
             "code": "json",
-            "in": \parseJSON(),
-        ),
+            "in": \parse_json(),
+        },
 %endif
 %ifndef NoXml
         MimeTypeXml: DataStreamDeserializeXml,
         MimeTypeXmlApp: DataStreamDeserializeXml,
 %endif
-    );
+    };
+    #/@}
 
     #! returns a @ref call_reference "call reference" (or @ref nothing) based on an optional \c "Content-Encoding" header value for decoding HTTP encoded data
     /** @par Example:

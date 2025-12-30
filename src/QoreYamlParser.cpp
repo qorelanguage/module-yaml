@@ -2,7 +2,7 @@
 /*
     yaml Qore module
 
-    Copyright (C) 2010 - 2022 Qore Technologies, s.r.o.
+    Copyright (C) 2010 - 2025 Qore Technologies, s.r.o.
 
     This library is free software; you can redistribute it and/or
     modify it under the terms of the GNU Lesser General Public
@@ -332,8 +332,8 @@ static QoreValue try_parse_number(const char* val, size_t len, bool no_simple_nu
                     || (*val == '-' && strcmp(val, "-9223372036854775808") <= 0))))) {
             if (no_simple_numeric)
                 return QoreValue();
-            int64 iv = strtoll(val, 0, 10);
             errno = 0;
+            int64 iv = strtoll(val, 0, 10);
             assert(errno != ERANGE);
             //printd(5, "try_parse_number() returning INT\n");
             return iv;

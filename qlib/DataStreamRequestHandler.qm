@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # @file DataStreamRequestHandler.qm Qore user module implementing client support for the DataStream protocol: YAML-encoded HTTP chunked transfers where each chunk is a unique data entity
 
-/*  DataStreamRequestHandler.qm Copyright (C) 2014 - 2022 Qore Technologies, s.r.o.
+/*  DataStreamRequestHandler.qm Copyright (C) 2014 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -38,9 +38,11 @@
 
 # do not use $ signs in declarations
 %new-style
+# strict argument handling
+%strict-args
 
 module DataStreamRequestHandler {
-    version = "1.0";
+    version = "1.1";
     desc = "user module implementing server support for the DataStream protocol: YAML-encoded HTTP chunked transfers "
         "where each chunk is a unique data entity";
     author = "David Nichols <david@qore.org>";
@@ -76,6 +78,11 @@ module DataStreamRequestHandler {
 
     @section datastreamrequesthandlerrelnotes Release Notes
 
+    @subsection datastreamrequesthandler_v1_1 DataStreamRequestHandler v1.1
+    - added \c %strict-args compile-time requirement
+    - added debug logging support
+    - updated copyright year to 2025
+
     @subsection datastreamrequesthandler_v1_0 DataStreamRequestHandler v1.0
     - initial release of the module
 */
@@ -109,6 +116,9 @@ public namespace DataStreamRequestHandler {
 
 	#! creates the chunked request handler according to the arguments
 	constructor(hash<auto> cx, *hash<auto> ah) : AbstractRestStreamRequestHandler(cx, ah) {
+	    @debug(1) {
+	        printf("AbstractDataStreamRequestHandler::constructor() encoding=%y\n", cx.encoding);
+	    }
 	    recv_callback = ds_get_recv(\recvData(), \recvDataDone());
 	    scb = ds_get_send(\sendData(), ds_get_content_encode(cx.encoding));
 
@@ -177,6 +187,9 @@ public namespace DataStreamRequestHandler {
     /** The receive callback calls @ref recvDataImpl() to deliver deserialized data
     */
 	nothing recvImpl(hash v) {
+	    @debug(2) {
+	        printf("AbstractDataStreamRequestHandler::recvImpl() data_size=%d\n", v.data.size());
+	    }
 	    recv_callback(v);
 	}
 
@@ -184,6 +197,9 @@ public namespace DataStreamRequestHandler {
     /** The send callback calls @ref sendDataImpl() to get the data to serialize and encode and send as a response
     */
 	auto sendImpl() {
+	    @debug(2) {
+	        printf("AbstractDataStreamRequestHandler::sendImpl()\n");
+	    }
 	    return scb();
 	}
 

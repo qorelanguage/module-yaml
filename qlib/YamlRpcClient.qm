@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file YamlRpcClient.qm @brief provides the definition for the YamlRpcClient class
 
-/*  YamlRpcClient.qm Copyright 2012 - 2023 Qore Technologies, s.r.o.
+/*  YamlRpcClient.qm Copyright 2012 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -43,7 +43,7 @@
 %strict-args
 
 module YamlRpcClient {
-    version = "1.5";
+    version = "1.6";
     desc = "YamlRpcClient module";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -156,6 +156,10 @@ Content-Length: 118
     @endcode
 
     @section yamlrpcclient_relnotes YamlRpcClient Module Release History
+
+    @subsection yrc_v_1_6 YamlRpcClient v1.6
+    - added debug logging support
+    - updated copyright year to 2025
 
     @subsection yrc_v_1_5 YamlRpcClient v1.5
     - implemented support for a data provider scheme cache and rich option information for connections
@@ -282,10 +286,20 @@ public class YamlRpcClient inherits Qore::HTTPClient {
         @return the value returned from the server; if an error response is returned, an exception is raised
     */
     auto callArgs(string method, auto args) {
+        @assert(method);
+        @debug(1) {
+            printf("YamlRpcClient::callArgs() method=%y path=%y\n", method, path);
+        }
         # create outgoing message in YamlRpc Call format
         string msg = YamlRpcClient::makeRequest(method, args, flags);
+        @debug(2) {
+            printf("YamlRpcClient::callArgs() request=%y\n", msg);
+        }
         # send the message to the server and get the response as an YAML string
         string ans = post(path, msg, headers);
+        @debug(2) {
+            printf("YamlRpcClient::callArgs() response=%y\n", ans);
+        }
         # parse the response and return a qore data structure
         return parse_yaml(ans);
     }

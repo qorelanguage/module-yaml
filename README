@@ -4,15 +4,16 @@ INTRODUCTION
 ------------
 The Qore yaml module provides simple de/serialization between Qore data and YAML strings.
 For more information about YAML, see:
-    	http://www.yaml.org
+    http://www.yaml.org
 
-Basically this module provides a simple Qore-language API to libyaml
-	http://pyyaml.org/wiki/LibYAML
+Basically this module provides a simple Qore-language API to libyaml:
+    http://pyyaml.org/wiki/LibYAML
 
 Conversions are supported with all Qore data types (except objects and NULL) with no information loss.
 Qore objects are currently not serialized, and NULL is serialized as YAML 'null'; deserialized as Qore NOTHING.
+Use the EmitSqlNull flag to serialize NULL as !sqlnull and deserialize it back to NULL.
 
-see README and docs for more information
+See the generated documentation for more detailed information.
 
 
 LICENSE
@@ -27,27 +28,73 @@ See COPYING.MIT and COPYING.LGPL for details on the open-source licenses.
 
 BUILDING
 --------
-Requires qore 0.8.5+ and libyaml 0.1.3+ to build and run
+Requires qore 1.0+ and libyaml 0.1.3+ to build and run.
 
-to configure the build, execute
-   	configure --disable-debug
+Building with CMake (recommended)
+---------------------------------
+CMake 3.5 or later is required.
 
-if the qore library cannot be found, then you can use:
-   	configure --disable-debug --with-qore=<dir>
+To configure and build:
+    mkdir build
+    cd build
+    cmake ..
+    make
 
-if libyaml cannot be found, then you can use:
-   	configure --disable-debug --with-libyaml=<dir>
+To install:
+    make install
 
-The qore binary also needs to be in the path so configure can determine the module directory
+To run tests:
+    make test
 
-Then execute
+CMake options:
+    -DCMAKE_INSTALL_PREFIX=/path    Set installation prefix
+    -DCMAKE_BUILD_TYPE=Release      Set build type (Release, Debug, etc.)
 
-make && make install
+If Qore or libyaml cannot be found automatically, you can specify:
+    cmake .. -DQORE_DIR=/path/to/qore -DLIBYAML_DIR=/path/to/libyaml
+
+
+Building with Autotools (legacy)
+--------------------------------
+The Autotools build system is still supported but CMake is preferred.
+
+To configure the build, execute:
+    ./configure --disable-debug
+
+If the qore library cannot be found, then you can use:
+    ./configure --disable-debug --with-qore=<dir>
+
+If libyaml cannot be found, then you can use:
+    ./configure --disable-debug --with-libyaml=<dir>
+
+The qore binary also needs to be in the path so configure can determine the module directory.
+
+Then execute:
+    make && make install
 
 (or 'make && sudo make install' as needed)
 
-please direct any questions to:
-david@qore.org
 
-or you can post in the qore forums at
-        http://qore.org/forums
+USER MODULES
+------------
+This module includes several Qore user modules:
+
+  - YamlRpcHandler: Server-side YAML-RPC protocol support for HttpServer
+  - YamlRpcClient: Client-side YAML-RPC protocol support
+  - DataStreamUtil: Utility functions for the DataStream protocol
+  - DataStreamClient: Client-side DataStream protocol support
+  - DataStreamRequestHandler: Server-side DataStream protocol support
+
+See the module documentation for details on each module.
+
+
+CONTACT
+-------
+Please direct any questions to:
+    david@qore.org
+
+Or you can post in the qore forums at:
+    http://qore.org/forums
+
+Or report issues at:
+    https://github.com/qorelanguage/qore/issues
