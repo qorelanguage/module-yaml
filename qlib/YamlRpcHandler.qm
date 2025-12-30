@@ -102,7 +102,7 @@ log("now listening on %s\n", Bind);
 http.waitStop();
     @endcode
 
-    @section ymlarpchandler_relnotes YamlRpcHandler Release Notes
+    @section yamlrpchandler_relnotes YamlRpcHandler Release Notes
 
     @subsection yamlrpchandler_v1_5 YamlRpcHandler v1.5
     - added module-level compile-time requirements: \c %strict-args, \c %require-types, \c %enable-all-warnings
