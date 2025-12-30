@@ -2,7 +2,7 @@
 /*
     yaml Qore module
 
-    Copyright (C) 2010 - 2022 Qore Technologies, s.r.o.
+    Copyright (C) 2010 - 2025 Qore Technologies, s.r.o.
 
     This library is free software; you can redistribute it and/or
     modify it under the terms of the GNU Lesser General Public
@@ -113,8 +113,6 @@ int QoreYamlEmitter::emit(const QoreValue& v) {
             err("cannot convert Qore type '%s' to YAML", v.getFullTypeName());
             return -1;
     }
-
-    return 0;
 }
 
 int QoreYamlEmitter::emitValue(const DateTime &d) {

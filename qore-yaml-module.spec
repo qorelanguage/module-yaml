@@ -1,4 +1,4 @@
-%global mod_ver 1.0.0
+%global mod_ver 1.1.0
 
 %{?_datarootdir: %global mydatarootdir %_datarootdir}
 %{!?_datarootdir: %global mydatarootdir /usr/share}
@@ -114,6 +114,15 @@ qore -l ./yaml-api-%{module_api}.qmod test/YamlRpcHandler.qtest -v
 qore -l ./yaml-api-%{module_api}.qmod test/yaml.qtest -v
 
 %changelog
+* Sun Dec 29 2024 David Nichols <david@qore.org> 1.1.0
+- updated to version 1.1.0
+- fixed errno handling in integer parsing
+- fixed error message in YAML parser
+- removed dead code in emitter
+- updated copyrights to 2025
+- added strict-args and debug logging to user modules
+- significantly expanded test coverage
+
 * Wed May 18 2022 David Nichols <david@qore.org> 1.0.0
 - updated to version 1.0.0
 

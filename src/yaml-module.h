@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright 2003 - 2022 Qore Technologies, s.r.o.
+    Copyright 2003 - 2025 Qore Technologies, s.r.o.
 
     This library is free software; you can redistribute it and/or
     modify it under the terms of the GNU Lesser General Public
@@ -471,8 +471,9 @@ protected:
 
         if (!yaml_parser_parse(&parser, &event)) {
             valid = false;
-            xsink->raiseException(QY_PARSE_ERR, "getEvent: unexpected event '%s' when parsing YAML document",
-                get_event_name(event.type));
+            xsink->raiseException(QY_PARSE_ERR, "YAML parser error at line %d column %d: %s",
+                (int)parser.problem_mark.line + 1, (int)parser.problem_mark.column + 1,
+                parser.problem ? parser.problem : "unknown error");
             return -1;
         }
         //printd(5, "QoreYamlParser::getEvent() got %s event (%d)\n", get_event_name(event.type), event.type);
