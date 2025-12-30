@@ -263,9 +263,7 @@ rest.recvDataStream(recvcallback, endcallback, "GET", "/orders/1", body);
         */
     recvDataStream(code recv_callback, code eod_callback, string method, string path, auto body,
             timeout timeout_ms = 0, *reference<hash<auto>> info, *hash<auto> hdr) {
-        @debug(1) {
-            printf("DataStreamClient::recvDataStream() method=%y path=%y\n", method, path);
-        }
+        @debug(printf("DataStreamClient::recvDataStream() method=%y path=%y\n", method, path));
         prepareMsg(method, path, \body, \hdr);
 
         on_exit if (exists body) {
@@ -359,9 +357,7 @@ hash<auto> h = rest.sendDataStream(callback, "POST", "/path");
     */
     hash<auto> sendDataStream(code scb, string method, string path, timeout timeout_ms = 0,
             *reference<hash<auto>> info, *hash<auto> hdr) {
-        @debug(1) {
-            printf("DataStreamClient::sendDataStream() method=%y path=%y\n", method, path);
-        }
+        @debug(printf("DataStreamClient::sendDataStream() method=%y path=%y\n", method, path));
         hdr = headers + hdr;
 
         ds_set_chunked_headers(\hdr, seh.ce, True);
@@ -525,9 +521,7 @@ rest.sendRecvDataStream(send_callback, reccallback, "POST", "/path");
     sendRecvDataStream(code scb, code recv_callback, code eod_callback, string method, string path,
             timeout timeout_ms = 0,
             *reference<hash<auto>> info, *hash<auto> hdr) {
-        @debug(1) {
-            printf("DataStreamClient::sendRecvDataStream() method=%y path=%y\n", method, path);
-        }
+        @debug(printf("DataStreamClient::sendRecvDataStream() method=%y path=%y\n", method, path));
         hdr = headers + hdr;
 
         ds_set_chunked_headers(\hdr, seh.ce, True);

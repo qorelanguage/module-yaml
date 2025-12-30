@@ -116,9 +116,7 @@ public namespace DataStreamRequestHandler {
 
 	#! creates the chunked request handler according to the arguments
 	constructor(hash<auto> cx, *hash<auto> ah) : AbstractRestStreamRequestHandler(cx, ah) {
-	    @debug(1) {
-	        printf("AbstractDataStreamRequestHandler::constructor() encoding=%y\n", cx.encoding);
-	    }
+	    @debug(printf("AbstractDataStreamRequestHandler::constructor() encoding=%y\n", cx.encoding));
 	    recv_callback = ds_get_recv(\recvData(), \recvDataDone());
 	    scb = ds_get_send(\sendData(), ds_get_content_encode(cx.encoding));
 
@@ -187,9 +185,7 @@ public namespace DataStreamRequestHandler {
     /** The receive callback calls @ref recvDataImpl() to deliver deserialized data
     */
 	nothing recvImpl(hash v) {
-	    @debug(2) {
-	        printf("AbstractDataStreamRequestHandler::recvImpl() data_size=%d\n", v.data.size());
-	    }
+	    @debug(printf("AbstractDataStreamRequestHandler::recvImpl() data_size=%d\n", v.data.size()));
 	    recv_callback(v);
 	}
 
@@ -197,9 +193,7 @@ public namespace DataStreamRequestHandler {
     /** The send callback calls @ref sendDataImpl() to get the data to serialize and encode and send as a response
     */
 	auto sendImpl() {
-	    @debug(2) {
-	        printf("AbstractDataStreamRequestHandler::sendImpl()\n");
-	    }
+	    @debug(printf("AbstractDataStreamRequestHandler::sendImpl()\n"));
 	    return scb();
 	}
 

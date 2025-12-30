@@ -279,10 +279,8 @@ public namespace YamlRpcHandler {
         # method called by HttpServer to handle a request
         # don't reimplement this method; fix/enhance it in the module
         final hash handleRequest(hash cx, hash<auto> hdr, *data body) {
-            @debug(1) {
-                log(cx, "handleRequest: method=%y path=%y body_size=%d", hdr.method, hdr.path,
-                    body.size());
-            }
+            @debug(log(cx, "handleRequest: method=%y path=%y body_size=%d", hdr.method, hdr.path,
+                body.size()));
 
             hash yamlrpc;
 
@@ -413,9 +411,8 @@ public namespace YamlRpcHandler {
             }
 
             if (found) {
-                @debug(2) {
-                    log(cx, "callMethod: found method=%y text=%y internal=%y", method, found.text, found.internal);
-                }
+                @debug(log(cx, "callMethod: found method=%y text=%y internal=%y", method, found.text,
+                    found.internal));
                 # add context marker, if any
                 cx.cmark = found.cmark;
                 cx.function = found.function;

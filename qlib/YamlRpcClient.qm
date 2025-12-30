@@ -287,19 +287,13 @@ public class YamlRpcClient inherits Qore::HTTPClient {
     */
     auto callArgs(string method, auto args) {
         @assert(method);
-        @debug(1) {
-            printf("YamlRpcClient::callArgs() method=%y path=%y\n", method, path);
-        }
+        @debug(printf("YamlRpcClient::callArgs() method=%y path=%y\n", method, path));
         # create outgoing message in YamlRpc Call format
         string msg = YamlRpcClient::makeRequest(method, args, flags);
-        @debug(2) {
-            printf("YamlRpcClient::callArgs() request=%y\n", msg);
-        }
+        @debug(printf("YamlRpcClient::callArgs() request=%y\n", msg));
         # send the message to the server and get the response as an YAML string
         string ans = post(path, msg, headers);
-        @debug(2) {
-            printf("YamlRpcClient::callArgs() response=%y\n", ans);
-        }
+        @debug(printf("YamlRpcClient::callArgs() response=%y\n", ans));
         # parse the response and return a qore data structure
         return parse_yaml(ans);
     }
