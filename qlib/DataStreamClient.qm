@@ -204,8 +204,8 @@ DataStreamClient ds({"url": "http://localhost:8001/rest"});
         - \c default_port: The default port number to connect to if none is given in the URL
         - \c headers: an optional hash of headers to send with every request, these can also be overridden in request
           method calls
-        - \c http_version: Either '1.0' or '1.1' for the claimed HTTP protocol version compliancy in outgoing message
-          headers
+        - \c http_version: HTTP version to use ('auto', '1.0', '1.1', or '2.0', defaults to 'auto'); HTTP/2 requires
+          TLS and is negotiated via ALPN
         - \c max_redirects: The maximum number of redirects before throwing an exception (the default is 5)
         - \c proxy: The proxy URL for connecting through a proxy
         - \c timeout: The timeout value in milliseconds (also can be a relative date-time value for clarity, ex:
