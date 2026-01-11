@@ -72,6 +72,7 @@ class DataStreamClientTest inherits QUnit::Test {
     constructor() : Test("DataStreamClient test", "1.0") {
         addTestCase("base test", \testDataStreamClient());
         addTestCase("constructor options", \testConstructorOptions());
+        addTestCase("http version cap", \testHttpVersionCap());
         addTestCase("connection test", \testConnection());
         addTestCase("message classes", \testMessageClasses());
         addTestCase("content encoding", \testContentEncoding());
@@ -122,6 +123,29 @@ class DataStreamClientTest inherits QUnit::Test {
 
         # Test default headers
         client.addDefaultHeaders({"X-Custom": "value"});
+    }
+
+    testHttpVersionCap() {
+        DataStreamClient client_default({"url": "http://localhost:" + port}, True);
+        assertEq("1.1", client_default.getEffectiveHttpVersion());
+
+        DataStreamClient client_auto({"url": "http://localhost:" + port, "http_version": "auto"}, True);
+        assertEq("1.1", client_auto.getEffectiveHttpVersion());
+
+        DataStreamClient client_two({"url": "http://localhost:" + port, "http_version": "2.0"}, True);
+        assertEq("1.1", client_two.getEffectiveHttpVersion());
+
+        DataStreamClient client_one_one({"url": "http://localhost:" + port, "http_version": "1.1"}, True);
+        assertEq("1.1", client_one_one.getEffectiveHttpVersion());
+
+        DataStreamClient client_one_zero({"url": "http://localhost:" + port, "http_version": "1.0"}, True);
+        assertEq("1.0", client_one_zero.getEffectiveHttpVersion());
+
+        code bad_ctor = sub () {
+            DataStreamClient bad({"url": "http://localhost:" + port, "http_version": "3.0"}, True);
+            delete bad;
+        };
+        assertThrows("HTTP-VERSION-ERROR", bad_ctor);
     }
 
     testConnection() {

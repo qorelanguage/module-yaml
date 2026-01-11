@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # @file DataStreamClient.qm Qore user module implementing client support for the DataStream protocol: YAML-encoded HTTP chunked transfers where each chunk is a unique data entity
 
-/*  DataStreamClient.qm Copyright (C) 2014 - 2025 Qore Technologies, s.r.o.
+/*  DataStreamClient.qm Copyright (C) 2014 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -174,6 +174,15 @@ public class DataStreamRecvMessage {
 public class DataStreamMessage inherits DataStreamSendMessage, DataStreamRecvMessage {
 }
 
+hash<auto> sub ds_process_opts(*hash<auto> opts) {
+    hash<auto> local_opts = opts ?? {};
+    *string http_version = local_opts.http_version;
+    if (!http_version || http_version == "auto" || http_version == "2.0" || http_version == "2") {
+        local_opts.http_version = "1.1";
+    }
+    return local_opts;
+}
+
 #! Extends @ref RestClient::RestClient "RestClient" with support for the @ref datastreamprotocol "DataStream protocol"
 public class DataStreamClient inherits RestClient::RestClient {
     public {
@@ -204,8 +213,9 @@ DataStreamClient ds({"url": "http://localhost:8001/rest"});
         - \c default_port: The default port number to connect to if none is given in the URL
         - \c headers: an optional hash of headers to send with every request, these can also be overridden in request
           method calls
-        - \c http_version: HTTP version to use ('auto', '1.0', '1.1', or '2.0', defaults to 'auto'); HTTP/2 requires
-          TLS and is negotiated via ALPN
+        - \c http_version: HTTP version to use ('auto', '1.0', '1.1', or '2.0', defaults to 'auto'); DataStream
+          requires HTTP/1.1 chunked transfer encoding, therefore HTTP/2 is not supported and this option is capped
+          at \c "1.1"
         - \c max_redirects: The maximum number of redirects before throwing an exception (the default is 5)
         - \c proxy: The proxy URL for connecting through a proxy
         - \c timeout: The timeout value in milliseconds (also can be a relative date-time value for clarity, ex:
@@ -219,7 +229,10 @@ DataStreamClient ds({"url": "http://localhost:8001/rest"});
         @note the \c data argument to @ref RestClient::RestClient::constructor() "RestClient::constructor()" is set to
         \c "yaml" automatically
     */
-    constructor(*hash<auto> opts, *softbool do_not_connect) : RestClient(opts + ("data": "yaml"), do_not_connect) {
+    constructor(*hash<auto> opts, *softbool do_not_connect) : RestClient(ds_process_opts(opts) + ("data": "yaml"),
+            do_not_connect) {
+        hash<auto> local_opts = ds_process_opts(opts);
+
         # build default DataStream-Accept-Encoding header from Accept-Encoding header if present
         hash<auto> dh = DefaultHeaders;
         if (headers."Accept-Encoding") {
@@ -228,8 +241,18 @@ DataStreamClient ds({"url": "http://localhost:8001/rest"});
                 dh{DataStreamAcceptEncoding} = dae;
         } else
             dh{DataStreamAcceptEncoding} = "gzip,bzip2,deflate";
-        headers = dh + opts.headers;
+        headers = dh + local_opts.headers;
+        effective_http_version = local_opts.http_version ?? "1.1";
     }
+
+    public string getEffectiveHttpVersion() {
+        return effective_http_version;
+    }
+
+    private {
+        string effective_http_version = "1.1";
+    }
+
 
     #! sends an HTTP request to an HTTP REST server supporting the @ref datastreamprotocol "DataStream protocol" and returns the decoded and deserialized response in the given callback as each HTTP chunk is received
     /** @par Example:
