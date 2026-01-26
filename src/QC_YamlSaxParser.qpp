@@ -202,7 +202,7 @@ hashdecl YamlSaxEvent {
         - @ref YamlSaxEventType::MappingEnd - Mapping/hash ends
         - @ref YamlSaxEventType::Alias - Alias reference (*anchor)
     */
-    enum<YamlSaxEventType> type;
+    int type;
 
     //! Anchor name if present
     /** Set when a node defines an anchor for later reference.
@@ -280,7 +280,7 @@ reference: *my_anchor
         - @ref YamlScalarStyle::Literal - Literal block scalar (|)
         - @ref YamlScalarStyle::Folded - Folded block scalar (>)
     */
-    *enum<YamlScalarStyle> style;
+    *string style;
 
     //! Implicit tag flag
     /** Only present for @ref YamlSaxScalar events. When @ref True,
