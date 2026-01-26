@@ -100,7 +100,15 @@ QoreValue QoreYamlParser::parseNode(bool favor_string) {
 QoreListNode* QoreYamlParser::parseSeq() {
     ReferenceHolder<QoreListNode> l(new QoreListNode(autoTypeInfo), xsink);
 
+    int iteration = 0;
     while (true) {
+        // Check for interrupt every 1000 iterations in sandboxed environments
+        if (++iteration % 1000 == 0) {
+            if (qore_check_io_interrupt(xsink, "YAML sequence parsing")) {
+                return nullptr;
+            }
+        }
+
         if (getEvent())
             return nullptr;
 
@@ -123,7 +131,15 @@ QoreHashNode* QoreYamlParser::parseMap() {
     // Collect merge key values to apply at the end (so explicit keys take precedence)
     ReferenceHolder<QoreListNode> merge_values(xsink);
 
+    int iteration = 0;
     while (true) {
+        // Check for interrupt every 1000 iterations in sandboxed environments
+        if (++iteration % 1000 == 0) {
+            if (qore_check_io_interrupt(xsink, "YAML mapping parsing")) {
+                return nullptr;
+            }
+        }
+
         if (getEvent())
             return nullptr;
 

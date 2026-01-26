@@ -29,6 +29,7 @@
 #endif
 
 #include <qore/Qore.h>
+#include <qore/QoreSandboxManager.h>
 
 #include <yaml.h>
 

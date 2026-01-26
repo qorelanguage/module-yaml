@@ -112,7 +112,15 @@ bool QoreYamlSaxParser::processEvents(ParseState& state) {
     yaml_event_t event;
     bool done = false;
 
+    int iteration = 0;
     while (!done) {
+        // Check for interrupt every 1000 iterations in sandboxed environments
+        if (++iteration % 1000 == 0) {
+            if (qore_check_io_interrupt(state.xsink, "YAML SAX parsing")) {
+                return false;
+            }
+        }
+
         if (!yaml_parser_parse(&state.parser, &event)) {
             state.xsink->raiseException(QY_SAX_PARSE_ERR,
                 "YAML parse error at line %d column %d: %s",

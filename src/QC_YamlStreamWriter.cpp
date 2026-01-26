@@ -436,7 +436,14 @@ int QoreYamlStreamWriter::writeValueRecursive(QoreValue value, ExceptionSink* xs
             if (startMapping(nullptr, xsink)) return -1;
             const QoreHashNode* h = value.get<const QoreHashNode>();
             ConstHashIterator hi(h);
+            int iteration = 0;
             while (hi.next()) {
+                // Check for interrupt every 1000 iterations in sandboxed environments
+                if (++iteration % 1000 == 0) {
+                    if (qore_check_io_interrupt(xsink, "YAML mapping writing")) {
+                        return -1;
+                    }
+                }
                 SimpleRefHolder<QoreStringNode> key(new QoreStringNode(hi.getKey()));
                 if (writeKey(*key, xsink)) return -1;
                 if (writeValueRecursive(hi.get(), xsink)) return -1;
@@ -448,7 +455,14 @@ int QoreYamlStreamWriter::writeValueRecursive(QoreValue value, ExceptionSink* xs
             if (startSequence(nullptr, xsink)) return -1;
             const QoreListNode* l = value.get<const QoreListNode>();
             ConstListIterator li(l);
+            int iteration = 0;
             while (li.next()) {
+                // Check for interrupt every 1000 iterations in sandboxed environments
+                if (++iteration % 1000 == 0) {
+                    if (qore_check_io_interrupt(xsink, "YAML sequence writing")) {
+                        return -1;
+                    }
+                }
                 if (writeValueRecursive(li.getValue(), xsink)) return -1;
             }
             return endSequence(xsink);
