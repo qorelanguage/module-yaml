@@ -18,12 +18,20 @@ include_directories( ${LIBYAML_INCLUDE_DIR} )
 
 set(QPP_SRC
     src/ql_yaml.qpp
+    src/QC_YamlSaxParser.qpp
+    src/QC_YamlDocumentIterator.qpp
+    src/QC_YamlStreamWriter.qpp
 )
 
 set(CPP_SRC
     src/QoreYamlEmitter.cpp
     src/QoreYamlParser.cpp
+    src/QC_YamlSaxParser.cpp
+    src/QC_YamlDocumentIterator.cpp
+    src/QC_YamlStreamWriter.cpp
     src/yaml-module.cpp
+    src/yaml-scalar-util.cpp
+    src/YamlStreamReadHandler.cpp
 )
 
 set(QMOD
@@ -32,6 +40,9 @@ set(QMOD
     qlib/YamlRpcHandler.qm
     qlib/DataStreamRequestHandler.qm
     qlib/YamlRpcClient.qm
+    qlib/YamlDocumentDataProvider/YamlDocumentDataProvider.qm
+    qlib/YamlTagHandler.qm
+    qlib/YamlSchema.qm
 )
 
 # Check for C++11.
@@ -69,6 +80,9 @@ qore_external_user_module("qlib/DataStreamClient.qm" "DataStreamUtil")
 qore_external_user_module("qlib/DataStreamRequestHandler.qm" "DataStreamUtil")
 qore_external_user_module("qlib/YamlRpcClient.qm" "")
 qore_external_user_module("qlib/YamlRpcHandler.qm" "")
+qore_external_user_module("qlib/YamlDocumentDataProvider" "")
+qore_external_user_module("qlib/YamlTagHandler.qm" "")
+qore_external_user_module("qlib/YamlSchema.qm" "")
 
 qore_dist("${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}")
 

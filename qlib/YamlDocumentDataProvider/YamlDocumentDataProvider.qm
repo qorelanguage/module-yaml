@@ -1,0 +1,58 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%requires qore >= 2.0
+
+%requires(reexport) DataProvider
+%requires yaml
+
+%new-style
+%strict-args
+%require-types
+%enable-all-warnings
+
+module YamlDocumentDataProvider {
+    version = "1.0";
+    desc = "User module providing YAML document stream data providers";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        DataProvider::registerFactory(new YamlDocumentDataProviderFactory());
+    };
+}
+
+/** @mainpage YamlDocumentDataProvider Module
+
+@section yamldocintro Introduction
+
+The %YamlDocumentDataProvider module provides data provider support for YAML
+document streams, enabling integration with Qore's data provider framework
+for reading multi-document YAML files.
+
+@section yamldocusage Usage
+
+@code{.py}
+%requires YamlDocumentDataProvider
+
+# Create provider from file path
+auto provider = DataProvider::create("yamldoc", {"path": "/path/to/file.yaml"});
+
+# Iterate records
+auto iter = provider.searchRecords();
+while (iter.next()) {
+    hash<auto> record = iter.getValue();
+    # Process document...
+}
+@endcode
+
+@section yamldocclasses Classes
+
+- @ref YamlDocumentDataProvider::YamlDocumentReadDataProvider "YamlDocumentReadDataProvider"
+- @ref YamlDocumentDataProvider::YamlDocumentDataProviderFactory "YamlDocumentDataProviderFactory"
+
+*/
+
+public namespace YamlDocumentDataProvider {
+    #! Default encoding
+    public const DefaultEncoding = "UTF-8";
+}

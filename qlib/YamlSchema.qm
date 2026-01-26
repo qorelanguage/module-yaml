@@ -1,0 +1,825 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  YamlSchema.qm Copyright 2003 - 2025 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%requires yaml
+%requires Util
+
+%modern
+
+module YamlSchema {
+    version = "1.0";
+    desc = "User module for JSON Schema validation of YAML data";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage YamlSchema Module
+
+@section yamlschemaintro Introduction
+
+The %YamlSchema module provides JSON Schema validation for YAML data. Since YAML
+is a superset of JSON, JSON Schema provides a robust validation mechanism.
+
+Supports basic JSON Schema features including type validation, required fields,
+min/max constraints, pattern matching, enum validation, and recursive schemas
+via $ref.
+
+@section yamlschemausage Usage
+
+@code{.py}
+%requires YamlSchema
+
+hash<auto> schema = {
+    "type": "object",
+    "properties": {
+        "name": {"type": "string"},
+        "age": {"type": "integer", "minimum": 0}
+    },
+    "required": ["name"]
+};
+
+YamlSchemaValidator validator(schema);
+
+# Valid data
+auto data = parse_yaml("name: Alice\nage: 30");
+assertTrue(validator.validate(data));
+
+# Invalid data - missing required field
+data = parse_yaml("age: 30");
+assertFalse(validator.validate(data));
+@endcode
+
+@section yamlschemaclasses Classes
+
+- @ref YamlSchema::YamlSchemaValidator "YamlSchemaValidator"
+
+*/
+
+public namespace YamlSchema {
+
+#! JSON Schema Draft-07 URI
+public const YamlSchemaDraft07 = "http://json-schema.org/draft-07/schema#";
+
+#! JSON Schema Draft-2019-09 URI
+public const YamlSchemaDraft201909 = "https://json-schema.org/draft/2019-09/schema";
+
+#! JSON Schema Draft-2020-12 URI
+public const YamlSchemaDraft202012 = "https://json-schema.org/draft/2020-12/schema";
+
+#! Maximum recursion depth for $ref resolution to prevent infinite loops
+public const MaxRefDepth = 100;
+
+#! Validation error information
+public hashdecl YamlSchemaValidationError {
+    #! JSON Pointer path to the error location in the data
+    string path;
+
+    #! The schema keyword that failed (e.g., "type", "required", "minimum")
+    string keyword;
+
+    #! Human-readable error message
+    string message;
+
+    #! JSON Pointer path to the failing constraint in the schema
+    string schema_path;
+}
+
+#! Validation result with detailed error information
+public hashdecl YamlSchemaValidationResult {
+    #! True if validation passed
+    bool valid;
+
+    #! List of validation errors (empty if valid)
+    list<hash<YamlSchemaValidationError>> errors;
+}
+
+#! YAML Schema validator using JSON Schema
+/** Validates YAML data against JSON Schema specifications.
+
+    Supports recursive schemas via $ref, resolving references during validation
+    rather than construction to properly handle self-referential schemas.
+
+    @par Example: Basic validation
+    @code{.py}
+hash<auto> schema = {
+    "type": "object",
+    "properties": {
+        "name": {"type": "string"},
+        "age": {"type": "integer", "minimum": 0}
+    },
+    "required": ["name"]
+};
+
+YamlSchemaValidator validator(schema);
+
+# Valid data
+auto data = parse_yaml("name: Alice\nage: 30");
+assertTrue(validator.validate(data));
+
+# Invalid data - missing required field
+data = parse_yaml("age: 30");
+assertFalse(validator.validate(data));
+    @endcode
+
+    @par Example: Recursive schema (tree structure)
+    @code{.py}
+hash<auto> schema = {
+    "type": "object",
+    "properties": {
+        "name": {"type": "string"},
+        "children": {
+            "type": "array",
+            "items": {"$ref": "#"}
+        }
+    }
+};
+
+YamlSchemaValidator validator(schema);
+assertTrue(validator.validate({
+    "name": "root",
+    "children": [
+        {"name": "child1", "children": []},
+        {"name": "child2", "children": [
+            {"name": "grandchild"}
+        ]}
+    ]
+}));
+    @endcode
+
+    @par Example: Detailed error reporting
+    @code{.py}
+YamlSchemaValidator validator(schema);
+auto data = parse_yaml("name: 123\nage: -5");
+
+hash<YamlSchemaValidationResult> result = validator.validateWithErrors(data);
+if (!result.valid) {
+    foreach hash<YamlSchemaValidationError> err in (result.errors) {
+        printf("Error at %s: %s (keyword: %s)\n", err.path, err.message, err.keyword);
+    }
+}
+    @endcode
+*/
+public class YamlSchemaValidator {
+    private {
+        hash<auto> schema;
+    }
+
+    #! Creates a YamlSchemaValidator from a schema hash
+    /** @param schema_hash the JSON Schema as a Qore hash
+
+        @throw YAML-SCHEMA-ERROR if the schema is invalid
+    */
+    constructor(hash<auto> schema_hash) {
+        schema = schema_hash;
+        validateSchemaStructure(schema);
+    }
+
+    #! Creates a YamlSchemaValidator from a YAML schema string
+    /** @param schema_yaml the schema as a YAML (or JSON) string
+
+        @throw YAML-SCHEMA-ERROR if the schema is invalid
+    */
+    constructor(string schema_yaml) {
+        schema = parse_yaml(schema_yaml);
+        validateSchemaStructure(schema);
+    }
+
+    #! Validates the schema structure itself (basic checks)
+    private validateSchemaStructure(hash<auto> sch) {
+        # Basic schema validation
+        if (exists sch.type) {
+            list<string> valid_types = ("string", "number", "integer", "boolean", "null", "array", "object");
+            if (sch.type.typeCode() == NT_STRING) {
+                if (!inlist(sch.type, valid_types)) {
+                    throw "YAML-SCHEMA-ERROR", sprintf("invalid type '%s' in schema", sch.type);
+                }
+            } else if (sch.type.typeCode() == NT_LIST) {
+                foreach auto t in (sch.type) {
+                    if (!inlist(t, valid_types)) {
+                        throw "YAML-SCHEMA-ERROR", sprintf("invalid type '%s' in schema", t);
+                    }
+                }
+            }
+        }
+
+        # Validate $ref syntax if present
+        if (exists sch."$ref") {
+            string ref = sch."$ref";
+            if (ref !~ /^#/) {
+                throw "YAML-SCHEMA-ERROR", sprintf("external $ref not supported: %s", ref);
+            }
+        }
+
+        # Recursively validate sub-schemas
+        list<string> hash_keys = ("properties", "patternProperties", "additionalProperties",
+                                  "$defs", "definitions", "if", "then", "else", "not",
+                                  "contains", "items");
+        foreach string key in (hash_keys) {
+            if (exists sch{key} && sch{key}.typeCode() == NT_HASH) {
+                if (key == "properties" || key == "patternProperties" ||
+                    key == "$defs" || key == "definitions") {
+                    foreach string sub_key in (keys sch{key}) {
+                        if (sch{key}{sub_key}.typeCode() == NT_HASH) {
+                            validateSchemaStructure(sch{key}{sub_key});
+                        }
+                    }
+                } else {
+                    validateSchemaStructure(sch{key});
+                }
+            }
+        }
+
+        foreach string key in (("allOf", "anyOf", "oneOf")) {
+            if (exists sch{key} && sch{key}.typeCode() == NT_LIST) {
+                foreach auto item in (sch{key}) {
+                    if (item.typeCode() == NT_HASH) {
+                        validateSchemaStructure(item);
+                    }
+                }
+            }
+        }
+    }
+
+    #! Resolves a $ref at validation time
+    /** @param sch the schema that may contain a $ref
+        @param ref_depth current $ref resolution depth
+
+        @return a list of schemas to validate against (supports $ref with siblings per JSON Schema 2019-09+)
+
+        @throw YAML-SCHEMA-ERROR if $ref cannot be resolved or max depth exceeded
+
+        Per JSON Schema draft 2019-09+, when $ref has sibling keywords, the value must
+        validate against BOTH the referenced schema AND the sibling keywords. This is
+        effectively allOf semantics. We return a list of schemas to validate against.
+    */
+    private list<hash<auto>> resolveRef(hash<auto> sch, int ref_depth) {
+        if (!exists sch."$ref") {
+            return (sch,);
+        }
+
+        if (ref_depth >= MaxRefDepth) {
+            throw "YAML-SCHEMA-ERROR",
+                sprintf("maximum $ref recursion depth (%d) exceeded", MaxRefDepth);
+        }
+
+        string ref = sch."$ref";
+
+        # Parse JSON Pointer (e.g., "#/$defs/myType" or "#/definitions/myType")
+        hash<auto> resolved = resolveJsonPointer(schema, ref.substr(1));
+
+        # If the resolved schema also has a $ref, resolve it recursively
+        list<hash<auto>> result = ();
+        if (exists resolved."$ref") {
+            result = resolveRef(resolved, ref_depth + 1);
+        } else {
+            push result, resolved;
+        }
+
+        # Per JSON Schema 2019-09+, sibling keywords are evaluated alongside $ref
+        # (effectively allOf semantics). Add siblings as a separate schema to validate.
+        hash<auto> siblings = sch - "$ref";
+        if (siblings.size() > 0) {
+            push result, siblings;
+        }
+
+        return result;
+    }
+
+    #! Resolves a JSON Pointer path
+    /** @param root the root document to resolve against
+        @param pointer the JSON Pointer path (without leading #)
+
+        @return the referenced value
+
+        @throw YAML-SCHEMA-ERROR if the pointer cannot be resolved
+    */
+    private hash<auto> resolveJsonPointer(hash<auto> root, string pointer) {
+        if (pointer == "" || pointer == "/") {
+            return root;
+        }
+
+        list<string> parts = pointer.split("/");
+        # Remove empty first element from leading /
+        if (parts.size() > 0 && parts[0] == "") {
+            shift parts;
+        }
+
+        auto current = root;
+        foreach string part in (parts) {
+            if (part == "") {
+                throw "YAML-SCHEMA-ERROR",
+                    sprintf("$ref pointer '#%s' has empty segment", pointer);
+            }
+
+            # Unescape JSON Pointer special chars
+            part = replace(replace(part, "~1", "/"), "~0", "~");
+
+            if (current.typeCode() == NT_HASH) {
+                if (!exists current{part}) {
+                    throw "YAML-SCHEMA-ERROR",
+                        sprintf("$ref pointer '#%s' not found at '%s'", pointer, part);
+                }
+                current = current{part};
+            } else if (current.typeCode() == NT_LIST) {
+                # Validate that part is a valid non-negative integer
+                if (part !~ /^[0-9]+$/) {
+                    throw "YAML-SCHEMA-ERROR",
+                        sprintf("$ref array index '%s' is not a valid integer", part);
+                }
+                int idx = int(part);
+                if (idx >= current.size()) {
+                    throw "YAML-SCHEMA-ERROR",
+                        sprintf("$ref array index %d out of bounds (size %d)", idx, current.size());
+                }
+                current = current[idx];
+            } else {
+                throw "YAML-SCHEMA-ERROR",
+                    sprintf("$ref path traversal error at '%s'", part);
+            }
+        }
+
+        if (current.typeCode() != NT_HASH) {
+            throw "YAML-SCHEMA-ERROR",
+                sprintf("$ref '#%s' does not resolve to a schema object", pointer);
+        }
+
+        return current;
+    }
+
+    #! Validates data against the schema
+    /** @param data the data to validate (any Qore type)
+        @param throw_on_error if True, throws exception on validation failure
+
+        @return True if validation passes, False otherwise
+
+        @throw YAML-SCHEMA-VALIDATION-ERROR if throw_on_error is True and validation fails
+    */
+    bool validate(auto data, bool throw_on_error = False) {
+        hash<YamlSchemaValidationResult> result = validateWithErrors(data);
+
+        if (!result.valid && throw_on_error) {
+            string msg = "YAML Schema validation failed";
+            if (result.errors.size() > 0) {
+                msg += ": " + result.errors[0].message;
+            }
+            throw "YAML-SCHEMA-VALIDATION-ERROR", msg;
+        }
+
+        return result.valid;
+    }
+
+    #! Validates data and returns detailed error information
+    /** @param data the data to validate
+
+        @return hash with 'valid' (bool) and 'errors' (list) keys
+    */
+    hash<YamlSchemaValidationResult> validateWithErrors(auto data) {
+        list<hash<YamlSchemaValidationError>> errors = new list<hash<YamlSchemaValidationError>>();
+        validateValue(data, schema, "", "#", \errors, 0);
+
+        return <YamlSchemaValidationResult>{
+            "valid": errors.size() == 0,
+            "errors": errors,
+        };
+    }
+
+    #! Validates a YAML string against the schema
+    /** @param yaml_str the YAML string to parse and validate
+        @param throw_on_error if True, throws exception on validation failure
+
+        @return True if validation passes, False otherwise
+
+        @throw YAML-PARSE-ERROR if the YAML is malformed
+        @throw YAML-SCHEMA-VALIDATION-ERROR if throw_on_error is True and validation fails
+    */
+    bool validateYaml(string yaml_str, bool throw_on_error = False) {
+        auto data = parse_yaml(yaml_str);
+        return validate(data, throw_on_error);
+    }
+
+    #! Loads a schema from a JSON file
+    /** @param location the file path to load the schema from
+
+        @return a new YamlSchemaValidator
+
+        @throw YAML-SCHEMA-ERROR if the file cannot be read or schema is invalid
+    */
+    static YamlSchemaValidator load(string location) {
+        string content = ReadOnlyFile::readTextFile(location);
+        return new YamlSchemaValidator(content);
+    }
+
+    #! Loads a schema from a YAML file
+    /** @param location the file path to the YAML schema
+
+        @return a new YamlSchemaValidator
+    */
+    static YamlSchemaValidator loadYaml(string location) {
+        string content = ReadOnlyFile::readTextFile(location);
+        hash<auto> schema_hash = parse_yaml(content);
+        return new YamlSchemaValidator(schema_hash);
+    }
+
+    #! Internal validation method
+    private validateValue(auto value, hash<auto> sch, string path, string schema_path,
+                          reference<list<hash<YamlSchemaValidationError>>> errors, int ref_depth) {
+        # Resolve $ref if present (at validation time)
+        # Returns a list of schemas to validate against (for $ref with siblings)
+        list<hash<auto>> schemas_to_validate = resolveRef(sch, ref_depth);
+        int new_ref_depth = exists sch."$ref" ? ref_depth + 1 : ref_depth;
+
+        # Validate against all schemas (allOf semantics for $ref with siblings)
+        foreach hash<auto> resolved_sch in (schemas_to_validate) {
+            validateSingleSchema(value, resolved_sch, path, schema_path, \errors, new_ref_depth);
+        }
+    }
+
+    #! Validates value against a single resolved schema
+    private validateSingleSchema(auto value, hash<auto> sch, string path, string schema_path,
+                                  reference<list<hash<YamlSchemaValidationError>>> errors, int ref_depth) {
+        string eff_path = path.val() ? path : "/";
+
+        # Check type constraint
+        if (exists sch.type) {
+            if (!checkType(value, sch.type)) {
+                push errors, <YamlSchemaValidationError>{
+                    "path": eff_path,
+                    "keyword": "type",
+                    "message": sprintf("expected type '%s', got '%s'",
+                                       sch.type.typeCode() == NT_LIST ? sch.type.join("|") : sch.type,
+                                       getTypeName(value)),
+                    "schema_path": schema_path + "/type",
+                };
+            }
+        }
+
+        # Check enum constraint - use {"enum"} since enum is reserved
+        if (exists sch{"enum"}) {
+            if (!inlist(value, sch{"enum"})) {
+                push errors, <YamlSchemaValidationError>{
+                    "path": eff_path,
+                    "keyword": "enum",
+                    "message": sprintf("value '%y' not in enum %y", value, sch{"enum"}),
+                    "schema_path": schema_path + "/enum",
+                };
+            }
+        }
+
+        # Check const constraint
+        if (exists sch{"const"}) {
+            if (value != sch{"const"}) {
+                push errors, <YamlSchemaValidationError>{
+                    "path": eff_path,
+                    "keyword": "const",
+                    "message": sprintf("value '%y' does not match const '%y'", value, sch{"const"}),
+                    "schema_path": schema_path + "/const",
+                };
+            }
+        }
+
+        # String-specific validations
+        if (value.typeCode() == NT_STRING) {
+            validateString(value, sch, path, schema_path, \errors);
+        }
+
+        # Numeric validations
+        if (value.typeCode() == NT_INT || value.typeCode() == NT_FLOAT || value.typeCode() == NT_NUMBER) {
+            validateNumber(value, sch, path, schema_path, \errors);
+        }
+
+        # Array validations
+        if (value.typeCode() == NT_LIST) {
+            validateArray(value, sch, path, schema_path, \errors, ref_depth);
+        }
+
+        # Object validations
+        if (value.typeCode() == NT_HASH) {
+            validateObject(value, sch, path, schema_path, \errors, ref_depth);
+        }
+
+        # Composite keywords
+        if (exists sch.allOf) {
+            for (int i = 0; i < sch.allOf.size(); ++i) {
+                validateValue(value, sch.allOf[i], path, schema_path + "/allOf/" + string(i), \errors, ref_depth);
+            }
+        }
+
+        if (exists sch.anyOf) {
+            bool any_valid = False;
+            foreach hash<auto> sub_schema in (sch.anyOf) {
+                list<hash<YamlSchemaValidationError>> sub_errors = new list<hash<YamlSchemaValidationError>>();
+                validateValue(value, sub_schema, path, schema_path + "/anyOf", \sub_errors, ref_depth);
+                if (sub_errors.size() == 0) {
+                    any_valid = True;
+                    break;
+                }
+            }
+            if (!any_valid) {
+                push errors, <YamlSchemaValidationError>{
+                    "path": eff_path,
+                    "keyword": "anyOf",
+                    "message": "value does not match any of the schemas in anyOf",
+                    "schema_path": schema_path + "/anyOf",
+                };
+            }
+        }
+
+        if (exists sch.oneOf) {
+            int valid_count = 0;
+            foreach hash<auto> sub_schema in (sch.oneOf) {
+                list<hash<YamlSchemaValidationError>> sub_errors = new list<hash<YamlSchemaValidationError>>();
+                validateValue(value, sub_schema, path, schema_path + "/oneOf", \sub_errors, ref_depth);
+                if (sub_errors.size() == 0) {
+                    ++valid_count;
+                }
+            }
+            if (valid_count != 1) {
+                push errors, <YamlSchemaValidationError>{
+                    "path": eff_path,
+                    "keyword": "oneOf",
+                    "message": sprintf("value must match exactly one schema in oneOf (matched %d)", valid_count),
+                    "schema_path": schema_path + "/oneOf",
+                };
+            }
+        }
+
+        if (exists sch{"not"}) {
+            list<hash<YamlSchemaValidationError>> sub_errors = new list<hash<YamlSchemaValidationError>>();
+            validateValue(value, sch{"not"}, path, schema_path + "/not", \sub_errors, ref_depth);
+            if (sub_errors.size() == 0) {
+                push errors, <YamlSchemaValidationError>{
+                    "path": eff_path,
+                    "keyword": "not",
+                    "message": "value must not match the schema in 'not'",
+                    "schema_path": schema_path + "/not",
+                };
+            }
+        }
+    }
+
+    #! Check type constraint
+    private bool checkType(auto value, auto type) {
+        if (type.typeCode() == NT_LIST) {
+            foreach string t in (type) {
+                if (checkSingleType(value, t)) {
+                    return True;
+                }
+            }
+            return False;
+        }
+        return checkSingleType(value, type);
+    }
+
+    private bool checkSingleType(auto value, string type) {
+        switch (type) {
+            case "string":
+                return value.typeCode() == NT_STRING;
+            case "number":
+                return value.typeCode() == NT_INT || value.typeCode() == NT_FLOAT || value.typeCode() == NT_NUMBER;
+            case "integer":
+                return value.typeCode() == NT_INT;
+            case "boolean":
+                return value.typeCode() == NT_BOOLEAN;
+            case "null":
+                return value.typeCode() == NT_NOTHING;
+            case "array":
+                return value.typeCode() == NT_LIST;
+            case "object":
+                return value.typeCode() == NT_HASH;
+        }
+        return True;
+    }
+
+    private string getTypeName(auto value) {
+        switch (value.typeCode()) {
+            case NT_STRING: return "string";
+            case NT_INT: return "integer";
+            case NT_FLOAT:
+            case NT_NUMBER: return "number";
+            case NT_BOOLEAN: return "boolean";
+            case NT_NOTHING: return "null";
+            case NT_LIST: return "array";
+            case NT_HASH: return "object";
+            default: return value.type();
+        }
+    }
+
+    #! Validate string-specific constraints
+    private validateString(string value, hash<auto> sch, string path, string schema_path,
+                           reference<list<hash<YamlSchemaValidationError>>> errors) {
+        string eff_path = path.val() ? path : "/";
+
+        if (exists sch.minLength && value.length() < sch.minLength) {
+            push errors, <YamlSchemaValidationError>{
+                "path": eff_path,
+                "keyword": "minLength",
+                "message": sprintf("string length %d is less than minLength %d", value.length(), sch.minLength),
+                "schema_path": schema_path + "/minLength",
+            };
+        }
+
+        if (exists sch.maxLength && value.length() > sch.maxLength) {
+            push errors, <YamlSchemaValidationError>{
+                "path": eff_path,
+                "keyword": "maxLength",
+                "message": sprintf("string length %d is greater than maxLength %d", value.length(), sch.maxLength),
+                "schema_path": schema_path + "/maxLength",
+            };
+        }
+
+        if (exists sch.pattern) {
+            try {
+                if (!regex(value, sch.pattern)) {
+                    push errors, <YamlSchemaValidationError>{
+                        "path": eff_path,
+                        "keyword": "pattern",
+                        "message": sprintf("string '%s' does not match pattern '%s'", value, sch.pattern),
+                        "schema_path": schema_path + "/pattern",
+                    };
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                push errors, <YamlSchemaValidationError>{
+                    "path": eff_path,
+                    "keyword": "pattern",
+                    "message": sprintf("invalid regex pattern '%s': %s", sch.pattern, ex.desc),
+                    "schema_path": schema_path + "/pattern",
+                };
+            }
+        }
+    }
+
+    #! Validate numeric constraints
+    private validateNumber(auto value, hash<auto> sch, string path, string schema_path,
+                           reference<list<hash<YamlSchemaValidationError>>> errors) {
+        string eff_path = path.val() ? path : "/";
+
+        if (exists sch.minimum && value < sch.minimum) {
+            push errors, <YamlSchemaValidationError>{
+                "path": eff_path,
+                "keyword": "minimum",
+                "message": sprintf("value %y is less than minimum %y", value, sch.minimum),
+                "schema_path": schema_path + "/minimum",
+            };
+        }
+
+        if (exists sch.maximum && value > sch.maximum) {
+            push errors, <YamlSchemaValidationError>{
+                "path": eff_path,
+                "keyword": "maximum",
+                "message": sprintf("value %y is greater than maximum %y", value, sch.maximum),
+                "schema_path": schema_path + "/maximum",
+            };
+        }
+
+        if (exists sch.exclusiveMinimum && value <= sch.exclusiveMinimum) {
+            push errors, <YamlSchemaValidationError>{
+                "path": eff_path,
+                "keyword": "exclusiveMinimum",
+                "message": sprintf("value %y must be greater than %y", value, sch.exclusiveMinimum),
+                "schema_path": schema_path + "/exclusiveMinimum",
+            };
+        }
+
+        if (exists sch.exclusiveMaximum && value >= sch.exclusiveMaximum) {
+            push errors, <YamlSchemaValidationError>{
+                "path": eff_path,
+                "keyword": "exclusiveMaximum",
+                "message": sprintf("value %y must be less than %y", value, sch.exclusiveMaximum),
+                "schema_path": schema_path + "/exclusiveMaximum",
+            };
+        }
+
+        if (exists sch.multipleOf && (value % sch.multipleOf) != 0) {
+            push errors, <YamlSchemaValidationError>{
+                "path": eff_path,
+                "keyword": "multipleOf",
+                "message": sprintf("value %y is not a multiple of %y", value, sch.multipleOf),
+                "schema_path": schema_path + "/multipleOf",
+            };
+        }
+    }
+
+    #! Validate array constraints
+    private validateArray(list<auto> value, hash<auto> sch, string path, string schema_path,
+                          reference<list<hash<YamlSchemaValidationError>>> errors, int ref_depth) {
+        string eff_path = path.val() ? path : "/";
+
+        if (exists sch.minItems && value.size() < sch.minItems) {
+            push errors, <YamlSchemaValidationError>{
+                "path": eff_path,
+                "keyword": "minItems",
+                "message": sprintf("array has %d items, less than minItems %d", value.size(), sch.minItems),
+                "schema_path": schema_path + "/minItems",
+            };
+        }
+
+        if (exists sch.maxItems && value.size() > sch.maxItems) {
+            push errors, <YamlSchemaValidationError>{
+                "path": eff_path,
+                "keyword": "maxItems",
+                "message": sprintf("array has %d items, more than maxItems %d", value.size(), sch.maxItems),
+                "schema_path": schema_path + "/maxItems",
+            };
+        }
+
+        # Validate items
+        if (exists sch.items) {
+            for (int i = 0; i < value.size(); ++i) {
+                string item_path = path + "/" + string(i);
+                validateValue(value[i], sch.items, item_path, schema_path + "/items", \errors, ref_depth);
+            }
+        }
+    }
+
+    #! Validate object constraints
+    private validateObject(hash<auto> value, hash<auto> sch, string path, string schema_path,
+                           reference<list<hash<YamlSchemaValidationError>>> errors, int ref_depth) {
+        string eff_path = path.val() ? path : "/";
+
+        # Check required properties
+        if (exists sch.required) {
+            foreach string req in (sch.required) {
+                if (!exists value{req}) {
+                    push errors, <YamlSchemaValidationError>{
+                        "path": eff_path,
+                        "keyword": "required",
+                        "message": sprintf("missing required property '%s'", req),
+                        "schema_path": schema_path + "/required",
+                    };
+                }
+            }
+        }
+
+        # Validate properties
+        if (exists sch.properties) {
+            foreach string key in (keys value) {
+                if (exists sch.properties{key}) {
+                    string prop_path = path + "/" + key;
+                    validateValue(value{key}, sch.properties{key}, prop_path,
+                                  schema_path + "/properties/" + key, \errors, ref_depth);
+                }
+            }
+        }
+
+        # Check additionalProperties
+        if (exists sch.additionalProperties && !sch.additionalProperties) {
+            # When additionalProperties is false, only properties defined in "properties" are allowed
+            # If "properties" is absent and additionalProperties is false, no properties are allowed
+            foreach string key in (keys value) {
+                if (!exists sch.properties || !exists sch.properties{key}) {
+                    push errors, <YamlSchemaValidationError>{
+                        "path": path + "/" + key,
+                        "keyword": "additionalProperties",
+                        "message": sprintf("additional property '%s' not allowed", key),
+                        "schema_path": schema_path + "/additionalProperties",
+                    };
+                }
+            }
+        }
+
+        # Check minProperties/maxProperties
+        if (exists sch.minProperties && value.size() < sch.minProperties) {
+            push errors, <YamlSchemaValidationError>{
+                "path": eff_path,
+                "keyword": "minProperties",
+                "message": sprintf("object has %d properties, less than minProperties %d",
+                                   value.size(), sch.minProperties),
+                "schema_path": schema_path + "/minProperties",
+            };
+        }
+
+        if (exists sch.maxProperties && value.size() > sch.maxProperties) {
+            push errors, <YamlSchemaValidationError>{
+                "path": eff_path,
+                "keyword": "maxProperties",
+                "message": sprintf("object has %d properties, more than maxProperties %d",
+                                   value.size(), sch.maxProperties),
+                "schema_path": schema_path + "/maxProperties",
+            };
+        }
+    }
+}
+
+} # namespace YamlSchema

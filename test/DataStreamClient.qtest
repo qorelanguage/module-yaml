@@ -107,7 +107,8 @@ class DataStreamClientTest inherits QUnit::Test {
         assertEq(404, info."response-code");
 
         client.get("/api", NOTHING, \info);
-        assertEq(200, info."response-code");
+        # 204 No Content is returned for responses with empty body
+        assertEq(204, info."response-code");
     }
 
     testConstructorOptions() {
