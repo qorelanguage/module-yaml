@@ -29,6 +29,7 @@
 #endif
 
 #include <qore/Qore.h>
+#include <qore/QoreSandboxManager.h>
 
 #include <yaml.h>
 
@@ -47,7 +48,7 @@
 #define QYE_VER_1_2             (1 << 7)
 #define QYE_EMIT_SQLNULL        (1 << 8)
 
-#define QYE_DEFAULT (QYE_NONE)
+#define QYE_DEFAULT (QYE_VER_1_2)
 
 #ifndef YAML_BINARY_TAG
 #define YAML_BINARY_TAG "tag:yaml.org,2002:binary"
@@ -503,12 +504,11 @@ protected:
     DLLLOCAL QoreValue parseAlias();
     DLLLOCAL QoreValue parseScalar(bool favor_string = false);
     DLLLOCAL QoreValue parseNode(bool favor_string = false);
-    DLLLOCAL DateTimeNode* parseAbsoluteDate();
-    DLLLOCAL DateTimeNode* parseDuration();
-    DLLLOCAL bool parseBool();
-
-    DLLLOCAL static bool checkAbsoluteDate(size_t len, const char* val, bool quoted = false);
-    DLLLOCAL static bool checkDuration(const char* val);
 };
+
+// Include new class headers
+#include "QC_YamlSaxParser.h"
+#include "QC_YamlDocumentIterator.h"
+#include "QC_YamlStreamWriter.h"
 
 #endif
