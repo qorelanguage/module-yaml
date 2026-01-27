@@ -1,10 +1,10 @@
 /* -*- mode: c++; indent-tabs-mode: nil -*- */
 /*
-    QC_YamlStreamWriter.cpp
+    QoreYamlStreamWriter.cpp
 
     Qore Programming Language
 
-    Copyright 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright 2003 - 2026 Qore Technologies, s.r.o.
 
     This library is free software; you can redistribute it and/or
     modify it under the terms of the GNU Lesser General Public

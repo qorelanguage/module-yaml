@@ -202,6 +202,10 @@ QoreValue yaml_try_parse_number(const char* val, size_t len, bool no_simple_nume
     return no_simple_numeric ? QoreValue() : QoreValue(q_strtod(val));
 }
 
+// Checks if the value matches the pattern for an absolute date/time string.
+// This performs format validation only (YYYY-MM-DD pattern with valid ranges for month 01-12
+// and day 01-31); actual date validity (e.g., rejecting Feb 30) is handled by
+// yaml_parse_absolute_date() when the date is parsed by Qore's date parsing functions.
 bool yaml_check_absolute_date(size_t len, const char* val, bool quoted) {
     if (quoted) {
         // we expect a full date when single quoted

@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright 2003 - 2026 Qore Technologies, s.r.o.
 
     This library is free software; you can redistribute it and/or
     modify it under the terms of the GNU Lesser General Public
@@ -386,9 +386,12 @@ parser.parseStream(fis, sub (hash<YamlSaxEvent> e) {
 });
     @endcode
 */
-nothing YamlSaxParser::parseStream(Qore::InputStream[QoreObject] stream, code callback, *string encoding) {
+nothing YamlSaxParser::parseStream(Qore::InputStream[InputStream] stream, code callback, *string encoding) {
+    // Release the reference to the extracted private data when done
+    ReferenceHolder<InputStream> stream_holder(stream, xsink);
+
     const QoreEncoding* enc = encoding ? QEM.findCreate(encoding->c_str()) : QCS_UTF8;
     ReferenceHolder<ResolvedCallReferenceNode> holder(callback->refRefSelf(), xsink);
-    // Use obj_stream (the QoreObject*) not stream (which is extracted private data)
+    // Use obj_stream (the QoreObject*) - the C++ class will ref it
     parser->parseStream(const_cast<QoreObject*>(obj_stream), *holder, enc, xsink);
 }

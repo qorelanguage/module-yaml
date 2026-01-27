@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright 2003 - 2026 Qore Technologies, s.r.o.
 
     This library is free software; you can redistribute it and/or
     modify it under the terms of the GNU Lesser General Public
@@ -143,7 +143,10 @@ YamlDocumentIterator::constructor(string yaml_str, *hash<YamlDocumentIteratorOpt
 /** @param stream the input stream to read YAML from
     @param options optional iteration options
 */
-YamlDocumentIterator::constructor(Qore::InputStream[QoreObject] stream, *hash<YamlDocumentIteratorOptions> options) {
+YamlDocumentIterator::constructor(Qore::InputStream[InputStream] stream, *hash<YamlDocumentIteratorOptions> options) {
+    // Release the reference to the extracted private data when done
+    ReferenceHolder<InputStream> holder(stream, xsink);
+
     // Use default values when option keys are not present (not just when options is null)
     bool skip_empty = true;
     int64 max_docs = 0;
@@ -163,7 +166,7 @@ YamlDocumentIterator::constructor(Qore::InputStream[QoreObject] stream, *hash<Ya
         }
     }
     const QoreEncoding* encoding = QEM.findCreate(enc);
-    // Use obj_stream (the QoreObject*) not stream (which is extracted private data)
+    // Use obj_stream (the QoreObject*) - the C++ class will ref it
     self->setPrivate(CID_YAMLDOCUMENTITERATOR,
         new QoreYamlDocumentIterator(const_cast<QoreObject*>(obj_stream), encoding, skip_empty, max_docs, xsink));
 }

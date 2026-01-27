@@ -74,12 +74,12 @@ The following changes were made to address the audit findings:
 |------|----------|----------------|
 | `QoreYamlParser.cpp` | `parseSeq()` | Every 1000 iterations |
 | `QoreYamlParser.cpp` | `parseMap()` | Every 1000 iterations |
-| `QC_YamlDocumentIterator.cpp` | `next()` | Every 100 iterations |
-| `QC_YamlDocumentIterator.cpp` | `parseSequence()` | Every 1000 iterations |
-| `QC_YamlDocumentIterator.cpp` | `parseMapping()` | Every 1000 iterations |
-| `QC_YamlSaxParser.cpp` | `processEvents()` | Every 1000 iterations |
-| `QC_YamlStreamWriter.cpp` | `writeValueRecursive()` (hash) | Every 1000 iterations |
-| `QC_YamlStreamWriter.cpp` | `writeValueRecursive()` (list) | Every 1000 iterations |
+| `QoreYamlDocumentIterator.cpp` | `next()` | Every 100 iterations |
+| `QoreYamlDocumentIterator.cpp` | `parseSequence()` | Every 1000 iterations |
+| `QoreYamlDocumentIterator.cpp` | `parseMapping()` | Every 1000 iterations |
+| `QoreYamlSaxParser.cpp` | `processEvents()` | Every 1000 iterations |
+| `QoreYamlStreamWriter.cpp` | `writeValueRecursive()` (hash) | Every 1000 iterations |
+| `QoreYamlStreamWriter.cpp` | `writeValueRecursive()` (list) | Every 1000 iterations |
 
 Each loop now includes:
 ```cpp
@@ -102,9 +102,9 @@ Stream-based parsing (`parseStream()`, `YamlDocumentIterator` with stream) relie
 
 ### C++ Source Files
 - `src/QoreYamlParser.cpp` - Main parser implementation
-- `src/QC_YamlSaxParser.cpp` - SAX parser implementation
-- `src/QC_YamlDocumentIterator.cpp` - Document iterator implementation
-- `src/QC_YamlStreamWriter.cpp` - Stream writer implementation
+- `src/QoreYamlSaxParser.cpp` - SAX parser implementation
+- `src/QoreYamlDocumentIterator.cpp` - Document iterator implementation
+- `src/QoreYamlStreamWriter.cpp` - Stream writer implementation
 - `src/YamlStreamReadHandler.cpp` - Stream read handler
 - `src/yaml-module.cpp` - Module initialization
 - `src/ql_yaml.qpp` - Module functions

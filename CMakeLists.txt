@@ -26,9 +26,9 @@ set(QPP_SRC
 set(CPP_SRC
     src/QoreYamlEmitter.cpp
     src/QoreYamlParser.cpp
-    src/QC_YamlSaxParser.cpp
-    src/QC_YamlDocumentIterator.cpp
-    src/QC_YamlStreamWriter.cpp
+    src/QoreYamlSaxParser.cpp
+    src/QoreYamlDocumentIterator.cpp
+    src/QoreYamlStreamWriter.cpp
     src/yaml-module.cpp
     src/yaml-scalar-util.cpp
     src/YamlStreamReadHandler.cpp
