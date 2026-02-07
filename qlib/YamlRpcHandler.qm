@@ -37,14 +37,7 @@
 # need HttpServerUtil module at a minimum in this module
 %requires HttpServerUtil
 
-# do not use $ signs in declarations
-%new-style
-# require type declarations
-%require-types
-# enable all warnings
-%enable-all-warnings
-# strict argument handling
-%strict-args
+%modern
 
 module YamlRpcHandler {
     version = "1.5";

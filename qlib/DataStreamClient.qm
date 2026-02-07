@@ -25,21 +25,12 @@
 # minimum Qore version
 %requires qore >= 2.0
 
-# require type definitions everywhere
-%require-types
-
-# enable all warnings
-%enable-all-warnings
-
 %requires DataStreamUtil
 %requires RestClient >= 1.4
 %requires yaml
 %requires Mime
 
-# do not use $ signs in declarations
-%new-style
-# strict argument handling
-%strict-args
+%modern
 
 module DataStreamClient {
     version = "1.4";

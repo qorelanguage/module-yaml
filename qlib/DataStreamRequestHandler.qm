@@ -25,21 +25,12 @@
 # minimum Qore version
 %requires qore >= 1.7.3
 
-# require type definitions everywhere
-%require-types
-
-# enable all warnings
-%enable-all-warnings
-
 %requires DataStreamUtil
 %requires RestHandler
 %requires yaml
 %requires Mime
 
-# do not use $ signs in declarations
-%new-style
-# strict argument handling
-%strict-args
+%modern
 
 module DataStreamRequestHandler {
     version = "1.1";

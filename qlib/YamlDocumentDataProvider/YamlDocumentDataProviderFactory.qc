@@ -1,10 +1,5 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%new-style
-%strict-args
-%require-types
-%enable-all-warnings
-
 public namespace YamlDocumentDataProvider {
 
 #! Factory for creating YAML document data providers

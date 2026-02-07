@@ -5,10 +5,7 @@
 %requires(reexport) DataProvider
 %requires yaml
 
-%new-style
-%strict-args
-%require-types
-%enable-all-warnings
+%modern
 
 module YamlDocumentDataProvider {
     version = "1.0";

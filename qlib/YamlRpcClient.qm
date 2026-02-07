@@ -33,14 +33,7 @@
 
 %requires(reexport) ConnectionProvider >= 1.4
 
-# do not use $ signs in declarations
-%new-style
-# require type declarations
-%require-types
-# enable all warnings
-%enable-all-warnings
-# do not ignore arg errors in calls, disallow access to all NOOP variants
-%strict-args
+%modern
 
 module YamlRpcClient {
     version = "1.6";

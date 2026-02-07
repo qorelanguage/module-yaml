@@ -1,10 +1,5 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%new-style
-%strict-args
-%require-types
-%enable-all-warnings
-
 #! Contains all public definitions in the YamlDocumentDataProvider module
 public namespace YamlDocumentDataProvider {
 
