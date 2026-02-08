@@ -40,6 +40,75 @@ class YamlHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Handler that echoes DataStream records back; stores received records in a shared buffer
+class DataStreamEchoHandler inherits AbstractHttpRequestHandler {
+    private {
+        Mutex mtx();
+        list<auto> records = ();
+    }
+
+    constructor() : AbstractHttpRequestHandler() {
+    }
+
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (hdr.method == "POST") {
+            # Parse YAML body - sendDataStream sends YAML-encoded data as multiple concatenated
+            # YAML documents (each chunk = one %YAML 1.2 document)
+            list<auto> parsed = ();
+            if (body) {
+                string body_str = body.typeCode() == NT_BINARY ? body.toString("UTF-8") : string(body);
+                # Split on YAML document boundaries
+                list<auto> parts = body_str.split("%YAML");
+                foreach string part in (parts) {
+                    if (part.val()) {
+                        parsed += parse_yaml("%YAML" + part);
+                    }
+                }
+            }
+            {
+                mtx.lock();
+                on_exit mtx.unlock();
+                records += parsed;
+            }
+            int count;
+            {
+                mtx.lock();
+                on_exit mtx.unlock();
+                count = records.size();
+            }
+            return makeResponse(200, make_yaml({"rows": count, "status": "ok"}),
+                {"Content-Type": MimeTypeYaml});
+        } else if (hdr.method == "GET") {
+            # Return stored records as YAML
+            list<auto> data;
+            {
+                mtx.lock();
+                on_exit mtx.unlock();
+                data = records;
+            }
+            return makeResponse(200, make_yaml(data), {"Content-Type": MimeTypeYaml});
+        } else if (hdr.method == "DELETE") {
+            # Clear stored records
+            {
+                mtx.lock();
+                on_exit mtx.unlock();
+                records = ();
+            }
+            return makeResponse(200, make_yaml({"status": "cleared"}), {"Content-Type": MimeTypeYaml});
+        }
+
+        return makeResponse(405, make_yaml({"error": "method not allowed"}), {"Content-Type": MimeTypeYaml});
+    }
+}
+
+#! Handler that returns 500 error for DataStream error recovery testing
+class DataStreamErrorHandler inherits AbstractHttpRequestHandler {
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(500, make_yaml({"err": "DS-ERROR", "desc": "simulated server error"}),
+            {"Content-Type": MimeTypeYaml});
+    }
+}
+
 class ErrorHandler inherits AbstractHttpRequestHandler {
     private {
         *string m_data;
@@ -74,6 +143,8 @@ class DataStreamClientTest inherits QUnit::Test {
         addTestCase("message classes", \testMessageClasses());
         addTestCase("content encoding", \testContentEncoding());
         addTestCase("error handling", \testErrorHandling());
+        addTestCase("datastream keep-alive", \testDataStreamKeepAlive());
+        addTestCase("datastream error recovery", \testDataStreamErrorRecovery());
 
         Logger logger("test", LoggerLevel::getLevelInfo());
         if (m_options.verbose > 2) {
@@ -86,6 +157,8 @@ class DataStreamClientTest inherits QUnit::Test {
         m_http = new HttpServer(http_opts);
         m_http.setHandler("/api", "/api", MimeTypeText, new ErrorHandler(MimeTypeText));
         m_http.setHandler("/yaml", "/yaml", MimeTypeYaml, new YamlHandler(MimeTypeYaml));
+        m_http.setHandler("/ds-echo", "/ds-echo", MimeTypeYaml, new DataStreamEchoHandler());
+        m_http.setHandler("/ds-error", "/ds-error", MimeTypeYaml, new DataStreamErrorHandler());
         port = m_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
 
         # Return for compatibility with test harness that checks return value.
@@ -217,6 +290,90 @@ class DataStreamClientTest inherits QUnit::Test {
             client.del("/api", NOTHING, \info);
         } catch (hash<ExceptionInfo> ex) {
             assertEq(404, info."response-code");
+        }
+    }
+
+    testDataStreamKeepAlive() {
+        # Test multiple DataStream operations on the same keep-alive connection
+        DataStreamClient client({"url": "http://localhost:" + port, "timeout": 30000}, True);
+
+        # Clear any previous state
+        hash<auto> info;
+        client.del("/ds-echo", NOTHING, \info);
+
+        # Operation 1: send 3 records via sendDataStream
+        int send_count = 0;
+        list<auto> send_data1 = ({"name": "rec1", "val": 1}, {"name": "rec2", "val": 2}, {"name": "rec3", "val": 3});
+        code sender1 = auto sub() {
+            if (send_count >= send_data1.size()) {
+                return NOTHING;
+            }
+            return send_data1[send_count++];
+        };
+        hash<auto> resp1 = client.sendDataStream(sender1, "POST", "/ds-echo", 20s, \info);
+        assertEq(200, resp1.status_code, "sendDataStream POST should return 200");
+        assertEq(3, resp1.body.rows, "server should have stored 3 records");
+
+        # Operation 2: GET the stored records
+        hash<auto> resp2 = client.get("/ds-echo", NOTHING, \info);
+        assertEq(200, info."response-code", "GET should return 200");
+        assertEq(NT_LIST, resp2.body.typeCode(), "GET response body should be a list");
+        assertEq(3, resp2.body.size(), "should retrieve 3 records");
+
+        # Operation 3: send 2 more records
+        send_count = 0;
+        list<auto> send_data2 = ({"name": "rec4", "val": 4}, {"name": "rec5", "val": 5});
+        code sender2 = auto sub() {
+            if (send_count >= send_data2.size()) {
+                return NOTHING;
+            }
+            return send_data2[send_count++];
+        };
+        hash<auto> resp3 = client.sendDataStream(sender2, "POST", "/ds-echo", 20s, \info);
+        assertEq(200, resp3.status_code, "second sendDataStream should return 200");
+        assertEq(5, resp3.body.rows, "server should now have 5 records");
+
+        # Operation 4: GET all records
+        hash<auto> resp4 = client.get("/ds-echo", NOTHING, \info);
+        assertEq(200, info."response-code", "second GET should return 200");
+        assertEq(5, resp4.body.size(), "should retrieve all 5 records");
+
+        # Verify data integrity of retrieved records
+        assertEq("rec1", resp4.body[0].name, "first record name");
+        assertEq(5, resp4.body[4].val, "last record value");
+
+        if (m_options.verbose > 1) {
+            printf("DataStream keep-alive: 4 operations on same connection OK\n");
+        }
+    }
+
+    testDataStreamErrorRecovery() {
+        # Test that a DataStream error doesn't break the keep-alive connection
+        DataStreamClient client({"url": "http://localhost:" + port, "timeout": 30000}, True);
+
+        hash<auto> info;
+
+        # Operation 1: successful GET to establish connection
+        client.get("/yaml", NOTHING, \info);
+        assertEq(200, info."response-code", "initial GET should succeed");
+
+        # Operation 2: request to error handler - should get 500
+        bool got_error = False;
+        try {
+            client.get("/ds-error", NOTHING, \info);
+        } catch (hash<ExceptionInfo> ex) {
+            got_error = True;
+            # DataStreamClient throws on error responses
+        }
+        # Either we got an exception or a 500 response
+        assertTrue(got_error || info."response-code" == 500, "error handler should return 500 or throw");
+
+        # Operation 3: subsequent request on same connection should still work
+        client.get("/yaml", NOTHING, \info);
+        assertEq(200, info."response-code", "GET after error should succeed on same connection");
+
+        if (m_options.verbose > 1) {
+            printf("DataStream error recovery: connection survived error OK\n");
         }
     }
 

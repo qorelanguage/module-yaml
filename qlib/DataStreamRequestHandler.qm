@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # @file DataStreamRequestHandler.qm Qore user module implementing client support for the DataStream protocol: YAML-encoded HTTP chunked transfers where each chunk is a unique data entity
 
-/*  DataStreamRequestHandler.qm Copyright (C) 2014 - 2025 Qore Technologies, s.r.o.
+/*  DataStreamRequestHandler.qm Copyright (C) 2014 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -72,7 +72,7 @@ module DataStreamRequestHandler {
     @subsection datastreamrequesthandler_v1_1 DataStreamRequestHandler v1.1
     - added \c %strict-args compile-time requirement
     - added debug logging support
-    - updated copyright year to 2025
+    - updated copyright year to 2026
 
     @subsection datastreamrequesthandler_v1_0 DataStreamRequestHandler v1.0
     - initial release of the module
@@ -80,17 +80,17 @@ module DataStreamRequestHandler {
 
 #! the DataStreamRequestHandler namespace contains all the public objects in the DataStreamRequestHandler module
 public namespace DataStreamRequestHandler {
-    #! this class implements a chunked request handler supporting the @ref datastreamprotocol "DataStream protocol"
-    /** this class must be subclassed and then the @ref recvDataImpl() and @ref sendDataImpl() methods reimplemented
-	to provide data receiving and sending support, respectively.
-     */
-    public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRestStreamRequestHandler {
-	public {
-	    #! the receive callback as returned by the @ref datastreamutilintro "DataStreamUtil" module
-	    code recv_callback;
+#! this class implements a chunked request handler supporting the @ref datastreamprotocol "DataStream protocol"
+/** this class must be subclassed and then the @ref recvDataImpl() and @ref sendDataImpl() methods reimplemented
+    to provide data receiving and sending support, respectively.
+*/
+public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRestStreamRequestHandler {
+    public {
+        #! the receive callback as returned by the @ref datastreamutilintro "DataStreamUtil" module
+        code recv_callback;
 
-	    #! the send callback as returned by the @ref datastreamutilintro "DataStreamUtil" module
-	    code scb;
+        #! the send callback as returned by the @ref datastreamutilintro "DataStreamUtil" module
+        code scb;
 
         #! flag for when all data has been received
         bool recv_done = False;
@@ -103,17 +103,25 @@ public namespace DataStreamRequestHandler {
 
         #! send error string received
         *string send_error;
-	}
+    }
 
-	#! creates the chunked request handler according to the arguments
-	constructor(hash<auto> cx, *hash<auto> ah) : AbstractRestStreamRequestHandler(cx, ah) {
-	    @debug(printf("AbstractDataStreamRequestHandler::constructor() encoding=%y\n", cx.encoding));
-	    recv_callback = ds_get_recv(\recvData(), \recvDataDone());
-	    scb = ds_get_send(\sendData(), ds_get_content_encode(cx.encoding));
+    #! creates the chunked request handler according to the arguments
+    constructor(hash<auto> cx, *hash<auto> ah) : AbstractRestStreamRequestHandler(cx, ah) {
+        @debug(printf("AbstractDataStreamRequestHandler::constructor() encoding=%y\n", cx.encoding));
+        recv_callback = ds_get_recv(\recvData(), \recvDataDone());
+        scb = ds_get_send(\sendData(), ds_get_content_encode(cx.encoding));
 
-	    # setup data stream with header
-	    call_function(recv_callback, {"hdr": cx.hdr, "obj": cx.socketobject});
-	}
+        # setup data stream with header
+        call_function(recv_callback, {"hdr": cx.hdr, "obj": cx.socketobject});
+    }
+
+    #! returns @ref False because DataStream manages its own per-chunk content encoding
+    /** Each send() call returns one independently compressed record via the DataStream protocol.
+        The server must not apply additional content encoding on top of this.
+    */
+    bool needsContentEncoding() {
+        return False;
+    }
 
     #! if an error occurred, then return a hash giving an error response, otherwise return @ref nothing
     /** this method is meant to be called by getResponseHeaderMessageImpl()
@@ -146,7 +154,7 @@ public namespace DataStreamRequestHandler {
         }
     }
 
-	#! returns the response header to the request
+    #! returns the response header to the request
     /**
         @return a hash with the following keys:
         - \c "code": the HTTP return code (see @ref HttpServer::HttpCodes)
@@ -158,35 +166,35 @@ public namespace DataStreamRequestHandler {
 
         @note this method is called after the message body has been received
     */
-	hash<auto> getResponseHeaderMessageImpl() {
+    hash<auto> getResponseHeaderMessageImpl() {
         *hash<auto> h = getErrorResponse();
         if (h) {
             return h;
         }
 
-	    hash<auto> hdr;
-	    ds_set_chunked_headers(\hdr, cx.encoding);
-	    return {
+        hash<auto> hdr;
+        ds_set_chunked_headers(\hdr, cx.encoding);
+        return {
             "code": 200,
             "hdr": hdr,
         };
-	}
+    }
 
-	#! calls the receive callback as returned by the @ref datastreamutilintro "DataStreamUtil" module
+    #! calls the receive callback as returned by the @ref datastreamutilintro "DataStreamUtil" module
     /** The receive callback calls @ref recvDataImpl() to deliver deserialized data
     */
-	nothing recvImpl(hash v) {
-	    @debug(printf("AbstractDataStreamRequestHandler::recvImpl() data_size=%d\n", v.data.size()));
-	    recv_callback(v);
-	}
+    nothing recvImpl(hash v) {
+        @debug(printf("AbstractDataStreamRequestHandler::recvImpl() data_size=%d\n", v.data.size()));
+        recv_callback(v);
+    }
 
-	#! calls the send callback as returned by the @ref datastreamutilintro "DataStreamUtil" module
+    #! calls the send callback as returned by the @ref datastreamutilintro "DataStreamUtil" module
     /** The send callback calls @ref sendDataImpl() to get the data to serialize and encode and send as a response
     */
-	auto sendImpl() {
-	    @debug(printf("AbstractDataStreamRequestHandler::sendImpl()\n"));
-	    return scb();
-	}
+    auto sendImpl() {
+        @debug(printf("AbstractDataStreamRequestHandler::sendImpl()\n"));
+        return scb();
+    }
 
     #! this method is called when all data has been received
     private nothing recvDataDone(*string err) {
@@ -195,17 +203,17 @@ public namespace DataStreamRequestHandler {
         recvDataDoneImpl(err);
     }
 
-	#! This is the concrete method called when data is received; it calls recvDataImpl() in turn
-	/** @param data the data received
-	*/
-	private nothing recvData(auto data) {
+    #! This is the concrete method called when data is received; it calls recvDataImpl() in turn
+    /** @param data the data received
+    */
+    private nothing recvData(auto data) {
         recvDataImpl(data);
     }
 
-	#! This is the concrete method called when data is received; it calls recvDataImpl() in turn
-	/** @return data the data to be sent over the link
-	*/
-	private auto sendData() {
+    #! This is the concrete method called when data is received; it calls recvDataImpl() in turn
+    /** @return data the data to be sent over the link
+    */
+    private auto sendData() {
         auto d = sendDataImpl();
         if (!exists d) {
             send_done = True;
@@ -217,19 +225,19 @@ public namespace DataStreamRequestHandler {
     private nothing recvDataDoneImpl(*string err) {
     }
 
-	#! reimplement this method in subclasses to receive decoded and deserialized data
-	/** @param data the argument passed to this callback is the decoded and deserialized data in the message
-	*/
-	private abstract nothing recvDataImpl(auto data);
+    #! reimplement this method in subclasses to receive decoded and deserialized data
+    /** @param data the argument passed to this callback is the decoded and deserialized data in the message
+    */
+    private abstract nothing recvDataImpl(auto data);
 
-	#! reimplement this method in subclasses to support streamed data transfers
-	/** When this method returns no value, it signifies the end of the streamed data transfer
+    #! reimplement this method in subclasses to support streamed data transfers
+    /** When this method returns no value, it signifies the end of the streamed data transfer
 
         @return the data returned by this callback will be serialized to YAML and send via the
         @ref datastreamprotocol "DataStream protocol" to the remote HTTP REST server in HTTP chunked format; when all
         data has been send then this callback should return @ref nothing, which will close the chunked message and
         terminate the request
-	*/
-	private abstract auto sendDataImpl();
-    }
+    */
+    private abstract auto sendDataImpl();
+}
 }
