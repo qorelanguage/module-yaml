@@ -54,7 +54,7 @@ else()
     message(FATAL_ERROR "The compiler ${CMAKE_CXX_COMPILER} has no C++11 support. Please use a different C++ compiler.")
 endif()
 
-qore_wrap_qpp_value(QPP_SOURCES ${QPP_SRC})
+qore_wrap_qpp_value(QPP_SOURCES METALIST QPP_META_SOURCES ${QPP_SRC})
 
 SET (module_name "yaml")
 
@@ -83,6 +83,14 @@ qore_external_user_module("qlib/YamlRpcHandler.qm" "")
 qore_external_user_module("qlib/YamlDocumentDataProvider" "")
 qore_external_user_module("qlib/YamlTagHandler.qm" "")
 qore_external_user_module("qlib/YamlSchema.qm" "")
+
+# install qpp metadata files
+if (COMMAND qore_install_qpp_metadata)
+    qore_install_qpp_metadata(${module_name} ${QPP_META_SOURCES})
+else()
+    install(FILES ${QPP_META_SOURCES}
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/qore/metadata)
+endif()
 
 qore_dist("${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}")
 
