@@ -102,8 +102,8 @@ public class YamlDocumentReadDataProvider inherits DataProvider::AbstractDataPro
                 "display_name": "Skip Empty Documents",
                 "short_desc": "Skip empty documents",
                 "type": AbstractDataProviderTypeMap."bool",
-                "desc": "When True (default), documents that parse to nothing/null are skipped. "
-                        "Set to False to include empty documents in iteration.",
+                "desc": "When `True` (default), documents that parse to `nothing`/`null` are skipped. "
+                        "Set to `False` to include empty documents in iteration.",
                 "default_value": True,
             },
             "max_documents": <DataProviderOptionInfo>{
