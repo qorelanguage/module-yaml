@@ -144,9 +144,6 @@ YamlDocumentIterator::constructor(string yaml_str, *hash<YamlDocumentIteratorOpt
     @param options optional iteration options
 */
 YamlDocumentIterator::constructor(Qore::InputStream[InputStream] stream, *hash<YamlDocumentIteratorOptions> options) {
-    // Release the reference to the extracted private data when done
-    ReferenceHolder<InputStream> holder(stream, xsink);
-
     // Use default values when option keys are not present (not just when options is null)
     bool skip_empty = true;
     int64 max_docs = 0;

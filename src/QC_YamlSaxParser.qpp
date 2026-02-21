@@ -387,9 +387,6 @@ parser.parseStream(fis, sub (hash<YamlSaxEvent> e) {
     @endcode
 */
 nothing YamlSaxParser::parseStream(Qore::InputStream[InputStream] stream, code callback, *string encoding) {
-    // Release the reference to the extracted private data when done
-    ReferenceHolder<InputStream> stream_holder(stream, xsink);
-
     const QoreEncoding* enc = encoding ? QEM.findCreate(encoding->c_str()) : QCS_UTF8;
     ReferenceHolder<ResolvedCallReferenceNode> holder(callback->refRefSelf(), xsink);
     // Use obj_stream (the QoreObject*) - the C++ class will ref it

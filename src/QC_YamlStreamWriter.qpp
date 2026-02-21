@@ -155,9 +155,6 @@ qclass YamlStreamWriter [arg=QoreYamlStreamWriter* writer; ns=Qore::YAML; dom=PR
     @param options optional writer configuration
 */
 YamlStreamWriter::constructor(Qore::OutputStream[OutputStream] stream, *hash<YamlStreamWriterOptions> options) {
-    // Release the reference to the extracted private data when done
-    ReferenceHolder<OutputStream> holder(stream, xsink);
-
     // Use default values when option keys are not present (not just when options is null)
     int flags = 0;
     int width = -1;
