@@ -440,7 +440,7 @@ int QoreYamlStreamWriter::writeValueRecursive(QoreValue value, ExceptionSink* xs
             while (hi.next()) {
                 // Check for interrupt every 1000 iterations in sandboxed environments
                 if (++iteration % 1000 == 0) {
-                    if (qore_check_io_interrupt(xsink, "YAML mapping writing")) {
+                    if (qore_check_cancel(xsink, "YAML mapping writing")) {
                         return -1;
                     }
                 }
@@ -459,7 +459,7 @@ int QoreYamlStreamWriter::writeValueRecursive(QoreValue value, ExceptionSink* xs
             while (li.next()) {
                 // Check for interrupt every 1000 iterations in sandboxed environments
                 if (++iteration % 1000 == 0) {
-                    if (qore_check_io_interrupt(xsink, "YAML sequence writing")) {
+                    if (qore_check_cancel(xsink, "YAML sequence writing")) {
                         return -1;
                     }
                 }

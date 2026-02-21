@@ -51,7 +51,7 @@ All parsing loops now check for interrupts every 1000 iterations (or 100 for doc
 - [x] Cleanup on interrupt
 - **Gaps Found**: None (after remediation)
 
-All parsing loops now call `qore_check_io_interrupt()` periodically. Stream I/O relies on Qore's built-in stream classes which handle interrupts.
+All parsing loops now call `qore_check_cancel()` periodically. Stream I/O relies on Qore's built-in stream classes which handle interrupts.
 
 **Severity**: None
 
@@ -66,7 +66,7 @@ The following changes were made to address the audit findings:
 
 ### 1. Added QoreSandboxManager include
 
-`yaml-module.h` now includes `<qore/QoreSandboxManager.h>` for access to `qore_check_io_interrupt()`.
+`yaml-module.h` now includes `<qore/QoreSandboxManager.h>` for access to `qore_check_cancel()`.
 
 ### 2. Added interrupt checking to all parsing loops
 
@@ -86,7 +86,7 @@ Each loop now includes:
 int iteration = 0;
 while (true) {
     if (++iteration % 1000 == 0) {
-        if (qore_check_io_interrupt(xsink, "YAML <operation> parsing")) {
+        if (qore_check_cancel(xsink, "YAML <operation> parsing")) {
             return nullptr;
         }
     }

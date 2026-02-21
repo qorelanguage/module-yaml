@@ -116,7 +116,7 @@ bool QoreYamlSaxParser::processEvents(ParseState& state) {
     while (!done) {
         // Check for interrupt every 1000 iterations in sandboxed environments
         if (++iteration % 1000 == 0) {
-            if (qore_check_io_interrupt(state.xsink, "YAML SAX parsing")) {
+            if (qore_check_cancel(state.xsink, "YAML SAX parsing")) {
                 return false;
             }
         }

@@ -2,7 +2,7 @@
 /*
     yaml Qore module
 
-    Copyright (C) 2010 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2010 - 2026 Qore Technologies, s.r.o.
 
     This library is free software; you can redistribute it and/or
     modify it under the terms of the GNU Lesser General Public
@@ -104,7 +104,7 @@ QoreListNode* QoreYamlParser::parseSeq() {
     while (true) {
         // Check for interrupt every 1000 iterations in sandboxed environments
         if (++iteration % 1000 == 0) {
-            if (qore_check_io_interrupt(xsink, "YAML sequence parsing")) {
+            if (qore_check_cancel(xsink, "YAML sequence parsing")) {
                 return nullptr;
             }
         }
@@ -135,7 +135,7 @@ QoreHashNode* QoreYamlParser::parseMap() {
     while (true) {
         // Check for interrupt every 1000 iterations in sandboxed environments
         if (++iteration % 1000 == 0) {
-            if (qore_check_io_interrupt(xsink, "YAML mapping parsing")) {
+            if (qore_check_cancel(xsink, "YAML mapping parsing")) {
                 return nullptr;
             }
         }
