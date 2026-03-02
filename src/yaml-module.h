@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright 2003 - 2026 Qore Technologies, s.r.o.
 
     This library is free software; you can redistribute it and/or
     modify it under the terms of the GNU Lesser General Public
@@ -290,8 +290,14 @@ public:
         if (seqStart(block ? YAML_BLOCK_SEQUENCE_STYLE : YAML_FLOW_SEQUENCE_STYLE)) {
             return -1;
         }
+        int iteration = 0;
         ConstListIterator li(l);
         while (li.next()) {
+            if (++iteration % 1000 == 0) {
+                if (qore_check_cancel(xsink, "YAML sequence emission")) {
+                    return -1;
+                }
+            }
             if (emit(li.getValue())) {
                 return -1;
             }
@@ -303,8 +309,14 @@ public:
         if (mapStart(block ? YAML_BLOCK_MAPPING_STYLE : YAML_FLOW_MAPPING_STYLE)) {
             return -1;
         }
+        int iteration = 0;
         ConstHashIterator hi(h);
         while (hi.next()) {
+            if (++iteration % 1000 == 0) {
+                if (qore_check_cancel(xsink, "YAML mapping emission")) {
+                    return -1;
+                }
+            }
             if (emitScalar(hi.getKey(), YAML_STR_TAG)) {
                 return -1;
             }

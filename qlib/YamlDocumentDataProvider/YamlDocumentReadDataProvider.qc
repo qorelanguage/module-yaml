@@ -1,4 +1,22 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Qore Programming Language
+#
+# Copyright 2003 - 2026 Qore Technologies, s.r.o.
+#
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 2.1 of the License, or (at your option) any later version.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #! Contains all public definitions in the YamlDocumentDataProvider module
 public namespace YamlDocumentDataProvider {
@@ -80,14 +98,14 @@ public class YamlDocumentReadDataProvider inherits DataProvider::AbstractDataPro
                 "short_desc": "Path to YAML file",
                 "type": AbstractDataProviderTypeMap."string",
                 "desc": "The filesystem path to the YAML file containing one or more documents. "
-                        "Documents are separated by '---' markers.",
+                        "Documents are separated by `---` markers.",
                 "example_value": "/data/config.yaml",
             },
             "stream": <DataProviderOptionInfo>{
                 "display_name": "Input Stream",
                 "short_desc": "Input stream to read",
                 "type": AbstractDataProviderTypeMap."any",
-                "desc": "An InputStream object to read YAML documents from. Use this for "
+                "desc": "An `InputStream` object to read YAML documents from. Use this for "
                         "reading from network connections, compressed files, or other sources.",
             },
             "data": <DataProviderOptionInfo>{
@@ -102,7 +120,7 @@ public class YamlDocumentReadDataProvider inherits DataProvider::AbstractDataPro
                 "display_name": "Skip Empty Documents",
                 "short_desc": "Skip empty documents",
                 "type": AbstractDataProviderTypeMap."bool",
-                "desc": "When `True` (default), documents that parse to `nothing`/`null` are skipped. "
+                "desc": "When `True` (default), documents that parse to `NOTHING` are skipped. "
                         "Set to `False` to include empty documents in iteration.",
                 "default_value": True,
             },
@@ -110,7 +128,7 @@ public class YamlDocumentReadDataProvider inherits DataProvider::AbstractDataPro
                 "display_name": "Max Documents",
                 "short_desc": "Maximum documents to read",
                 "type": AbstractDataProviderTypeMap."int",
-                "desc": "Maximum number of documents to read from the stream. Use 0 (default) "
+                "desc": "Maximum number of documents to read from the stream. Use `0` (default) "
                         "for unlimited. Useful for sampling or limiting memory usage.",
                 "default_value": 0,
                 "example_value": 100,
@@ -119,7 +137,7 @@ public class YamlDocumentReadDataProvider inherits DataProvider::AbstractDataPro
                 "display_name": "Character Encoding",
                 "short_desc": "Input encoding",
                 "type": AbstractDataProviderTypeMap."string",
-                "desc": "Character encoding for reading the YAML data. Default: UTF-8.",
+                "desc": "Character encoding for reading the YAML data. Default: `UTF-8`.",
                 "default_value": DefaultEncoding,
                 "allowed_values": (
                     <AllowedValueInfo>{

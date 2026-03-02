@@ -5,7 +5,7 @@
 
 %requires yaml
 %requires QUnit
-%requires YamlTagHandler
+%requires ../qlib/YamlTagHandler.qm
 
 %exec-class YamlTagHandlerTest
 

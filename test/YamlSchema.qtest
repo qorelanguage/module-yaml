@@ -5,7 +5,7 @@
 
 %requires yaml
 %requires QUnit
-%requires YamlSchema
+%requires ../qlib/YamlSchema.qm
 
 %try-module json >= 1.11
 %define NoJson

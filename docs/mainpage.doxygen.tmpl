@@ -33,6 +33,9 @@
     - <a href="../../DataStreamRequestHandler/html/index.html">DataStreamRequestHandler user module</a>
     - <a href="../../YamlRpcClient/html/index.html">YamlRpcClient user module</a>
     - <a href="../../YamlRpcHandler/html/index.html">YamlRpcHandler user module</a>
+    - <a href="../../YamlSchema/html/index.html">YamlSchema user module</a>
+    - <a href="../../YamlTagHandler/html/index.html">YamlTagHandler user module</a>
+    - <a href="../../YamlDocumentDataProvider/html/index.html">YamlDocumentDataProvider user module</a>
 
     @section Examples
 
@@ -113,13 +116,29 @@ auto data = parse_yaml(yaml_str);
 
     @subsection yaml_1_1_0 yaml Module Version 1.1.0
 
+    <b>New Features</b>
+    - added @ref Qore::YAML::YamlSaxParser "YamlSaxParser" class for SAX-style event-based YAML
+      parsing with proper value deserialization
+    - added @ref Qore::YAML::YamlDocumentIterator "YamlDocumentIterator" class for iterating
+      multi-document YAML streams
+    - added @ref Qore::YAML::YamlStreamWriter "YamlStreamWriter" class for streaming YAML output
+    - added @ref Qore::YAML::YamlSaxEventType "YamlSaxEventType" and
+      @ref Qore::YAML::YamlScalarStyle "YamlScalarStyle" enums
+    - added @ref Qore::YAML::YamlSaxEvent "YamlSaxEvent" hashdecl for SAX event data
+
+    <b>New User Modules</b>
+    - added <a href="../../YamlDocumentDataProvider/html/index.html">YamlDocumentDataProvider</a>:
+      data provider for reading multi-document YAML streams
+    - added <a href="../../YamlSchema/html/index.html">YamlSchema</a>: YAML schema validation
+    - added <a href="../../YamlTagHandler/html/index.html">YamlTagHandler</a>: custom YAML tag handling
+
     <b>Bug Fixes</b>
     - fixed errno handling in integer parsing (was set after \c strtoll instead of before)
     - fixed error message in YAML parser to show proper line/column and error description
     - removed dead code in emitter
 
     <b>Improvements</b>
-    - updated copyright years to 2025
+    - updated copyright years to 2026
     - added \c %strict-args compile-time requirement to all user modules
     - added debug logging support with \c @debug() to YamlRpcHandler, YamlRpcClient,
       DataStreamClient, and DataStreamRequestHandler modules

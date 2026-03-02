@@ -4,16 +4,13 @@
 
 %requires QUnit
 %requires yaml
-%try-module DataProvider
-%define NO_DATAPROVIDER
-%endtry
+%requires DataProvider
 %requires ../qlib/YamlDocumentDataProvider
 
 %exec-class YamlDocumentDataProviderTest
 
 class YamlDocumentDataProviderTest inherits QUnit::Test {
     constructor() : Test("YamlDocumentDataProviderTest", "1.0") {
-%ifndef NO_DATAPROVIDER
         addTestCase("provider from data", \testProviderFromData());
         addTestCase("provider from path", \testProviderFromPath());
         addTestCase("provider from stream", \testProviderFromStream());
@@ -43,11 +40,9 @@ class YamlDocumentDataProviderTest inherits QUnit::Test {
         # Factory tests
         addTestCase("factory create", \testFactoryCreate());
         addTestCase("factory info", \testFactoryInfo());
-%endif
         set_return_value(main());
     }
 
-%ifndef NO_DATAPROVIDER
     testProviderFromData() {
         string yaml = "---\nname: Alice\n---\nname: Bob\n---\nname: Charlie";
 
@@ -333,5 +328,4 @@ scalar value";
         assertEq("yamldoc", info.name);
         assertTrue(exists info.desc);
     }
-%endif
 }

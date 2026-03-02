@@ -23,6 +23,7 @@
 
 #include "QC_YamlSaxParser.h"
 #include "yaml-module.h"
+#include "yaml-scalar-util.h"
 
 QoreYamlSaxParser::QoreYamlSaxParser() {
 }
@@ -60,8 +61,22 @@ QoreHashNode* QoreYamlSaxParser::createEventHash(yaml_event_t& event, int depth,
             h->setKeyValue("anchor", new QoreStringNode((const char*)event.data.scalar.anchor), xsink);
         if (event.data.scalar.tag)
             h->setKeyValue("tag", new QoreStringNode((const char*)event.data.scalar.tag), xsink);
-        h->setKeyValue("value", new QoreStringNode((const char*)event.data.scalar.value,
-                                                    event.data.scalar.length, QCS_UTF8), xsink);
+
+        // Deserialize scalar value to proper Qore type
+        {
+            const char* val = (const char*)event.data.scalar.value;
+            size_t len = event.data.scalar.length;
+            if (event.data.scalar.tag) {
+                const char* tag = (const char*)event.data.scalar.tag;
+                h->setKeyValue("value", yaml_parse_tagged_scalar(val, len, tag, xsink), xsink);
+            } else {
+                h->setKeyValue("value", yaml_parse_implicit_scalar(val, len,
+                    event.data.scalar.style, false, xsink), xsink);
+            }
+            if (*xsink) {
+                return nullptr;
+            }
+        }
         // Set implicit based on style: use plain_implicit for plain scalars, quoted_implicit for quoted
         // If either is true, it means the tag was inferred rather than explicitly specified
         bool is_implicit = event.data.scalar.plain_implicit || event.data.scalar.quoted_implicit;

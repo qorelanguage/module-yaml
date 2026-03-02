@@ -148,7 +148,7 @@ writer.endDocument();
 writer.close();
     @endcode
 */
-qclass YamlStreamWriter [arg=QoreYamlStreamWriter* writer; ns=Qore::YAML; dom=PROCESS];
+qclass YamlStreamWriter [arg=QoreYamlStreamWriter* writer; ns=Qore::YAML];
 
 //! Creates a YamlStreamWriter for the given output stream
 /** @param stream the output stream to write YAML to

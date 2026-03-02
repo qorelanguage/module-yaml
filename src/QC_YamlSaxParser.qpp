@@ -99,56 +99,6 @@ enum Qore::YAML::YamlScalarStyle : string {
     Folded = "folded",
 };
 
-/** @defgroup yaml_sax_event_constants YAML SAX Event Type Constants
-    These constants identify YAML SAX parser event types.
-
-    @note For new code, consider using the @ref YamlSaxEventType enum for type safety.
-
-    @since yaml 1.1
-*/
-///@{
-namespace Qore::YAML;
-
-//! Stream start event
-const YamlSaxStreamStart = YAML_SAX_STREAM_START;
-
-//! Stream end event
-/** @deprecated Use @ref YamlSaxEventType::StreamEnd instead */
-const YamlSaxStreamEnd = YAML_SAX_STREAM_END;
-
-//! Document start event (---)
-/** @deprecated Use @ref YamlSaxEventType::DocumentStart instead */
-const YamlSaxDocumentStart = YAML_SAX_DOCUMENT_START;
-
-//! Document end event (...)
-/** @deprecated Use @ref YamlSaxEventType::DocumentEnd instead */
-const YamlSaxDocumentEnd = YAML_SAX_DOCUMENT_END;
-
-//! Alias reference event (*anchor)
-/** @deprecated Use @ref YamlSaxEventType::Alias instead */
-const YamlSaxAlias = YAML_SAX_ALIAS;
-
-//! Scalar value event
-/** @deprecated Use @ref YamlSaxEventType::Scalar instead */
-const YamlSaxScalar = YAML_SAX_SCALAR;
-
-//! Sequence start event
-/** @deprecated Use @ref YamlSaxEventType::SequenceStart instead */
-const YamlSaxSequenceStart = YAML_SAX_SEQUENCE_START;
-
-//! Sequence end event
-/** @deprecated Use @ref YamlSaxEventType::SequenceEnd instead */
-const YamlSaxSequenceEnd = YAML_SAX_SEQUENCE_END;
-
-//! Mapping start event
-/** @deprecated Use @ref YamlSaxEventType::MappingStart instead */
-const YamlSaxMappingStart = YAML_SAX_MAPPING_START;
-
-//! Mapping end event
-/** @deprecated Use @ref YamlSaxEventType::MappingEnd instead */
-const YamlSaxMappingEnd = YAML_SAX_MAPPING_END;
-///@}
-
 //! Hash structure for YAML SAX events
 /** Contains all information about a single YAML parsing event. The available
     fields depend on the event type.
@@ -157,25 +107,25 @@ const YamlSaxMappingEnd = YAML_SAX_MAPPING_END;
 
     | Event Type | Available Fields |
     |------------|------------------|
-    | @ref YamlSaxStreamStart | type, line, column |
-    | @ref YamlSaxStreamEnd | type, line, column |
-    | @ref YamlSaxDocumentStart | type, depth, line, column |
-    | @ref YamlSaxDocumentEnd | type, depth, line, column |
-    | @ref YamlSaxScalar | type, depth, line, column, value, anchor, tag, style, implicit |
-    | @ref YamlSaxSequenceStart | type, depth, line, column, anchor, tag |
-    | @ref YamlSaxSequenceEnd | type, depth, line, column |
-    | @ref YamlSaxMappingStart | type, depth, line, column, anchor, tag |
-    | @ref YamlSaxMappingEnd | type, depth, line, column |
-    | @ref YamlSaxAlias | type, depth, line, column, alias |
+    | @ref YamlSaxEventType::StreamStart | type, line, column |
+    | @ref YamlSaxEventType::StreamEnd | type, line, column |
+    | @ref YamlSaxEventType::DocumentStart | type, depth, line, column |
+    | @ref YamlSaxEventType::DocumentEnd | type, depth, line, column |
+    | @ref YamlSaxEventType::Scalar | type, depth, line, column, value, anchor, tag, style, implicit |
+    | @ref YamlSaxEventType::SequenceStart | type, depth, line, column, anchor, tag |
+    | @ref YamlSaxEventType::SequenceEnd | type, depth, line, column |
+    | @ref YamlSaxEventType::MappingStart | type, depth, line, column, anchor, tag |
+    | @ref YamlSaxEventType::MappingEnd | type, depth, line, column |
+    | @ref YamlSaxEventType::Alias | type, depth, line, column, alias |
 
     @par Example: Inspecting events
     @code{.py}
 parser.parse(yaml, sub (hash<YamlSaxEvent> e) {
     switch (e.type) {
-        case YamlSaxScalar:
+        case YamlSaxEventType::Scalar:
             printf("Scalar at line %d: %y (style: %s)\n", e.line, e.value, e.style);
             break;
-        case YamlSaxMappingStart:
+        case YamlSaxEventType::MappingStart:
             printf("Mapping started at depth %d\n", e.depth);
             if (e.anchor) printf("  with anchor: %s\n", e.anchor);
             break;
@@ -184,7 +134,6 @@ parser.parse(yaml, sub (hash<YamlSaxEvent> e) {
     @endcode
 
     @see YamlSaxParser
-    @see @ref yaml_sax_event_constants
 
     @since yaml 1.1
 */
@@ -206,8 +155,8 @@ hashdecl YamlSaxEvent {
 
     //! Anchor name if present
     /** Set when a node defines an anchor for later reference.
-        Only present for @ref YamlSaxScalar, @ref YamlSaxSequenceStart,
-        and @ref YamlSaxMappingStart events.
+        Only present for @ref YamlSaxEventType::Scalar, @ref YamlSaxEventType::SequenceStart,
+        and @ref YamlSaxEventType::MappingStart events.
 
         @par Example YAML:
         @code{.yaml}
@@ -227,21 +176,28 @@ defaults: &my_anchor
         - \c "tag:yaml.org,2002:null" - Null
         - \c "!custom" - Custom application tag
 
-        Only present for @ref YamlSaxScalar, @ref YamlSaxSequenceStart,
-        and @ref YamlSaxMappingStart events.
+        Only present for @ref YamlSaxEventType::Scalar, @ref YamlSaxEventType::SequenceStart,
+        and @ref YamlSaxEventType::MappingStart events.
     */
     *string tag;
 
-    //! Scalar value as string
-    /** The raw string value of the scalar. Only present for
-        @ref YamlSaxScalar events. Type conversion should be done
-        by the application based on the tag and context.
+    //! Deserialized scalar value
+    /** The deserialized value of the scalar. Only present for
+        @ref YamlSaxEventType::Scalar events. Values are deserialized to their
+        proper Qore types based on the YAML tag and scalar style:
+        - Plain scalars: type-inferred (\c "true" → @ref True, \c "42" → integer, \c "null" → @ref NOTHING, etc.)
+        - Single-quoted scalars: dates and numbers are parsed, other values remain strings
+        - Double-quoted scalars: always returned as strings
+        - Explicitly tagged scalars: parsed according to the tag
+
+        @see yaml_parse_tagged_scalar()
+        @see yaml_parse_implicit_scalar()
     */
     auto value;
 
     //! Alias target anchor name
     /** The name of the anchor being referenced. Only present for
-        @ref YamlSaxAlias events.
+        @ref YamlSaxEventType::Alias events.
 
         @par Example YAML:
         @code{.yaml}
@@ -283,7 +239,7 @@ reference: *my_anchor
     *enum<YamlScalarStyle> style;
 
     //! Implicit tag flag
-    /** Only present for @ref YamlSaxScalar events. When @ref True,
+    /** Only present for @ref YamlSaxEventType::Scalar events. When @ref True,
         the tag was inferred by the parser rather than explicitly
         specified in the YAML source.
     */
@@ -315,18 +271,17 @@ int scalar_count = 0;
 YamlSaxParser parser();
 parser.parseStream(new FileInputStream("/large/file.yaml"), sub (hash<YamlSaxEvent> e) {
     switch (e.type) {
-        case YamlSaxMappingStart: mapping_count++; break;
-        case YamlSaxScalar: scalar_count++; break;
+        case YamlSaxEventType::MappingStart: mapping_count++; break;
+        case YamlSaxEventType::Scalar: scalar_count++; break;
     }
 });
     @endcode
 
     @see hash<YamlSaxEvent>
-    @see @ref yaml_sax_event_constants
 
     @since yaml 1.1
 */
-qclass YamlSaxParser [arg=QoreYamlSaxParser* parser; ns=Qore::YAML; dom=PROCESS];
+qclass YamlSaxParser [arg=QoreYamlSaxParser* parser; ns=Qore::YAML];
 
 //! Creates a new YamlSaxParser instance
 /** @par Example:

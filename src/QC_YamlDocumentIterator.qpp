@@ -113,7 +113,7 @@ while (iter.next()) {
 }
     @endcode
 */
-qclass YamlDocumentIterator [arg=QoreYamlDocumentIterator* iter; ns=Qore::YAML; dom=PROCESS];
+qclass YamlDocumentIterator [arg=QoreYamlDocumentIterator* iter; ns=Qore::YAML];
 
 //! Creates an iterator from a YAML string
 /** @param yaml_str the YAML string containing documents
