@@ -1,4 +1,4 @@
-%global mod_ver 1.1.0
+%global mod_ver 1.2.0
 
 %{?_datarootdir: %global mydatarootdir %_datarootdir}
 %{!?_datarootdir: %global mydatarootdir /usr/share}
@@ -77,7 +77,7 @@ yaml module.
 
 %files doc
 %defattr(-,root,root,-)
-%doc docs/yaml docs/YamlRpcClient docs/YamlRpcHandler docs/DataStreamUtil docs/DataStreamClient docs/DataStreamRequestHandler test examples
+%doc docs/yaml docs/YamlRpcClient docs/YamlRpcHandler docs/DataStreamUtil docs/DataStreamClient docs/DataStreamRequestHandler docs/Connect test examples
 
 %prep
 %setup -q
@@ -107,13 +107,23 @@ rm -rf $RPM_BUILD_ROOT
 
 %check
 export QORE_MODULE_DIR=$QORE_MODULE_DIR:qlib
+qore -l ./yaml-api-%{module_api}.qmod test/Connect.qtest -v
+qore -l ./yaml-api-%{module_api}.qmod test/ConnectGrpc.qtest -v
 qore -l ./yaml-api-%{module_api}.qmod test/DataStreamClient.qtest -v
+qore -l ./yaml-api-%{module_api}.qmod test/DataStreamDualProtocol.qtest -v
 qore -l ./yaml-api-%{module_api}.qmod test/DataStreamHandler.qtest -v
 qore -l ./yaml-api-%{module_api}.qmod test/DataStreamUtil.qtest -v
 qore -l ./yaml-api-%{module_api}.qmod test/YamlRpcHandler.qtest -v
 qore -l ./yaml-api-%{module_api}.qmod test/yaml.qtest -v
 
 %changelog
+* Mon Mar 03 2026 David Nichols <david@qore.org> 1.2.0
+- updated to version 1.2.0
+- added Connect module (v1.0): Connect RPC protocol (DataStream 2.0)
+- DataStreamUtil 1.3: Connect protocol framing utility functions
+- DataStreamClient 1.5: Connect protocol auto-negotiation
+- DataStreamRequestHandler 1.2: automatic Connect protocol detection
+
 * Sun Dec 29 2024 David Nichols <david@qore.org> 1.1.0
 - updated to version 1.1.0
 - fixed errno handling in integer parsing

@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # @file DataStreamUtil.qm Qore user module implementing support for the DataStream protocol: YAML-encoded HTTP chunked transfers where each chunk is a unique data entity
 
-/*  DataStreamUtil.qm Copyright (C) 2014 - 2025 Qore Technologies, s.r.o.
+/*  DataStreamUtil.qm Copyright (C) 2014 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -39,7 +39,7 @@
 %modern
 
 module DataStreamUtil {
-    version = "1.2";
+    version = "1.3";
     desc = "user module supporting YAML-encoded HTTP chunked transfers where each chunk is a unique data entity";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -63,13 +63,23 @@ module DataStreamUtil {
 
     All the public symbols in the module are defined in the DataStreamUtil namespace
 
-    Functions:
+    DataStream v1 Functions:
     - @ref DataStreamUtil::ds_get_content_decode() "ds_get_content_decode()": returns a @ref call_reference "call reference" (or @ref nothing) for decoding content encoded data
     - @ref DataStreamUtil::ds_get_content_encode() "ds_get_content_encode()": returns a @ref call_reference "call reference" (or @ref nothing) for encoding content encoded data
     - @ref DataStreamUtil::ds_get_send() "ds_get_send()": returns a @ref call_reference "call reference" for serializing and encoding data for sending DataStream chunked data
     - @ref DataStreamUtil::ds_get_recv() "ds_get_recv()": returns a @ref call_reference "call reference" for decoding and deserializing data for receiving DataStream chunked data
     - @ref DataStreamUtil::ds_set_chunked_headers() "ds_set_chunked_headers()": sets up HTTP headers for DataStream chunked data transfers
     - @ref DataStreamUtil::ds_set_non_chunked_headers() "ds_set_non_chunked_headers()": sets up HTTP headers for DataStream non-chunked data transfers
+
+    Connect Protocol (DataStream 2.0) Functions:
+    - @ref DataStreamUtil::connect_frame_message() "connect_frame_message()": frames a binary payload with the 5-byte Connect envelope
+    - @ref DataStreamUtil::connect_unframe_message() "connect_unframe_message()": parses a single Connect-framed message
+    - @ref DataStreamUtil::connect_next_frame_size() "connect_next_frame_size()": returns the size of the next complete frame or -1
+    - @ref DataStreamUtil::connect_detect_protocol() "connect_detect_protocol()": detects Connect protocol from HTTP headers
+    - @ref DataStreamUtil::connect_get_send() "connect_get_send()": returns a send callback with Connect framing
+    - @ref DataStreamUtil::connect_get_recv() "connect_get_recv()": returns a receive callback with Connect frame parsing
+    - @ref DataStreamUtil::connect_set_chunked_headers() "connect_set_chunked_headers()": sets up Connect streaming headers
+    - @ref DataStreamUtil::connect_set_non_chunked_headers() "connect_set_non_chunked_headers()": sets up Connect unary headers
 
     @section datastreamprotocol DataStream Protocol
 
@@ -188,7 +198,123 @@ Date: Sun, 20 Apr 2014 07:49:51 GMT
 Server: Qorus-HTTP-Server/0.3.7
     @endverbatim
 
+    @section connectprotocol Connect Protocol (DataStream 2.0)
+
+    The Connect protocol supersedes DataStream v1 with 5-byte framed messages, support for all
+    4 RPC patterns (unary, server streaming, client streaming, bidirectional streaming), and
+    compatibility with HTTP/2 and HTTP/3.  Connect uses the same wire format as gRPC (5-byte
+    Length-Prefixed-Message envelope), enabling interoperability with gRPC tooling.
+
+    For the higher-level client and server API, see the
+    <a href="../../Connect/html/index.html">Connect module</a>.  The functions in this module
+    provide low-level framing utilities that can be used directly when integrating Connect
+    framing with existing DataStream infrastructure.
+
+    @subsection connectprotocolframing Connect Framing Format
+
+    Every Connect message (and every gRPC message) uses a 5-byte envelope header followed by
+    the serialized payload:
+
+    <b>Connect / gRPC Length-Prefixed-Message Format</b>
+    |!Offset|!Size|!Field|!Description
+    |0|1 byte|Flags|Bit 0 (\c 0x01): payload is compressed; Bit 1 (\c 0x02): end-of-stream marker
+    |1|4 bytes|Length|Big-endian unsigned 32-bit payload length in bytes
+    |5|N bytes|Payload|Serialized message data (YAML, protobuf, JSON, etc.)
+
+    @note The framing format is identical to the
+    <a href="https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md">gRPC Length-Prefixed-Message</a>
+    specification.  This means a Connect-framed message can be parsed by gRPC tooling and vice versa.
+
+    @subsection connectprotocolheaders Connect Streaming Headers
+
+    <b>Connect Streaming Request Headers</b>
+    |!Header|!Value|!Description
+    |\c Content-Type|\c application/connect+yaml|Streaming content type: \c application/connect+{codec}
+    |\c Connect-Protocol-Version|\c 1|Connect protocol version (required)
+    |[\c Connect-Content-Encoding]|e.g. \c gzip|Optional compression of individual message payloads
+    |\c Transfer-Encoding|\c chunked|Required for HTTP/1.1 streaming; implicit for HTTP/2 and HTTP/3
+
+    <b>Connect Streaming Response Headers</b>
+    |!Header|!Value|!Description
+    |\c Content-Type|\c application/connect+yaml|Same streaming content type as the request
+    |[\c Connect-Content-Encoding]|e.g. \c gzip|Optional compression matching client's \c Connect-Accept-Encoding
+
+    <b>Connect Unary Request/Response Headers</b>
+    |!Header|!Value|!Description
+    |\c Content-Type|\c application/yaml|Unary content type: \c application/{codec}
+    |\c Connect-Protocol-Version|\c 1|Connect protocol version (required in requests)
+    |[\c Connect-Timeout-Ms]|e.g. \c 5000|Optional request timeout in milliseconds
+
+    @subsection connectprotocolendstream EndStreamResponse
+
+    Streaming responses end with a special frame that has the \c CONNECT_FLAG_END_STREAM flag
+    (\c 0x02) set.  The payload of this frame is always JSON (regardless of the message codec)
+    and carries optional trailing metadata and/or an error:
+
+    @verbatim
+EndStreamResponse (success, no metadata):
+{}
+
+EndStreamResponse (error):
+{"error":{"code":"internal","message":"database connection lost"}}
+
+EndStreamResponse (success with trailing metadata):
+{"metadata":{"x-request-id":"abc-123","x-trace":"def-456"}}
+    @endverbatim
+
+    @subsection connectprotocolexample Example Connect Request and Response
+
+    Unary Connect POST request:
+    @verbatim
+POST /MyService/MyMethod HTTP/1.1
+Host: localhost:8080
+Content-Type: application/yaml
+Connect-Protocol-Version: 1
+Connect-Timeout-Ms: 5000
+Content-Length: 42
+
+message: "Hello, World!"
+count: 42
+    @endverbatim
+
+    Unary Connect response:
+    @verbatim
+HTTP/1.1 200 OK
+Content-Type: application/yaml
+Content-Length: 38
+
+message: "Hello, Hello, World!!"
+    @endverbatim
+
+    @subsection connectprotocoldetection Protocol Detection
+
+    The @ref DataStreamUtil::connect_detect_protocol() "connect_detect_protocol()" function
+    detects whether an incoming HTTP request uses the Connect protocol by checking for:
+    - the \c Connect-Protocol-Version header (value \c "1"), or
+    - a Connect streaming content type (\c application/connect+{codec})
+
+    This allows a single server handler to serve both Connect and DataStream v1 clients
+    transparently.  See the
+    <a href="../../DataStreamRequestHandler/html/index.html">DataStreamRequestHandler</a>
+    module for automatic dual-protocol handling.
+
     @section datastreamutilrelnotes Release Notes
+
+    @subsection datastreamutil_v1_3 DataStreamUtil v1.3
+    - added Connect protocol (DataStream 2.0) framing utility functions:
+      @ref DataStreamUtil::connect_frame_message() "connect_frame_message()",
+      @ref DataStreamUtil::connect_unframe_message() "connect_unframe_message()",
+      @ref DataStreamUtil::connect_next_frame_size() "connect_next_frame_size()",
+      @ref DataStreamUtil::connect_detect_protocol() "connect_detect_protocol()",
+      @ref DataStreamUtil::connect_get_send() "connect_get_send()",
+      @ref DataStreamUtil::connect_get_recv() "connect_get_recv()",
+      @ref DataStreamUtil::connect_set_chunked_headers() "connect_set_chunked_headers()",
+      @ref DataStreamUtil::connect_set_non_chunked_headers() "connect_set_non_chunked_headers()"
+    - added Connect protocol constants for dual-protocol (Connect + DataStream v1) support
+    - added @ref CONNECT_DEFAULT_MAX_MESSAGE_SIZE constant (4 MB default, matching gRPC)
+    - added \c max_message_size parameter to @ref connect_unframe_message() and
+      @ref connect_get_recv() for frame size validation
+    - updated copyright year to 2026
 
     @subsection datastreamutil_v1_2 DataStreamUtil v1.2
     - added \c %strict-args compile-time requirement
@@ -380,7 +506,7 @@ httpclient.sendWithSendCallback(ds_get_send(scb, enc_func), method, path, hdr, t
 
         @note if using content encoding; the appropriate \c "DataStream-Content-Encoding" header will be added by @ref ds_set_chunked_headers() if the \a content_encoding argument is used
     */
-    public code sub ds_get_send(code scb, *code enc_func) {
+    public code<auto()> sub ds_get_send(code<auto()> scb, *code enc_func) {
         return auto sub () {
             auto data;
             try {
@@ -396,6 +522,9 @@ httpclient.sendWithSendCallback(ds_get_send(scb, enc_func), method, path, hdr, t
                 #printf("DBG ds_get_send() returning: %y\n", data);
                 return data;
             } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "THREAD-CANCELLED" || ex.err == "PROGRAM-INTERRUPTED") {
+                    rethrow;
+                }
                 #printf("DBG ds_get_send() closure: %s: %s\n", ex.err, ex.desc);
                 string str = sprintf("%s: %s", ex.err, ex.desc);
                 # make sure there are no newlines in the string
@@ -443,7 +572,7 @@ httpclient.sendWithRecvCallback(ds_get_recv(recv_callback), body, method, path, 
         "DataStream-Content-Type" is not \c "text/yaml" or the \c "Content-Encoding" or
         \c "DataStream-Content-Encoding" headers give unrecognized content encodings.
     */
-    public code sub ds_get_recv(code recv_callback, code eod_callback, *code body_callback, *bool extern_decode) {
+    public code<nothing(hash<auto>)> sub ds_get_recv(code<nothing(auto)> recv_callback, code<nothing(*string)> eod_callback, *code<nothing(string, string)> body_callback, *bool extern_decode) {
         # decode content encoding call reference
         *code dce;
         # "header parsed" flag
@@ -678,23 +807,436 @@ string dae = ds_get_ds_accept_enc_header(hdr."Accept-Encoding");
         string dae = (select ae.split(","), DataStreamContentEncodingHash.$1).join(",");
         return dae ? dae : NOTHING;
     }
+
+    #! @defgroup ConnectProtocolConstants Connect Protocol Constants
+    /** Constants for Connect protocol (DataStream 2.0) framing and header support.
+        These are placed in DataStreamUtil to avoid circular dependencies — both DataStreamClient
+        and DataStreamRequestHandler can use them without requiring the Connect module.
+
+        @since DataStreamUtil 1.3
+    */
+    #/@{
+
+    #! YAML MIME type for Connect unary requests
+    /** @since DataStreamUtil 1.3
+    */
+    public const ConnectMimeTypeYaml = "application/yaml";
+
+    #! YAML MIME type for Connect streaming requests
+    /** @since DataStreamUtil 1.3
+    */
+    public const ConnectStreamMimeTypeYaml = "application/connect+yaml";
+
+    #! Connect protocol version header name
+    /** @since DataStreamUtil 1.3
+    */
+    public const ConnectProtocolVersionHdr = "connect-protocol-version";
+
+    #! Connect protocol version value
+    /** @since DataStreamUtil 1.3
+    */
+    public const ConnectProtocolVersionVal = "1";
+
+    #! Connect content encoding header for streaming
+    /** @since DataStreamUtil 1.3
+    */
+    public const ConnectContentEncodingHdr = "connect-content-encoding";
+
+    #! Connect accept encoding header for streaming
+    /** @since DataStreamUtil 1.3
+    */
+    public const ConnectAcceptEncodingHdr = "connect-accept-encoding";
+
+    #! Envelope flag: payload is compressed (bit 0)
+    /** @since DataStreamUtil 1.3
+    */
+    public const CONNECT_FLAG_COMPRESSED = 0x01;
+
+    #! Envelope flag: end-of-stream marker (bit 1)
+    /** @since DataStreamUtil 1.3
+    */
+    public const CONNECT_FLAG_END_STREAM = 0x02;
+
+    #! Default maximum message size: 4 MB (matches gRPC default)
+    /** Used to prevent unbounded memory allocation from malicious or malformed
+        frames that declare very large payload sizes.
+
+        @since DataStreamUtil 1.3
+    */
+    public const CONNECT_DEFAULT_MAX_MESSAGE_SIZE = 4 * 1024 * 1024;
+    #/@}
+
+    #! @defgroup ConnectFramingFunctions Connect Protocol Framing Functions
+    /** Functions for Connect protocol (DataStream 2.0) message framing and protocol detection.
+
+        @since DataStreamUtil 1.3
+    */
+    #/@{
+
+    #! Frame a binary message with the Connect 5-byte envelope header
+    /** @param payload the message payload
+        @param flags envelope flags (combination of \c CONNECT_FLAG_* constants)
+        @return the framed message (5-byte header + payload)
+
+        @since DataStreamUtil 1.3
+    */
+    public binary sub connect_frame_message(binary payload, int flags = 0) {
+        int len = payload.size();
+        string header_str = chr(flags & 0xFF);
+        header_str += chr((len >> 24) & 0xFF);
+        header_str += chr((len >> 16) & 0xFF);
+        header_str += chr((len >> 8) & 0xFF);
+        header_str += chr(len & 0xFF);
+        return binary(header_str) + payload;
+    }
+
+    #! Parse a Connect-framed message
+    /** @param data the framed message data (must be >= 5 bytes)
+        @param max_message_size optional maximum payload size in bytes; 0 means no limit;
+        if not provided, no size validation is performed
+
+        @return a hash with \c flags (int) and \c data (binary) keys
+
+        @throw CONNECT-FRAMING-ERROR if the data is too short or declares more bytes than available
+        @throw CONNECT-MESSAGE-SIZE-ERROR if the declared payload exceeds max_message_size
+
+        @since DataStreamUtil 1.3
+    */
+    public hash<auto> sub connect_unframe_message(binary data, *int max_message_size) {
+        if (data.size() < 5) {
+            throw "CONNECT-FRAMING-ERROR",
+                sprintf("Connect frame too short: %d bytes (minimum 5)", data.size());
+        }
+        int flags = data[0];
+        int len = (data[1] << 24) | (data[2] << 16) | (data[3] << 8) | data[4];
+        if (max_message_size > 0 && len > max_message_size) {
+            throw "CONNECT-MESSAGE-SIZE-ERROR",
+                sprintf("Connect frame payload size %d exceeds maximum %d bytes",
+                    len, max_message_size);
+        }
+        if (data.size() < 5 + len) {
+            throw "CONNECT-FRAMING-ERROR",
+                sprintf("Connect frame declares %d bytes but only %d available",
+                    len, data.size() - 5);
+        }
+        return {
+            "flags": flags,
+            "data": data.substr(5, len),
+        };
+    }
+
+    #! Get the size of the next complete Connect frame in a buffer
+    /** @param buf the buffer to check
+        @return the total frame size (5 + payload), or -1 if the buffer does not contain a complete
+        frame
+
+        @since DataStreamUtil 1.3
+    */
+    public int sub connect_next_frame_size(binary buf) {
+        if (buf.size() < 5) {
+            return -1;
+        }
+        int len = (buf[1] << 24) | (buf[2] << 16) | (buf[3] << 8) | buf[4];
+        int total = 5 + len;
+        if (buf.size() < total) {
+            return -1;
+        }
+        return total;
+    }
+
+    #! Detect the Connect protocol from HTTP request headers
+    /** Returns True if the request uses the Connect protocol based on header inspection.
+
+        @param hdr the HTTP request headers (keys in lower-case)
+        @return True if the request is a Connect protocol request
+
+        @since DataStreamUtil 1.3
+    */
+    public bool sub connect_detect_protocol(hash<auto> hdr) {
+        # Check for Connect protocol version header
+        if (hdr{ConnectProtocolVersionHdr}.val()) {
+            return True;
+        }
+        # Check for Connect content types
+        *string ct = hdr."content-type";
+        if (ct.val()) {
+            ct = ct.lwr();
+            if (ct =~ /^application\/yaml/ || ct =~ /^application\/connect\+/) {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    #! Returns a send callback for Connect-framed chunked data
+    /** @param scb the send data callback that should return data for sending; when it returns
+        NOTHING, an EndStreamResponse frame is emitted
+        @param enc_func an optional call reference for content encoding after YAML serialization
+
+        @return a closure suitable for use with HTTP send callback methods; each call serializes
+        data to YAML, frames with the 5-byte Connect envelope, and optionally compresses
+
+        @since DataStreamUtil 1.3
+    */
+    public code<auto()> sub connect_get_send(code<auto()> scb, *code enc_func) {
+        bool eos_sent = False;
+        return auto sub () {
+            if (eos_sent) {
+                return NOTHING;
+            }
+            auto data;
+            try {
+                data = scb();
+                if (!exists data) {
+                    # End of stream: emit EndStreamResponse frame (JSON {} with END_STREAM flag)
+                    eos_sent = True;
+                    return connect_frame_message(binary("{}"), CONNECT_FLAG_END_STREAM);
+                }
+                # Serialize to YAML
+                binary payload = binary(make_yaml(data));
+                # Optionally compress
+                int flags = 0;
+                if (enc_func) {
+                    payload = enc_func(payload);
+                    flags = CONNECT_FLAG_COMPRESSED;
+                }
+                return connect_frame_message(payload, flags);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "THREAD-CANCELLED" || ex.err == "PROGRAM-INTERRUPTED") {
+                    rethrow;
+                }
+                # Emit EndStreamResponse with error
+                eos_sent = True;
+                string err_msg = sprintf("%s: %s", ex.err, ex.desc);
+                err_msg =~ s/[\r\n]/ /g;
+%ifdef NoJson
+                string json = "{\"code\":\"internal\",\"message\":"
+                    + connect_json_escape(err_msg) + "}";
+%else
+                string json = make_json({"error": {"code": "internal", "message": err_msg}});
+%endif
+                return connect_frame_message(binary(json), CONNECT_FLAG_END_STREAM);
+            }
+        };
+    }
+
+    #! Returns a receive callback for Connect-framed chunked data
+    /** @param recv_cb the data callback; called once for each deserialized message
+        @param eod_cb the "end of data" callback; called with an optional string error argument
+        when all data has been received
+        @param body_cb an optional "body callback" for raw data before deserialization
+        @param extern_decode if True, non-Connect data is decoded externally
+        @param max_message_size maximum message size in bytes; 0 means no limit;
+        defaults to @ref CONNECT_DEFAULT_MAX_MESSAGE_SIZE
+
+        @return a closure suitable for use with HTTP receive callback methods; accumulates binary
+        data, parses 5-byte Connect frames, deserializes YAML payloads, and dispatches to the
+        appropriate callback
+
+        @throw CONNECT-MESSAGE-SIZE-ERROR if a frame payload or buffer exceeds the maximum
+
+        @since DataStreamUtil 1.3
+    */
+    public code<nothing(hash<auto>)> sub connect_get_recv(code<nothing(auto)> recv_cb, code<nothing(*string)> eod_cb, *code<nothing(string, string)> body_cb,
+            *bool extern_decode, int max_message_size = CONNECT_DEFAULT_MAX_MESSAGE_SIZE) {
+        # binary buffer for accumulating frame data
+        binary buf = binary();
+        # header parsed flag
+        bool hp;
+        # decode content encoding
+        *code dce;
+
+        return sub (hash<auto> h) {
+            # Header delivery
+            if (h.hasKey("hdr")) {
+                if (hp) {
+                    # Second header delivery = trailer (end of data)
+                    eod_cb();
+                    return;
+                }
+                hp = True;
+                # Parse content encoding for compressed frames
+                *string ce = h.hdr{ConnectContentEncodingHdr} ?? h.hdr."content-encoding";
+                dce = ds_get_content_decode(ce);
+                return;
+            }
+            # Data delivery
+            if (exists h."data") {
+                # Accumulate data
+                if (h."data".typeCode() == NT_BINARY) {
+                    buf += h."data";
+                } else {
+                    buf += binary(h."data");
+                }
+                # Validate buffer size to prevent unbounded accumulation
+                if (max_message_size > 0 && buf.size() > 5 + max_message_size) {
+                    throw "CONNECT-MESSAGE-SIZE-ERROR",
+                        sprintf("Connect recv buffer size %d exceeds maximum message size %d bytes",
+                            buf.size(), max_message_size);
+                }
+
+                # Parse complete frames
+                while (True) {
+                    int frame_size = connect_next_frame_size(buf);
+                    if (frame_size < 0) {
+                        # Validate declared frame size before waiting for more data
+                        if (max_message_size > 0 && buf.size() >= 5) {
+                            int declared_len = (buf[1] << 24) | (buf[2] << 16)
+                                | (buf[3] << 8) | buf[4];
+                            if (declared_len > max_message_size) {
+                                throw "CONNECT-MESSAGE-SIZE-ERROR",
+                                    sprintf("Connect frame declares %d bytes, exceeds maximum %d",
+                                        declared_len, max_message_size);
+                            }
+                        }
+                        break;
+                    }
+                    hash<auto> frame = connect_unframe_message(buf);
+                    # Advance buffer past consumed frame
+                    if (buf.size() > frame_size) {
+                        buf = buf.substr(frame_size);
+                    } else {
+                        buf = binary();
+                    }
+
+                    # Check for EndStreamResponse
+                    if (frame.flags & CONNECT_FLAG_END_STREAM) {
+                        # Parse JSON EndStreamResponse for error
+                        *string err_msg;
+                        try {
+                            string json_str = frame.data.toString("utf-8");
+                            if (json_str.val()) {
+%ifdef NoJson
+                                hash<auto> obj = connect_simple_json_decode(json_str);
+%else
+                                hash<auto> obj = parse_json(json_str);
+%endif
+                                if (obj.error.message.val()) {
+                                    err_msg = sprintf("%s: %s", obj.error.code ?? "unknown",
+                                        obj.error.message);
+                                } else if (obj.error.code.val()) {
+                                    err_msg = obj.error.code;
+                                }
+                            }
+                        } catch () {
+                            # Ignore JSON parse errors
+                        }
+                        eod_cb(err_msg);
+                        return;
+                    }
+
+                    # Regular data frame — decompress if needed
+                    binary payload = frame.data;
+                    if ((frame.flags & CONNECT_FLAG_COMPRESSED) && dce) {
+                        payload = binary(dce(payload, "utf8"));
+                    }
+
+                    # Pass raw body to body callback if present
+                    if (body_cb) {
+                        body_cb(payload.toString("utf-8"), "yaml");
+                    }
+
+                    # Deserialize YAML and deliver
+                    auto parsed = parse_yaml(payload.toString("utf-8"));
+                    recv_cb(parsed);
+                }
+            }
+        };
+    }
+
+    #! Sets up HTTP headers for Connect streaming (chunked) data transfers
+    /** @param hdr a reference to a hash of message headers
+        @param content_encoding an optional content encoding string
+        @param req set to True if the headers are for a request
+
+        @since DataStreamUtil 1.3
+    */
+    public nothing sub connect_set_chunked_headers(reference<hash<auto>> hdr,
+            *string content_encoding, *softbool req) {
+        if (!hdr."Content-Type") {
+            hdr."Content-Type" = ConnectStreamMimeTypeYaml;
+        }
+        hdr{ConnectProtocolVersionHdr} = ConnectProtocolVersionVal;
+        if (content_encoding) {
+            hdr{ConnectContentEncodingHdr} = content_encoding;
+        }
+        hdr += {
+            "Transfer-Encoding": "chunked",
+        };
+    }
+
+    #! Sets up HTTP headers for Connect non-chunked (unary) data transfers
+    /** @param hdr a reference to a hash of message headers
+        @param content_encoding an optional content encoding string
+        @param req set to True if the headers are for a request
+
+        @since DataStreamUtil 1.3
+    */
+    public nothing sub connect_set_non_chunked_headers(reference<hash<auto>> hdr,
+            *string content_encoding, *softbool req) {
+        if (!hdr."Content-Type") {
+            hdr."Content-Type" = ConnectMimeTypeYaml;
+        }
+        hdr{ConnectProtocolVersionHdr} = ConnectProtocolVersionVal;
+        if (content_encoding) {
+            hdr."Content-Encoding" = content_encoding;
+        }
+    }
+    #/@}
 }
 
 # private namespace for non-exported definitions
 namespace DataStreamUtilPrivate {
     # private function
     sub ds_do_request_headers(reference<hash<auto>> hdr) {
-        if (!hdr.Accept)
+        if (!hdr.Accept) {
             hdr.Accept = MimeTypeYaml + "," + MimeTypeOctetStream;
+        }
 
-        if (!hdr{DataStreamAccept})
+        if (!hdr{DataStreamAccept}) {
             hdr{DataStreamAccept} = MimeTypeYaml;
+        }
 
         # get DataStream-Accept-Encoding headers
-        if (!hdr{DataStreamAcceptEncoding})
+        if (!hdr{DataStreamAcceptEncoding}) {
             hdr{DataStreamAcceptEncoding} = ds_get_ds_accept_enc_header(hdr."Accept-Encoding");
+        }
 
-        if (!hdr."Accept-Encoding" && hdr{DataStreamAcceptEncoding})
+        if (!hdr."Accept-Encoding" && hdr{DataStreamAcceptEncoding}) {
             hdr."Accept-Encoding" = hdr{DataStreamAcceptEncoding};
+        }
     }
+
+%ifdef NoJson
+    # Escape a string for JSON encoding (minimal implementation for when json module is unavailable)
+    string sub connect_json_escape(string s) {
+        s =~ s/\\/\\\\/g;
+        s =~ s/"/\\"/g;
+        s =~ s/\n/\\n/g;
+        s =~ s/\r/\\r/g;
+        s =~ s/\t/\\t/g;
+        return "\"" + s + "\"";
+    }
+
+    # Simple JSON object decoder for EndStreamResponse (when json module is unavailable)
+    # Handles only the subset needed: {"error":{"code":"...","message":"..."}}
+    hash<auto> sub connect_simple_json_decode(string json) {
+        hash<auto> result();
+        # Look for error.code
+        if (json =~ /"code"\s*:\s*"([^"]*)"/) {
+            if (!result.error) {
+                result.error = {};
+            }
+            result.error.code = $1;
+        }
+        # Look for error.message
+        if (json =~ /"message"\s*:\s*"([^"]*)"/) {
+            if (!result.error) {
+                result.error = {};
+            }
+            result.error.message = $1;
+        }
+        return result;
+    }
+%endif
 }

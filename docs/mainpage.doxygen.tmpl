@@ -26,8 +26,12 @@
       entity (<a href="../../DataStreamUtil/html/index.html">DataStreamUtil</a>,
       <a href="../../DataStreamClient/html/index.html">DataStreamClient</a>,
       <a href="../../DataStreamRequestHandler/html/index.html">DataStreamRequestHandler</a>)
+    - Connect (DataStream 2.0): HTTP-native streaming RPC protocol with 5-byte framed messages,
+      all 4 RPC patterns, and gRPC wire format compatibility
+      (<a href="../../Connect/html/index.html">Connect</a>)
 
     Also included with the binary yaml module:
+    - <a href="../../Connect/html/index.html">Connect user module</a>
     - <a href="../../DataStreamUtil/html/index.html">DataStreamUtil user module</a>
     - <a href="../../DataStreamClient/html/index.html">DataStreamClient user module</a>
     - <a href="../../DataStreamRequestHandler/html/index.html">DataStreamRequestHandler user module</a>
@@ -113,6 +117,48 @@ auto data = parse_yaml(yaml_str);
         an ordered map
 
     @section yamlreleasenotes Release Notes
+
+    @subsection yaml_1_2_0 yaml Module Version 1.2.0
+
+    <b>New User Modules</b>
+    - added <a href="../../Connect/html/index.html">Connect</a> (v1.0): Connect RPC protocol
+      module implementing DataStream 2.0 with YAML as the primary codec; supports unary,
+      server-streaming, client-streaming, and bidirectional-streaming RPC patterns over
+      HTTP/1.1, HTTP/2, and HTTP/3
+      - standard 5-byte framed envelopes compatible with gRPC tooling
+      - extensible codec system via \c AbstractConnectCodec
+      - conditional gRPC and gRPC-Web interoperability when the \c grpc module is available
+      - Connect protocol error model with 16 status codes matching gRPC semantics
+      - \c GrpcDetection utility class for gRPC/gRPC-Web content-type detection and
+        \c grpc-timeout header parsing (always available, no \c grpc module dependency)
+
+    <b>Improvements</b>
+    - <a href="../../DataStreamUtil/html/index.html">DataStreamUtil</a>: added Connect protocol
+      (DataStream 2.0) framing utility functions: \c connect_frame_message(),
+      \c connect_unframe_message(), \c connect_next_frame_size(),
+      \c connect_detect_protocol(), \c connect_get_send(), \c connect_get_recv(),
+      \c connect_set_chunked_headers(), \c connect_set_non_chunked_headers();
+      added \c CONNECT_DEFAULT_MAX_MESSAGE_SIZE constant (4 MB default, matching gRPC);
+      added Connect protocol documentation with framing format, headers, and examples
+    - <a href="../../DataStreamClient/html/index.html">DataStreamClient</a>: added Connect
+      protocol (DataStream 2.0) support with auto-negotiation; the client tries Connect mode
+      first (over HTTP/2 or HTTP/3) and falls back to DataStream v1 if the server doesn't
+      support Connect; new constructor options:
+      \c protocol (\c "auto", \c "connect", \c "datastream") and \c http3_protocol
+      (\c "auto", \c "h2", \c "h3"); new methods: \c setProtocol(), \c getProtocol(),
+      \c getDetectedProtocol(), \c resetProtocolCache();
+      added protocol selection and message size limit documentation
+    - <a href="../../DataStreamRequestHandler/html/index.html">DataStreamRequestHandler</a>:
+      added automatic Connect protocol (DataStream 2.0) detection; the handler now accepts
+      both Connect-framed and DataStream v1 chunked requests without any changes to subclasses;
+      added \c isConnectProtocol() method to query the detected protocol;
+      added usage documentation with subclassing example and protocol transparency explanation
+
+    <b>User Module Version Updates</b>
+    - <a href="../../Connect/html/index.html">Connect</a>: new module (1.0)
+    - <a href="../../DataStreamUtil/html/index.html">DataStreamUtil</a>: 1.2 -> 1.3
+    - <a href="../../DataStreamClient/html/index.html">DataStreamClient</a>: 1.4 -> 1.5
+    - <a href="../../DataStreamRequestHandler/html/index.html">DataStreamRequestHandler</a>: 1.1 -> 1.2
 
     @subsection yaml_1_1_0 yaml Module Version 1.1.0
 

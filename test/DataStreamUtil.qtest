@@ -28,6 +28,23 @@ class DataStreamUtilTest inherits QUnit::Test {
         addTestCase("compression roundtrip", \testCompressionRoundtrip());
         addTestCase("edge cases", \testEdgeCases());
         addTestCase("request headers", \testRequestHeaders());
+        addTestCase("connect frame roundtrip", \testConnectFrameRoundtrip());
+        addTestCase("connect frame multi-frame", \testConnectFrameMultiFrame());
+        addTestCase("connect frame incomplete", \testConnectFrameIncomplete());
+        addTestCase("connect frame errors", \testConnectFrameErrors());
+        addTestCase("connect detect protocol", \testConnectDetectProtocol());
+        addTestCase("connect send callback", \testConnectSendCallback());
+        addTestCase("connect recv callback", \testConnectRecvCallback());
+        addTestCase("connect headers", \testConnectHeaders());
+        addTestCase("connect frame max message size", \testConnectFrameMaxMessageSize());
+        addTestCase("connect frame malformed edge cases", \testConnectFrameMalformedEdgeCases());
+        addTestCase("connect recv partial frames", \testConnectRecvPartialFrames());
+        addTestCase("connect recv error propagation", \testConnectRecvErrorPropagation());
+        addTestCase("connect send error propagation", \testConnectSendErrorPropagation());
+        addTestCase("connect recv max message size", \testConnectRecvMaxMessageSize());
+        addTestCase("connect recv empty stream", \testConnectRecvEmptyStream());
+        addTestCase("ds v1 send recv roundtrip", \testDSv1SendRecvRoundtrip());
+        addTestCase("ds v1 send error trailer", \testDSv1SendErrorTrailer());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -411,6 +428,593 @@ class DataStreamUtilTest inherits QUnit::Test {
         hdr = {};
         ds_set_non_chunked_headers(\hdr, NOTHING, True);
         assertEq(MimeTypeYaml, hdr{DataStreamAccept});
+    }
+
+    # ---- Connect framing tests ----
+
+    testConnectFrameRoundtrip() {
+        # Basic frame/unframe roundtrip
+        binary payload = binary("hello connect");
+        binary framed = connect_frame_message(payload);
+        assertEq(5 + payload.size(), framed.size(), "framed size");
+        hash<auto> info = connect_unframe_message(framed);
+        assertEq(0, info.flags, "default flags");
+        assertEq(payload, info.data, "payload roundtrip");
+
+        # Frame with compression flag
+        framed = connect_frame_message(payload, CONNECT_FLAG_COMPRESSED);
+        info = connect_unframe_message(framed);
+        assertEq(CONNECT_FLAG_COMPRESSED, info.flags & CONNECT_FLAG_COMPRESSED,
+            "compression flag set");
+        assertEq(payload, info.data, "compressed payload data");
+
+        # Frame with end-of-stream flag
+        framed = connect_frame_message(payload, CONNECT_FLAG_END_STREAM);
+        info = connect_unframe_message(framed);
+        assertEq(CONNECT_FLAG_END_STREAM, info.flags & CONNECT_FLAG_END_STREAM,
+            "end-stream flag set");
+
+        # Empty payload
+        framed = connect_frame_message(binary());
+        assertEq(5, framed.size(), "empty payload frame is 5 bytes");
+        info = connect_unframe_message(framed);
+        assertEq(0, info.data.size(), "empty payload data size");
+
+        # Large payload
+        binary large = binary(strmul("x", 100000));
+        framed = connect_frame_message(large);
+        info = connect_unframe_message(framed);
+        assertEq(large.size(), info.data.size(), "large payload roundtrip");
+    }
+
+    testConnectFrameMultiFrame() {
+        # Multiple frames concatenated
+        binary p1 = binary("first");
+        binary p2 = binary("second");
+        binary p3 = binary("third");
+        binary combined = connect_frame_message(p1) + connect_frame_message(p2)
+            + connect_frame_message(p3);
+
+        # Parse first frame
+        int frame_size = connect_next_frame_size(combined);
+        assertEq(5 + p1.size(), frame_size, "first frame size");
+        hash<auto> f1 = connect_unframe_message(combined);
+        assertEq(p1, f1.data, "first frame data");
+
+        # Advance and parse second
+        combined = combined.substr(frame_size);
+        frame_size = connect_next_frame_size(combined);
+        assertEq(5 + p2.size(), frame_size, "second frame size");
+        hash<auto> f2 = connect_unframe_message(combined);
+        assertEq(p2, f2.data, "second frame data");
+
+        # Advance and parse third
+        combined = combined.substr(frame_size);
+        frame_size = connect_next_frame_size(combined);
+        assertEq(5 + p3.size(), frame_size, "third frame size");
+        hash<auto> f3 = connect_unframe_message(combined);
+        assertEq(p3, f3.data, "third frame data");
+
+        # No more frames
+        combined = combined.substr(frame_size);
+        assertEq(-1, connect_next_frame_size(combined), "no more frames");
+    }
+
+    testConnectFrameIncomplete() {
+        # Empty buffer
+        assertEq(-1, connect_next_frame_size(binary()), "empty buffer");
+
+        # Incomplete header (< 5 bytes)
+        assertEq(-1, connect_next_frame_size(<0001>), "short header");
+        assertEq(-1, connect_next_frame_size(<0000000a>), "4-byte header");
+
+        # Header present but payload incomplete
+        binary payload = binary("hello");
+        binary framed = connect_frame_message(payload);
+        binary partial = framed.substr(0, framed.size() - 2);
+        assertEq(-1, connect_next_frame_size(partial), "incomplete payload");
+    }
+
+    testConnectFrameErrors() {
+        # Too short for unframe
+        assertThrows("CONNECT-FRAMING-ERROR", \connect_unframe_message(), binary(<0102>));
+
+        # Frame declares more bytes than available
+        binary bad = <0000000064010203>;  # declares 100 bytes, has 3
+        assertThrows("CONNECT-FRAMING-ERROR", \connect_unframe_message(), bad);
+    }
+
+    testConnectDetectProtocol() {
+        # Detect by protocol version header
+        assertTrue(connect_detect_protocol({
+            ConnectProtocolVersionHdr: "1",
+        }), "detect by protocol version header");
+
+        # Detect by application/yaml content type
+        assertTrue(connect_detect_protocol({
+            "content-type": "application/yaml",
+        }), "detect by yaml content type");
+
+        # Detect by streaming content type
+        assertTrue(connect_detect_protocol({
+            "content-type": "application/connect+yaml",
+        }), "detect by streaming content type");
+
+        # Case insensitive content type detection
+        assertTrue(connect_detect_protocol({
+            "content-type": "Application/YAML",
+        }), "detect case insensitive");
+
+        # Not a Connect request: DataStream v1
+        assertFalse(connect_detect_protocol({
+            "content-type": "application/octet-stream",
+            DataStreamAccept.lwr(): MimeTypeYaml,
+        }), "DataStream v1 request not detected as Connect");
+
+        # Not a Connect request: plain HTTP
+        assertFalse(connect_detect_protocol({
+            "content-type": "text/html",
+        }), "plain HTTP not detected as Connect");
+
+        # Empty headers
+        assertFalse(connect_detect_protocol({}), "empty headers");
+    }
+
+    testConnectSendCallback() {
+        # Test connect_get_send produces framed data
+        list<auto> data_items = (
+            {"item": 1, "name": "first"},
+            {"item": 2, "name": "second"},
+        );
+        int index = 0;
+
+        code data_provider = auto sub () {
+            if (index < data_items.size()) {
+                return data_items[index++];
+            }
+            return NOTHING;
+        };
+
+        code send_cb = connect_get_send(data_provider);
+
+        # First call: should return framed YAML of first item
+        auto result = send_cb();
+        assertTrue(result.typeCode() == NT_BINARY, "first result is binary");
+        hash<auto> frame = connect_unframe_message(result);
+        assertEq(0, frame.flags, "first frame: no flags");
+        auto parsed = parse_yaml(frame.data.toString("utf-8"));
+        assertEq(1, parsed.item, "first frame: item value");
+        assertEq("first", parsed.name, "first frame: name value");
+
+        # Second call: framed YAML of second item
+        result = send_cb();
+        frame = connect_unframe_message(result);
+        parsed = parse_yaml(frame.data.toString("utf-8"));
+        assertEq(2, parsed.item, "second frame: item value");
+
+        # Third call: EndStreamResponse frame
+        result = send_cb();
+        assertTrue(result.typeCode() == NT_BINARY, "EOS result is binary");
+        frame = connect_unframe_message(result);
+        assertEq(CONNECT_FLAG_END_STREAM, frame.flags & CONNECT_FLAG_END_STREAM,
+            "EOS frame has end-stream flag");
+
+        # Fourth call: NOTHING (already sent EOS)
+        result = send_cb();
+        assertEq(NOTHING, result, "after EOS returns NOTHING");
+    }
+
+    testConnectRecvCallback() {
+        # Test connect_get_recv processes framed data
+        list<auto> received = ();
+        bool eod_called = False;
+        *string eod_error;
+
+        code recv_cb = sub (auto data) {
+            push received, data;
+        };
+
+        code eod_cb = sub (*string err) {
+            eod_called = True;
+            eod_error = err;
+        };
+
+        code callback = connect_get_recv(recv_cb, eod_cb);
+
+        # Create a mock socket
+        MockSocket sock();
+
+        # Simulate header delivery
+        callback({
+            "hdr": {
+                "content-type": ConnectStreamMimeTypeYaml,
+            },
+            "obj": sock,
+        });
+
+        # Simulate receiving two framed messages + EndStreamResponse
+        hash<auto> msg1 = {"key": "value1", "num": 1};
+        hash<auto> msg2 = {"key": "value2", "num": 2};
+        binary framed_data = connect_frame_message(binary(make_yaml(msg1)))
+            + connect_frame_message(binary(make_yaml(msg2)))
+            + connect_frame_message(binary("{}"), CONNECT_FLAG_END_STREAM);
+
+        callback({"data": framed_data});
+
+        assertEq(2, received.size(), "received 2 messages");
+        assertEq("value1", received[0].key, "first message key");
+        assertEq(1, received[0].num, "first message num");
+        assertEq("value2", received[1].key, "second message key");
+        assertEq(2, received[1].num, "second message num");
+        assertTrue(eod_called, "EOD callback called");
+        assertEq(NOTHING, eod_error, "no error");
+    }
+
+    testConnectHeaders() {
+        # Test connect_set_chunked_headers
+        hash<auto> hdr = {};
+        connect_set_chunked_headers(\hdr);
+        assertEq(ConnectStreamMimeTypeYaml, hdr."Content-Type", "streaming content type");
+        assertEq(ConnectProtocolVersionVal, hdr{ConnectProtocolVersionHdr},
+            "protocol version");
+        assertEq("chunked", hdr."Transfer-Encoding", "chunked transfer");
+
+        # Test with content encoding
+        hdr = {};
+        connect_set_chunked_headers(\hdr, "gzip");
+        assertEq("gzip", hdr{ConnectContentEncodingHdr}, "content encoding");
+
+        # Test connect_set_non_chunked_headers
+        hdr = {};
+        connect_set_non_chunked_headers(\hdr);
+        assertEq(ConnectMimeTypeYaml, hdr."Content-Type", "unary content type");
+        assertEq(ConnectProtocolVersionVal, hdr{ConnectProtocolVersionHdr},
+            "unary protocol version");
+        assertFalse(hdr.hasKey("Transfer-Encoding"), "no chunked for unary");
+
+        # Test with content encoding
+        hdr = {};
+        connect_set_non_chunked_headers(\hdr, "gzip");
+        assertEq("gzip", hdr."Content-Encoding", "unary content encoding");
+    }
+
+    testConnectFrameMaxMessageSize() {
+        # Test max_message_size enforcement in connect_unframe_message()
+        binary payload = binary(strmul("x", 100));
+        binary framed = connect_frame_message(payload);
+
+        # With limit larger than payload — should succeed
+        hash<auto> frame = connect_unframe_message(framed, 200);
+        assertEq(100, frame.data.size(), "within limit succeeds");
+
+        # With limit exactly matching — should succeed
+        frame = connect_unframe_message(framed, 100);
+        assertEq(100, frame.data.size(), "at limit succeeds");
+
+        # With limit smaller than payload — should throw
+        assertThrows("CONNECT-MESSAGE-SIZE-ERROR", \connect_unframe_message(),
+            (framed, 50));
+
+        # With limit = 0 (no limit) — should succeed
+        frame = connect_unframe_message(framed, 0);
+        assertEq(100, frame.data.size(), "no limit succeeds");
+
+        # With no limit argument — should succeed (default)
+        frame = connect_unframe_message(framed);
+        assertEq(100, frame.data.size(), "default no limit succeeds");
+
+        # Large frame exceeding default 4MB limit
+        binary large_payload = binary(strmul("x", 1024));
+        binary large_framed = connect_frame_message(large_payload);
+        assertThrows("CONNECT-MESSAGE-SIZE-ERROR", \connect_unframe_message(),
+            (large_framed, 512));
+    }
+
+    testConnectFrameMalformedEdgeCases() {
+        # Frame with zero-length payload — valid
+        binary zero_frame = connect_frame_message(binary());
+        hash<auto> frame = connect_unframe_message(zero_frame);
+        assertEq(0, frame.flags, "zero-length: no flags");
+        assertEq(0, frame.data.size(), "zero-length: empty data");
+
+        # Frame with end-stream flag and empty JSON payload
+        binary eos_frame = connect_frame_message(binary("{}"), CONNECT_FLAG_END_STREAM);
+        frame = connect_unframe_message(eos_frame);
+        assertEq(CONNECT_FLAG_END_STREAM, frame.flags & CONNECT_FLAG_END_STREAM,
+            "EOS: flag set");
+        assertEq("{}", frame.data.toString("utf-8"), "EOS: empty JSON");
+
+        # Frame with both compressed and end-stream flags
+        binary both_flags = connect_frame_message(binary("test"),
+            CONNECT_FLAG_COMPRESSED | CONNECT_FLAG_END_STREAM);
+        frame = connect_unframe_message(both_flags);
+        assertEq(CONNECT_FLAG_COMPRESSED | CONNECT_FLAG_END_STREAM, frame.flags,
+            "both flags set");
+
+        # Exactly 5 bytes (header only, zero payload) — valid
+        assertEq(5, zero_frame.size(), "zero payload frame is 5 bytes");
+
+        # 1 byte payload
+        binary one_byte = connect_frame_message(binary("A"));
+        frame = connect_unframe_message(one_byte);
+        assertEq(1, frame.data.size(), "1-byte payload");
+        assertEq("A", frame.data.toString("utf-8"), "1-byte content");
+
+        # Multiple flags in single byte — verify preserved
+        binary custom_flags = connect_frame_message(binary("x"), 0xFF);
+        frame = connect_unframe_message(custom_flags);
+        assertEq(0xFF, frame.flags, "all flag bits preserved");
+    }
+
+    testConnectRecvPartialFrames() {
+        # Test connect_get_recv with data arriving in partial chunks
+        list<auto> received = ();
+        bool eod_called = False;
+        *string eod_error;
+
+        code recv_cb = sub (auto data) { push received, data; };
+        code eod_cb = sub (*string err) { eod_called = True; eod_error = err; };
+
+        code callback = connect_get_recv(recv_cb, eod_cb);
+
+        MockSocket sock();
+        callback({"hdr": {"content-type": ConnectStreamMimeTypeYaml}, "obj": sock});
+
+        # Build two messages + EOS
+        hash<auto> msg1 = {"key": "partial1"};
+        hash<auto> msg2 = {"key": "partial2"};
+        binary full_data = connect_frame_message(binary(make_yaml(msg1)))
+            + connect_frame_message(binary(make_yaml(msg2)))
+            + connect_frame_message(binary("{}"), CONNECT_FLAG_END_STREAM);
+
+        # Deliver in small chunks to simulate partial frame delivery
+        int chunk_size = 7;  # Smaller than most frames
+        int offset = 0;
+        while (offset < full_data.size()) {
+            int end = offset + chunk_size;
+            if (end > full_data.size()) {
+                end = full_data.size();
+            }
+            binary chunk = full_data.substr(offset, end - offset);
+            callback({"data": chunk});
+            offset = end;
+        }
+
+        assertEq(2, received.size(), "partial delivery: 2 messages");
+        assertEq("partial1", received[0].key, "partial delivery: msg1");
+        assertEq("partial2", received[1].key, "partial delivery: msg2");
+        assertTrue(eod_called, "partial delivery: EOD called");
+        assertEq(NOTHING, eod_error, "partial delivery: no error");
+    }
+
+    testConnectRecvErrorPropagation() {
+        # Test connect_get_recv with error in EndStreamResponse
+        list<auto> received = ();
+        bool eod_called = False;
+        *string eod_error;
+
+        code recv_cb = sub (auto data) { push received, data; };
+        code eod_cb = sub (*string err) { eod_called = True; eod_error = err; };
+
+        code callback = connect_get_recv(recv_cb, eod_cb);
+
+        MockSocket sock();
+        callback({"hdr": {"content-type": ConnectStreamMimeTypeYaml}, "obj": sock});
+
+        # Send one message + EndStreamResponse with error
+        hash<auto> msg = {"key": "before-error"};
+        string error_json = "{\"error\":{\"code\":\"internal\",\"message\":\"something broke\"}}";
+        binary framed_data = connect_frame_message(binary(make_yaml(msg)))
+            + connect_frame_message(binary(error_json), CONNECT_FLAG_END_STREAM);
+
+        callback({"data": framed_data});
+
+        assertEq(1, received.size(), "error propagation: 1 message before error");
+        assertEq("before-error", received[0].key, "error propagation: message correct");
+        assertTrue(eod_called, "error propagation: EOD called");
+        assertTrue(eod_error.val(), "error propagation: error string present");
+        assertTrue(eod_error =~ /something broke/, "error propagation: error message");
+    }
+
+    testConnectSendErrorPropagation() {
+        # Test connect_get_send when data provider throws an exception
+        code data_provider = auto sub () {
+            throw "DATA-ERROR", "data provider failed";
+        };
+
+        code send_cb = connect_get_send(data_provider);
+
+        # First call should return an EndStreamResponse with error
+        auto result = send_cb();
+        assertTrue(result.typeCode() == NT_BINARY, "error: result is binary");
+        hash<auto> frame = connect_unframe_message(result);
+        assertEq(CONNECT_FLAG_END_STREAM, frame.flags & CONNECT_FLAG_END_STREAM,
+            "error: end-stream flag set");
+        # The payload should be JSON with error info
+        string json_str = frame.data.toString("utf-8");
+        assertTrue(json_str =~ /DATA-ERROR/, "error: contains error code");
+
+        # Second call should return NOTHING (stream is done)
+        result = send_cb();
+        assertEq(NOTHING, result, "after error returns NOTHING");
+    }
+
+    testConnectRecvMaxMessageSize() {
+        # Test connect_get_recv enforces max_message_size
+        list<auto> received = ();
+        bool eod_called = False;
+        *string eod_error;
+        bool got_error = False;
+
+        code recv_cb = sub (auto data) { push received, data; };
+        code eod_cb = sub (*string err) { eod_called = True; eod_error = err; };
+
+        # Set very small max_message_size (50 bytes)
+        code callback = connect_get_recv(recv_cb, eod_cb, NOTHING, NOTHING, 50);
+
+        MockSocket sock();
+        callback({"hdr": {"content-type": ConnectStreamMimeTypeYaml}, "obj": sock});
+
+        # Send a frame with payload larger than limit
+        binary large_payload = binary(strmul("x", 100));
+        binary framed = connect_frame_message(large_payload);
+
+        try {
+            callback({"data": framed});
+        } catch (hash<ExceptionInfo> ex) {
+            got_error = True;
+            assertEq("CONNECT-MESSAGE-SIZE-ERROR", ex.err, "max size: correct error");
+        }
+        assertTrue(got_error, "max size: error thrown for oversized frame");
+    }
+
+    testConnectRecvEmptyStream() {
+        # Test connect_get_recv with EndStreamResponse only (no data messages)
+        list<auto> received = ();
+        bool eod_called = False;
+        *string eod_error;
+
+        code recv_cb = sub (auto data) { push received, data; };
+        code eod_cb = sub (*string err) { eod_called = True; eod_error = err; };
+
+        code callback = connect_get_recv(recv_cb, eod_cb);
+
+        MockSocket sock();
+        callback({"hdr": {"content-type": ConnectStreamMimeTypeYaml}, "obj": sock});
+
+        # Send only EndStreamResponse (empty stream)
+        binary framed_data = connect_frame_message(binary("{}"), CONNECT_FLAG_END_STREAM);
+        callback({"data": framed_data});
+
+        assertEq(0, received.size(), "empty stream: no messages");
+        assertTrue(eod_called, "empty stream: EOD called");
+        assertEq(NOTHING, eod_error, "empty stream: no error");
+    }
+
+    testDSv1SendRecvRoundtrip() {
+        # Test DS v1 send callback produces YAML and recv callback consumes it
+        list<auto> items = (
+            {"name": "alpha", "val": 1},
+            {"name": "beta", "val": 2},
+            {"name": "gamma", "val": 3},
+        );
+        int send_idx = 0;
+
+        # Create send callback
+        code data_provider = auto sub () {
+            if (send_idx >= items.size()) {
+                return NOTHING;
+            }
+            return items[send_idx++];
+        };
+        code send_cb = ds_get_send(data_provider);
+
+        # Collect sent chunks — ds_get_send returns YAML strings for data items
+        # and NOTHING when done
+        list<auto> sent_chunks = ();
+        while (True) {
+            auto chunk = send_cb();
+            if (!exists chunk) {
+                break;
+            }
+            push sent_chunks, chunk;
+        }
+        assertEq(3, sent_chunks.size(), "DS v1 send: 3 chunks");
+
+        # Verify each sent chunk is valid YAML
+        for (int i = 0; i < 3; i++) {
+            auto parsed = parse_yaml(string(sent_chunks[i]));
+            assertEq(items[i].name, parsed.name, sprintf("DS v1 send: chunk %d name", i));
+            assertEq(items[i].val, parsed.val, sprintf("DS v1 send: chunk %d val", i));
+        }
+
+        # Create receive callback and feed the sent chunks as pre-deserialized data
+        # In real HTTP: each chunk is a YAML string, ds_get_recv deserializes it
+        # Here we deliver pre-deserialized to test the callback flow
+        list<auto> received = ();
+        bool eod_called = False;
+        *string eod_error;
+
+        code recv_data = sub (auto data) { push received, data; };
+        code eod_data = sub (*string err) { eod_called = True; eod_error = err; };
+
+        code recv_cb = ds_get_recv(recv_data, eod_data);
+
+        # First call: header delivery
+        MockSocket sock();
+        recv_cb({
+            "hdr": {
+                "content-type": MimeTypeYaml + ";charset=utf8",
+                DataStreamContentType.lwr(): MimeTypeYaml + ";charset=utf8",
+                "transfer-encoding": "chunked",
+                "status_code": 200,
+            },
+            "obj": sock,
+        });
+
+        # Deliver data chunks as pre-deserialized (deserialized: True)
+        for (int i = 0; i < items.size(); i++) {
+            recv_cb({"data": items[i], "deserialized": True});
+        }
+
+        # Signal end of data via trailer headers
+        recv_cb({"hdr": {}});
+
+        assertEq(3, received.size(), "DS v1 recv: 3 items");
+        assertEq("alpha", received[0].name, "DS v1 recv: first name");
+        assertEq("beta", received[1].name, "DS v1 recv: second name");
+        assertEq("gamma", received[2].name, "DS v1 recv: third name");
+        assertTrue(eod_called, "DS v1 recv: EOD called");
+        assertEq(NOTHING, eod_error, "DS v1 recv: no error");
+    }
+
+    testDSv1SendErrorTrailer() {
+        # Test DS v1 send callback error handling — exception creates DataStream-Error trailer
+        code data_provider = auto sub () {
+            throw "SEND-ERROR", "provider failed";
+        };
+
+        code send_cb = ds_get_send(data_provider);
+
+        # ds_get_send catches the exception and returns a hash with DataStreamError
+        # This hash is NOT YAML-encoded — the HTTP chunked layer handles that
+        auto result = send_cb();
+        assertEq(NT_HASH, result.typeCode(), "DS v1 error: result is hash");
+        assertTrue(result.hasKey(DataStreamError), "DS v1 error: has DataStreamError key");
+        assertTrue(result{DataStreamError} =~ /SEND-ERROR/, "DS v1 error: contains error code");
+        assertTrue(result{DataStreamError} =~ /provider failed/,
+            "DS v1 error: contains error desc");
+
+        # Verify the error can be received via ds_get_recv as a trailer
+        # The DataStreamError hash is what gets sent as the last chunk
+        # and then reported as a trailer via the hdr callback
+        list<auto> received = ();
+        bool eod_called = False;
+        *string eod_error;
+
+        code recv_data = sub (auto data) { push received, data; };
+        code eod_data = sub (*string err) { eod_called = True; eod_error = err; };
+
+        code recv_cb = ds_get_recv(recv_data, eod_data);
+
+        MockSocket sock();
+        recv_cb({
+            "hdr": {
+                "content-type": MimeTypeYaml + ";charset=utf8",
+                "status_code": 200,
+            },
+            "obj": sock,
+        });
+
+        # Deliver the error trailer via the second header delivery
+        recv_cb({
+            "hdr": {
+                DataStreamError.lwr(): result{DataStreamError},
+            },
+        });
+
+        assertTrue(eod_called, "DS v1 error recv: EOD called");
+        assertEq(result{DataStreamError}, eod_error, "DS v1 error recv: error propagated");
     }
 }
 

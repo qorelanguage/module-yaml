@@ -28,9 +28,23 @@ EXTRA_DIST = COPYING.LGPL COPYING.MIT AUTHORS README \
 	test/YamlSchema.qtest \
 	test/YamlTagHandler.qtest \
 	test/YamlInterrupt.qtest \
+	test/Connect.qtest \
+	test/ConnectGrpc.qtest \
+	test/DataStreamDualProtocol.qtest \
 	qlib/YamlDocumentDataProvider/YamlDocumentDataProvider.qm \
 	qlib/YamlDocumentDataProvider/YamlDocumentDataProviderFactory.qc \
 	qlib/YamlDocumentDataProvider/YamlDocumentReadDataProvider.qc \
+	qlib/Connect/Connect.qm \
+	qlib/Connect/ConnectCodec.qc \
+	qlib/Connect/YamlConnectCodec.qc \
+	qlib/Connect/ConnectHelper.qc \
+	qlib/Connect/ConnectError.qc \
+	qlib/Connect/ConnectClient.qc \
+	qlib/Connect/ConnectClientStream.qc \
+	qlib/Connect/ConnectHandler.qc \
+	qlib/Connect/ConnectServerStream.qc \
+	qlib/Connect/ProtobufConnectCodec.qc \
+	qlib/Connect/GrpcProtocolAdapter.qc \
 	examples/yaml-server.q \
 	$(USER_MODULES) \
 	qore-yaml-module.spec
@@ -40,8 +54,8 @@ ACLOCAL_AMFLAGS=-I m4
 dist_mod_DATA = $(USER_MODULES)
 
 if COND_DOXYGEN
-DOX = yaml YamlRpcClient YamlRpcHandler DataStreamUtil DataStreamClient DataStreamRequestHandler YamlSchema YamlTagHandler YamlDocumentDataProvider
-DOXYGEN_OUTPUT=docs/yaml/html docs/YamlRpcClient/html docs/YamlRpcHandler/html docs/DataStreamUtil/html docs/DataStreamClient/html docs/DataStreamRequestHandler/html docs/YamlSchema/html docs/YamlTagHandler/html docs/YamlDocumentDataProvider/html
+DOX = yaml YamlRpcClient YamlRpcHandler DataStreamUtil DataStreamClient DataStreamRequestHandler YamlSchema YamlTagHandler YamlDocumentDataProvider Connect
+DOXYGEN_OUTPUT=docs/yaml/html docs/YamlRpcClient/html docs/YamlRpcHandler/html docs/DataStreamUtil/html docs/DataStreamClient/html docs/DataStreamRequestHandler/html docs/YamlSchema/html docs/YamlTagHandler/html docs/YamlDocumentDataProvider/html docs/Connect/html
 DOXYFILES = docs/doxyfile docs/mainpage.doxygen
 DOXYFILES_SRC = docs/doxyfile.tmpl docs/qlib/Doxyfile.tmpl docs/footer_template.html
 QLIB_TMP_DOXYFILES = docs/qlib/YamlRpcClient.qm.dox.h docs/qlib/Doxyfile.YamlRpcClient \
@@ -51,7 +65,8 @@ QLIB_TMP_DOXYFILES = docs/qlib/YamlRpcClient.qm.dox.h docs/qlib/Doxyfile.YamlRpc
 	docs/qlib/DataStreamRequestHandler.qm.dox.h docs/qlib/Doxyfile.DataStreamRequestHandler \
 	docs/qlib/YamlSchema.qm.dox.h docs/qlib/Doxyfile.YamlSchema \
 	docs/qlib/YamlTagHandler.qm.dox.h docs/qlib/Doxyfile.YamlTagHandler \
-	docs/qlib/YamlDocumentDataProvider.qm.dox.h docs/qlib/Doxyfile.YamlDocumentDataProvider
+	docs/qlib/YamlDocumentDataProvider.qm.dox.h docs/qlib/Doxyfile.YamlDocumentDataProvider \
+	docs/qlib/Connect.qm.dox.h docs/qlib/Doxyfile.Connect
 QDX = qdx
 DX_CLEANFILES = ${DOXYFILES} $(QLIB_TMP_DOXYFILES)
 
@@ -137,6 +152,16 @@ docs/qlib/YamlDocumentDataProvider.qm.dox.h: qlib/YamlDocumentDataProvider/YamlD
 docs/YamlDocumentDataProvider/html: docs/qlib/YamlDocumentDataProvider.qm.dox.h docs/qlib/Doxyfile.YamlDocumentDataProvider
 	cd docs; $(DOXYGEN_CMD) qlib/Doxyfile.YamlDocumentDataProvider
 	$(QDX) --post docs/YamlDocumentDataProvider/html docs/YamlDocumentDataProvider/html/search
+
+docs/qlib/Doxyfile.Connect: docs/qlib/Doxyfile.tmp
+	$(QDX) -M=qlib/Connect/Connect.qm:qlib/Connect.qm.dox.h $< $@
+
+docs/qlib/Connect.qm.dox.h: qlib/Connect/Connect.qm
+	$(QDX) $< $@
+
+docs/Connect/html: docs/qlib/Connect.qm.dox.h docs/qlib/Doxyfile.Connect
+	cd docs; $(DOXYGEN_CMD) qlib/Doxyfile.Connect
+	$(QDX) --post docs/Connect/html docs/Connect/html/search
 
 docs/yaml/html: $(DOXYFILES)
 	cd docs; $(DOXYGEN_CMD) doxyfile;

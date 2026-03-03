@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.5)
 project(qore-yaml-module)
 
 set (VERSION_MAJOR 1)
-set (VERSION_MINOR 1)
+set (VERSION_MINOR 2)
 set (VERSION_PATCH 0)
 
 # where to look first for cmake modules, before ${CMAKE_ROOT}/Modules/ is checked
@@ -43,6 +43,7 @@ set(QMOD
     qlib/YamlDocumentDataProvider/YamlDocumentDataProvider.qm
     qlib/YamlTagHandler.qm
     qlib/YamlSchema.qm
+    qlib/Connect/Connect.qm
 )
 
 # Check for C++11.
@@ -83,6 +84,7 @@ qore_external_user_module("qlib/YamlRpcHandler.qm" "")
 qore_external_user_module("qlib/YamlDocumentDataProvider" "")
 qore_external_user_module("qlib/YamlTagHandler.qm" "")
 qore_external_user_module("qlib/YamlSchema.qm" "")
+qore_external_user_module("qlib/Connect" "")
 
 # install qpp metadata files
 if (COMMAND qore_install_qpp_metadata)

@@ -1,0 +1,240 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file Connect.qm Connect RPC protocol module (DataStream 2.0)
+
+/*  Connect.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires qore >= 2.0
+%requires yaml >= 0.7
+%requires Mime >= 1.0
+%requires HttpServerUtil
+
+%try-module json
+%define NoJson
+%endtry
+
+%try-module HttpClientIo
+%define NoHttpClientIo
+%endtry
+
+%try-module AsyncSocketIo
+%define NoAsyncSocketIo
+%endtry
+
+%try-module grpc
+%define NoGrpc
+%endtry
+
+module Connect {
+    version = "1.0";
+    desc = "Connect RPC protocol module implementing DataStream 2.0 with YAML as the primary "
+        "codec; supports unary, server-streaming, client-streaming, and bidirectional-streaming "
+        "RPC patterns over HTTP/1.1, HTTP/2, and HTTP/3";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage Connect Module
+
+    @tableofcontents
+
+    @section connectintro Connect Module Introduction
+
+    The %Connect module implements the
+    <a href="https://connectrpc.com/docs/protocol">Connect RPC protocol</a> (v1) with YAML
+    as the primary serialization codec.  Connect is an HTTP-native streaming RPC protocol
+    that supersedes the DataStream v1 protocol (chunked-transfer YAML) with proper
+    framing, bidirectional streaming, and compatibility with standard HTTP infrastructure.
+
+    Key advantages over DataStream v1:
+    - <b>Proxy-safe</b>: unary RPCs are plain HTTP POST requests that work with any
+      HTTP proxy, load balancer, or CDN
+    - <b>All 4 RPC patterns</b>: unary, server streaming, client streaming, and
+      bidirectional streaming
+    - <b>Multi-transport</b>: works over HTTP/1.1 (unary), HTTP/2 (all patterns), and
+      HTTP/3 (all patterns)
+    - <b>Standard framing</b>: uses the same 5-byte envelope as gRPC, enabling
+      interoperability with gRPC tooling
+    - <b>Extensible codecs</b>: YAML is the default, but any codec (protobuf, JSON,
+      etc.) can be used via the @ref Connect::AbstractConnectCodec interface
+    - <b>gRPC interop</b>: when the \c grpc module is available, the same server handler
+      can serve both Connect and gRPC clients simultaneously
+
+    @section connectquickstart Quick Start
+
+    @subsection connectquickstart_unary Unary RPC
+
+    @code{.py}
+%modern
+%requires Connect
+
+# --- Server ---
+ConnectHandler handler();
+handler.registerUnary("Greeter", "SayHello",
+    auto sub (auto request, hash<auto> metadata) {
+        return {"message": "Hello, " + request.name};
+    });
+
+# Register handler with HttpServer
+http.setHandler("connect", "", NOTHING, handler);
+
+# --- Client ---
+ConnectClient client("http://localhost:8080");
+auto response = client.call("Greeter", "SayHello", {"name": "World"});
+printf("Response: %y\n", response);
+    @endcode
+
+    @subsection connectquickstart_serverstream Server Streaming
+
+    @code{.py}
+# --- Server ---
+handler.registerServerStream("Events", "Subscribe",
+    sub (auto request, ConnectServerStream stream, hash<auto> metadata) {
+        for (int i = 0; i < 10; ++i) {
+            stream.write({"event": sprintf("event-%d", i), "topic": request.topic});
+        }
+    });
+
+# --- Client ---
+ConnectClientStream stream = client.serverStream("Events", "Subscribe",
+    {"topic": "news"});
+while (*auto msg = stream.read()) {
+    printf("Event: %y\n", msg);
+}
+hash<ConnectCallResult> result = stream.finish();
+    @endcode
+
+    @subsection connectquickstart_clientstream Client Streaming
+
+    @code{.py}
+# --- Server ---
+handler.registerClientStream("Upload", "Send",
+    auto sub (ConnectServerStream stream, hash<auto> metadata) {
+        int count = 0;
+        while (*auto msg = stream.read()) {
+            ++count;
+        }
+        return {"total": count};
+    });
+
+# --- Client ---
+ConnectClientStream stream = client.clientStream("Upload", "Send");
+stream.write({"chunk": "data1"});
+stream.write({"chunk": "data2"});
+stream.writesDone();
+hash<ConnectCallResult> result = stream.finish();
+    @endcode
+
+    @subsection connectquickstart_bidi Bidirectional Streaming
+
+    @code{.py}
+# --- Server ---
+handler.registerBidiStream("Chat", "Send",
+    sub (ConnectServerStream stream, hash<auto> metadata) {
+        while (*auto msg = stream.read(30s)) {
+            stream.write({"reply": "Echo: " + msg.text});
+        }
+    });
+
+# --- Client ---
+ConnectClientStream stream = client.bidiStream("Chat", "Send");
+stream.write({"text": "Hello"});
+*auto reply = stream.read(5s);
+stream.writesDone();
+hash<ConnectCallResult> result = stream.finish();
+    @endcode
+
+    @section connectcodec Codec System
+
+    The Connect module uses an extensible codec system.  Any class inheriting
+    @ref Connect::AbstractConnectCodec can be registered with the server handler
+    or passed to the client.
+
+    The default codec is @ref Connect::YamlConnectCodec, which preserves full
+    Qore type fidelity (number precision, dates with timezones, durations,
+    binary, etc.).
+
+    When the \c grpc binary module is available, the
+    @ref Connect::ProtobufConnectCodec can be added for protobuf serialization,
+    enabling gRPC client interoperability.
+
+    @section connecterror Error Handling
+
+    The Connect protocol defines 16 error codes (matching gRPC semantics):
+
+    | Code | HTTP Status |
+    |---|---|
+    | \c canceled | 408 |
+    | \c unknown | 500 |
+    | \c invalid_argument | 400 |
+    | \c deadline_exceeded | 408 |
+    | \c not_found | 404 |
+    | \c already_exists | 409 |
+    | \c permission_denied | 403 |
+    | \c resource_exhausted | 429 |
+    | \c failed_precondition | 412 |
+    | \c aborted | 409 |
+    | \c out_of_range | 400 |
+    | \c unimplemented | 501 |
+    | \c internal | 500 |
+    | \c unavailable | 503 |
+    | \c data_loss | 500 |
+    | \c unauthenticated | 401 |
+
+    For unary RPCs, errors are returned as JSON bodies with an HTTP error status.
+    For streaming RPCs, errors are carried in the EndStreamResponse frame.
+
+    @section connectclasses Classes
+
+    - @ref Connect::ConnectHandler "ConnectHandler": server-side HTTP request handler
+    - @ref Connect::ConnectClient "ConnectClient": client for making Connect RPC calls
+    - @ref Connect::ConnectClientStream "ConnectClientStream": client-side streaming handle
+    - @ref Connect::ConnectServerStream "ConnectServerStream": server-side streaming handle
+    - @ref Connect::ConnectHelper "ConnectHelper": framing, headers, protocol utilities
+    - @ref Connect::ConnectError "ConnectError": error model and serialization
+    - @ref Connect::AbstractConnectCodec "AbstractConnectCodec": codec interface
+    - @ref Connect::YamlConnectCodec "YamlConnectCodec": YAML codec implementation
+    - @ref Connect::GrpcDetection "GrpcDetection": gRPC/gRPC-Web protocol detection (always available)
+
+    @section connectrelnotes Release Notes
+
+    @subsection connect_v1_0 Connect Module Version 1.0
+
+    - initial release implementing the Connect RPC protocol v1
+    - YAML as the primary codec with full Qore type fidelity
+    - all 4 RPC patterns: unary, server streaming, client streaming, bidirectional
+    - server handler integrates with HttpServer as AbstractHttpRequestHandler
+    - client supports HTTP/2 and HTTP/3 via HttpClientIo connection pooling with auto-protocol selection
+    - HTTP/2 and HTTP/3 streaming on the server side
+    - Connect protocol error model with 16 status codes
+    - standard 5-byte framed envelopes (compatible with gRPC tooling)
+    - extensible codec system via AbstractConnectCodec
+    - conditional gRPC interoperability when grpc module is available
+*/
+
+#! Main Connect namespace
+/** All public declarations in the %Connect module are defined in this namespace.
+*/
+public namespace Connect {
+}

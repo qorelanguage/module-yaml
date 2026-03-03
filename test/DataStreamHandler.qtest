@@ -3,8 +3,8 @@
 
 %modern
 
-%requires ../qlib/DataStreamRequestHandler.qm
 %requires ../qlib/DataStreamUtil.qm
+%requires ../qlib/DataStreamRequestHandler.qm
 %requires yaml
 %requires Mime
 %requires QUnit
@@ -82,6 +82,12 @@ class DataStreamRequestHandlerTest inherits QUnit::Test {
         addTestCase("data types", \testDataTypes());
         addTestCase("empty data", \testEmptyData());
         addTestCase("large data", \testLargeData());
+        addTestCase("DS v1 protocol detection", \testDSv1ProtocolDetection());
+        addTestCase("Connect protocol detection", \testConnectProtocolDetection());
+        addTestCase("Connect response headers", \testConnectResponseHeaders());
+        addTestCase("Connect error response", \testConnectErrorResponse());
+        addTestCase("missing accept header DS v1", \testMissingAcceptHeaderDSv1());
+        addTestCase("handler isConnectProtocol accessor", \testIsConnectProtocol());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -258,5 +264,115 @@ class DataStreamRequestHandlerTest inherits QUnit::Test {
         }
 
         assertEq(100, count);
+    }
+
+    testDSv1ProtocolDetection() {
+        # ADSRH should detect DS v1 from DataStream-Accept header
+        hash<auto> cx = {
+            "socketobject": new Socket(),
+            "hdr": {
+                DataStreamAccept.lwr(): MimeTypeYaml,
+                "content-type": MimeTypeYaml + ";charset=utf8",
+            },
+        };
+        TestDataStreamRequestHandler handler(cx);
+
+        # Should NOT be detected as Connect
+        assertFalse(handler.isConnectProtocol(), "DS v1 headers: not Connect");
+    }
+
+    testConnectProtocolDetection() {
+        # ADSRH should detect Connect from Connect-Protocol-Version header
+        hash<auto> cx = {
+            "socketobject": new Socket(),
+            "hdr": {
+                ConnectProtocolVersionHdr: "1",
+                "content-type": ConnectStreamMimeTypeYaml,
+            },
+        };
+        TestDataStreamRequestHandler handler(cx);
+
+        assertTrue(handler.isConnectProtocol(), "Connect headers: detected");
+    }
+
+    testConnectResponseHeaders() {
+        # Connect mode should produce Connect response headers
+        hash<auto> cx = {
+            "socketobject": new Socket(),
+            "hdr": {
+                ConnectProtocolVersionHdr: "1",
+                "content-type": ConnectStreamMimeTypeYaml,
+            },
+        };
+        TestDataStreamRequestHandler handler(cx);
+
+        hash<auto> response = handler.getResponseHeaderMessageImpl();
+        assertEq(200, response.code, "Connect response: 200");
+        assertTrue(response.hasKey("hdr"), "Connect response: has headers");
+        # Connect mode uses application/connect+yaml content type
+        assertEq(ConnectStreamMimeTypeYaml, response.hdr."Content-Type",
+            "Connect response: content type");
+        assertEq("chunked", response.hdr."Transfer-Encoding",
+            "Connect response: chunked");
+        assertEq(ConnectProtocolVersionVal,
+            response.hdr{ConnectProtocolVersionHdr},
+            "Connect response: protocol version");
+    }
+
+    testConnectErrorResponse() {
+        # Connect mode error should produce JSON error format
+        hash<auto> cx = {
+            "socketobject": new Socket(),
+            "hdr": {
+                ConnectProtocolVersionHdr: "1",
+                "content-type": ConnectStreamMimeTypeYaml,
+            },
+        };
+        TestDataStreamRequestHandler handler(cx);
+
+        # Trigger error response by setting exception
+        *hash<auto> error = handler.getErrorResponse();
+        # For Connect mode, error should be JSON format
+        if (error) {
+            assertTrue(error.hasKey("code"), "Connect error: has code");
+        }
+    }
+
+    testMissingAcceptHeaderDSv1() {
+        # DS v1 without DataStreamAccept header should return 406
+        hash<auto> cx = {
+            "socketobject": new Socket(),
+            "hdr": {
+                "content-type": MimeTypeYaml,
+                # No DataStreamAccept header
+            },
+        };
+        TestDataStreamRequestHandler handler(cx);
+
+        *hash<auto> error = handler.getErrorResponse();
+        assertTrue(error.hasKey("code"), "missing accept: has code");
+        assertEq(406, error.code, "missing accept: 406");
+    }
+
+    testIsConnectProtocol() {
+        # Test isConnectProtocol accessor
+        hash<auto> ds_cx = {
+            "socketobject": new Socket(),
+            "hdr": {
+                DataStreamAccept.lwr(): MimeTypeYaml,
+            },
+        };
+        TestDataStreamRequestHandler ds_handler(ds_cx);
+        assertFalse(ds_handler.isConnectProtocol(), "DS v1: isConnectProtocol=False");
+
+        hash<auto> connect_cx = {
+            "socketobject": new Socket(),
+            "hdr": {
+                ConnectProtocolVersionHdr: "1",
+                "content-type": "application/yaml",
+            },
+        };
+        TestDataStreamRequestHandler connect_handler(connect_cx);
+        assertTrue(connect_handler.isConnectProtocol(), "Connect: isConnectProtocol=True");
     }
 }

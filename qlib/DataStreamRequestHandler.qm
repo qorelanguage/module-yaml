@@ -33,7 +33,7 @@
 %modern
 
 module DataStreamRequestHandler {
-    version = "1.1";
+    version = "1.2";
     desc = "user module implementing server support for the DataStream protocol: YAML-encoded HTTP chunked transfers "
         "where each chunk is a unique data entity";
     author = "David Nichols <david@qore.org>";
@@ -67,7 +67,82 @@ module DataStreamRequestHandler {
 
     @note Most of the underlying functionality is provided by the @ref datastreamutilintro "DataStreamUtil" module
 
+    @section datastreamrequesthandlerusage Usage
+
+    To use the DataStream request handler, subclass
+    @ref DataStreamRequestHandler::AbstractDataStreamRequestHandler "AbstractDataStreamRequestHandler"
+    and implement the @ref DataStreamRequestHandler::AbstractDataStreamRequestHandler::recvDataImpl() "recvDataImpl()"
+    and @ref DataStreamRequestHandler::AbstractDataStreamRequestHandler::sendDataImpl() "sendDataImpl()" abstract
+    methods.  The handler automatically detects whether the client uses Connect (DataStream 2.0)
+    or DataStream v1 from the request headers — no changes are needed in subclasses.
+
+    @subsection datastreamrequesthandlerexample Subclassing Example
+
+    @code{.py}
+%modern
+%requires DataStreamRequestHandler
+
+class MyDataStreamHandler inherits DataStreamRequestHandler::AbstractDataStreamRequestHandler {
+    private {
+        list<auto> received_records = ();
+        list<auto> response_records;
+    }
+
+    constructor(hash<auto> cx, *hash<auto> ah, list<auto> response_records)
+            : AbstractDataStreamRequestHandler(cx, ah) {
+        self.response_records = response_records;
+    }
+
+    private nothing recvDataImpl(auto data) {
+        received_records += data;
+    }
+
+    private auto sendDataImpl() {
+        if (!response_records.size()) {
+            return NOTHING;  # signals end of stream
+        }
+        return shift response_records;
+    }
+}
+    @endcode
+
+    Each handler instance manages one request.  A new instance is created per incoming
+    request by passing the connection context (\c cx) and URL arguments (\c ah) from
+    the HTTP server to the constructor.  The handler is typically integrated through
+    the \c RestHandler framework, which creates handler instances automatically.
+
+    @subsection datastreamrequesthandlerprotocol Protocol Transparency
+
+    The handler detects the protocol automatically from the request headers using
+    @ref DataStreamUtil::connect_detect_protocol() "connect_detect_protocol()".  Both Connect
+    and DataStream v1 clients are served by the same handler class — the abstract methods
+    \c recvDataImpl() and \c sendDataImpl() receive and return native Qore data structures
+    regardless of the wire protocol.
+
+    If protocol-specific logic is needed, use the
+    @ref DataStreamRequestHandler::AbstractDataStreamRequestHandler::isConnectProtocol() "isConnectProtocol()"
+    method:
+
+    @code{.py}
+private nothing recvDataImpl(auto data) {
+    if (isConnectProtocol()) {
+        # Connect-specific handling (e.g., structured error responses)
+        log("Connect client sent record: %y", data);
+    } else {
+        # DataStream v1 handling
+        log("DS v1 client sent record: %y", data);
+    }
+    received_records += data;
+}
+    @endcode
+
     @section datastreamrequesthandlerrelnotes Release Notes
+
+    @subsection datastreamrequesthandler_v1_2 DataStreamRequestHandler v1.2
+    - added automatic Connect protocol (DataStream 2.0) detection: the handler now accepts
+      both Connect-framed and DataStream v1 chunked requests without any changes to subclasses
+    - added @ref DataStreamRequestHandler::AbstractDataStreamRequestHandler::isConnectProtocol()
+      "isConnectProtocol()" method to query the detected protocol
 
     @subsection datastreamrequesthandler_v1_1 DataStreamRequestHandler v1.1
     - added \c %strict-args compile-time requirement
@@ -87,10 +162,10 @@ public namespace DataStreamRequestHandler {
 public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRestStreamRequestHandler {
     public {
         #! the receive callback as returned by the @ref datastreamutilintro "DataStreamUtil" module
-        code recv_callback;
+        code<nothing(hash<auto>)> recv_callback;
 
         #! the send callback as returned by the @ref datastreamutilintro "DataStreamUtil" module
-        code scb;
+        code<auto()> scb;
 
         #! flag for when all data has been received
         bool recv_done = False;
@@ -103,13 +178,32 @@ public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRest
 
         #! send error string received
         *string send_error;
+
+        #! True if the request uses the Connect protocol (DataStream 2.0), False for DataStream v1
+        /** @since DataStreamRequestHandler 1.2
+        */
+        bool connect_mode = False;
     }
 
     #! creates the chunked request handler according to the arguments
+    /** Automatically detects the protocol (Connect or DataStream v1) from the request headers
+        and sets up the appropriate send/receive callbacks. Subclasses do not need to change —
+        the abstract methods @ref recvDataImpl() and @ref sendDataImpl() work identically
+        regardless of the detected protocol.
+
+        @since DataStreamRequestHandler 1.0, updated in 1.2 with Connect detection
+    */
     constructor(hash<auto> cx, *hash<auto> ah) : AbstractRestStreamRequestHandler(cx, ah) {
-        @debug(printf("AbstractDataStreamRequestHandler::constructor() encoding=%y\n", cx.encoding));
-        recv_callback = ds_get_recv(\recvData(), \recvDataDone());
-        scb = ds_get_send(\sendData(), ds_get_content_encode(cx.encoding));
+        connect_mode = connect_detect_protocol(cx.hdr);
+        @debug(printf("AbstractDataStreamRequestHandler::constructor() encoding=%y connect_mode=%y\n",
+            cx.encoding, connect_mode));
+        if (connect_mode) {
+            recv_callback = connect_get_recv(\recvData(), \recvDataDone());
+            scb = connect_get_send(\sendData(), ds_get_content_encode(cx.encoding));
+        } else {
+            recv_callback = ds_get_recv(\recvData(), \recvDataDone());
+            scb = ds_get_send(\sendData(), ds_get_content_encode(cx.encoding));
+        }
 
         # setup data stream with header
         call_function(recv_callback, {"hdr": cx.hdr, "obj": cx.socketobject});
@@ -127,30 +221,53 @@ public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRest
     /** this method is meant to be called by getResponseHeaderMessageImpl()
     */
     *hash<auto> getErrorResponse() {
-        if (cx.hdr{DataStreamAccept.lwr()} != MimeTypeYaml) {
-            return {
-                "code": (err = 406),
-                "body": sprintf("cannot accept DataStream request with header %s: %y; expecting %y", DataStreamAccept,
-                    cx.hdr{DataStreamAccept.lwr()}, MimeTypeYaml),
-                "hdr": {"Content-Type": MimeTypeText},
-            };
-        }
+        if (connect_mode) {
+            # Connect mode: errors use JSON bodies
+            if (send_error) {
+                return {
+                    "code": (err = 400),
+                    "body": "{\"code\":\"internal\",\"message\":\"sender reported an error\"}",
+                    "hdr": {"Content-Type": "application/json"},
+                };
+            }
+            if (ex) {
+                string msg = sprintf("%s: %s", ex.err, ex.desc);
+                msg =~ s/"/\\"/g;
+                return {
+                    "code": (err = 500),
+                    "body": sprintf("{\"code\":\"internal\",\"message\":\"%s\"}", msg),
+                    "hdr": {"Content-Type": "application/json"},
+                    "close": True,
+                };
+            }
+        } else {
+            # DataStream v1 mode
+            if (cx.hdr{DataStreamAccept.lwr()} != MimeTypeYaml) {
+                return {
+                    "code": (err = 406),
+                    "body": sprintf("cannot accept DataStream request with header %s: %y; "
+                        "expecting %y", DataStreamAccept,
+                        cx.hdr{DataStreamAccept.lwr()}, MimeTypeYaml),
+                    "hdr": {"Content-Type": MimeTypeText},
+                };
+            }
 
-        if (send_error) {
-            return {
-                "code": (err = 400),
-                "body": "Sender reported a DataStream error in the request trailer",
-                "hdr": {"Content-Type": MimeTypeText},
-            };
-        }
+            if (send_error) {
+                return {
+                    "code": (err = 400),
+                    "body": "Sender reported a DataStream error in the request trailer",
+                    "hdr": {"Content-Type": MimeTypeText},
+                };
+            }
 
-        if (ex) {
-            return {
-                "code": (err = 409),
-                "body": make_yaml(ex),
-                "hdr": {"Content-Type": MimeTypeYaml},
-                "close": True,
-            };
+            if (ex) {
+                return {
+                    "code": (err = 409),
+                    "body": make_yaml(ex),
+                    "hdr": {"Content-Type": MimeTypeYaml},
+                    "close": True,
+                };
+            }
         }
     }
 
@@ -173,7 +290,11 @@ public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRest
         }
 
         hash<auto> hdr;
-        ds_set_chunked_headers(\hdr, cx.encoding);
+        if (connect_mode) {
+            connect_set_chunked_headers(\hdr, cx.encoding);
+        } else {
+            ds_set_chunked_headers(\hdr, cx.encoding);
+        }
         return {
             "code": 200,
             "hdr": hdr,
@@ -194,6 +315,15 @@ public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRest
     auto sendImpl() {
         @debug(printf("AbstractDataStreamRequestHandler::sendImpl()\n"));
         return scb();
+    }
+
+    #! Returns True if the request uses the Connect protocol (DataStream 2.0)
+    /** @return True for Connect protocol, False for DataStream v1
+
+        @since DataStreamRequestHandler 1.2
+    */
+    bool isConnectProtocol() {
+        return connect_mode;
     }
 
     #! this method is called when all data has been received
