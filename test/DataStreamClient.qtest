@@ -528,23 +528,23 @@ class DataStreamClientTest inherits QUnit::Test {
         assertEq(NOTHING, client.getDetectedProtocol(), "default: no detection");
 
         # Set to datastream
-        client.setProtocol("datastream");
+        client.setProtocol(DataStreamProtocol::DataStream);
         assertEq("datastream", client.getProtocol(), "set: datastream");
 
         # Set to connect
-        client.setProtocol("connect");
+        client.setProtocol(DataStreamProtocol::Connect);
         assertEq("connect", client.getProtocol(), "set: connect");
 
         # Set back to auto
-        client.setProtocol("auto");
+        client.setProtocol(DataStreamProtocol::Auto);
         assertEq("auto", client.getProtocol(), "set: auto");
 
         # Reset cache
         client.resetProtocolCache();
         assertEq(NOTHING, client.getDetectedProtocol(), "reset: no detection");
 
-        # Invalid protocol
-        assertThrows("DATASTREAM-CLIENT-ERROR", \client.setProtocol(), "bogus");
+        # Invalid protocol cast - enum type system rejects invalid values
+        assertThrows("RUNTIME-CAST-ERROR", sub () { DataStreamProtocol p = cast<enum<DataStreamProtocol>>("bogus"); remove p; });
     }
 
     testMaxMessageSize() {

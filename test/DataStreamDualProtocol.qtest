@@ -172,7 +172,7 @@ class DataStreamDualProtocolTest inherits QUnit::Test {
         assertEq("auto", client.getProtocol(), "initial protocol: auto");
 
         # Set to datastream
-        client.setProtocol("datastream");
+        client.setProtocol(DataStreamProtocol::DataStream);
         assertEq("datastream", client.getProtocol(), "protocol set to datastream");
 
         # Reset
@@ -180,11 +180,11 @@ class DataStreamDualProtocolTest inherits QUnit::Test {
         assertEq(NOTHING, client.getDetectedProtocol(), "cached protocol cleared");
 
         # Set back to auto
-        client.setProtocol("auto");
+        client.setProtocol(DataStreamProtocol::Auto);
         assertEq("auto", client.getProtocol(), "protocol reset to auto");
 
-        # Invalid protocol throws
-        assertThrows("DATASTREAM-CLIENT-ERROR", \client.setProtocol(), "invalid");
+        # Invalid protocol cast - enum type system rejects invalid values
+        assertThrows("RUNTIME-CAST-ERROR", sub () { DataStreamProtocol p = cast<enum<DataStreamProtocol>>("invalid"); remove p; });
     }
 
     # ---- Test: Connect error format from ADSRH ----

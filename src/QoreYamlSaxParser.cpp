@@ -25,6 +25,8 @@
 #include "yaml-module.h"
 #include "yaml-scalar-util.h"
 
+#include <qore/QoreEnumDecl.h>
+
 QoreYamlSaxParser::QoreYamlSaxParser() {
 }
 
@@ -35,22 +37,24 @@ QoreHashNode* QoreYamlSaxParser::createEventHash(yaml_event_t& event, int depth,
                                                   ExceptionSink* xsink) {
     ReferenceHolder<QoreHashNode> h(new QoreHashNode(hashdeclYamlSaxEvent, xsink), xsink);
 
-    int type = 0;
+    int type_val = 0;
     switch (event.type) {
-        case YAML_STREAM_START_EVENT: type = YAML_SAX_STREAM_START; break;
-        case YAML_STREAM_END_EVENT: type = YAML_SAX_STREAM_END; break;
-        case YAML_DOCUMENT_START_EVENT: type = YAML_SAX_DOCUMENT_START; break;
-        case YAML_DOCUMENT_END_EVENT: type = YAML_SAX_DOCUMENT_END; break;
-        case YAML_ALIAS_EVENT: type = YAML_SAX_ALIAS; break;
-        case YAML_SCALAR_EVENT: type = YAML_SAX_SCALAR; break;
-        case YAML_SEQUENCE_START_EVENT: type = YAML_SAX_SEQUENCE_START; break;
-        case YAML_SEQUENCE_END_EVENT: type = YAML_SAX_SEQUENCE_END; break;
-        case YAML_MAPPING_START_EVENT: type = YAML_SAX_MAPPING_START; break;
-        case YAML_MAPPING_END_EVENT: type = YAML_SAX_MAPPING_END; break;
+        case YAML_STREAM_START_EVENT: type_val = YAML_SAX_STREAM_START; break;
+        case YAML_STREAM_END_EVENT: type_val = YAML_SAX_STREAM_END; break;
+        case YAML_DOCUMENT_START_EVENT: type_val = YAML_SAX_DOCUMENT_START; break;
+        case YAML_DOCUMENT_END_EVENT: type_val = YAML_SAX_DOCUMENT_END; break;
+        case YAML_ALIAS_EVENT: type_val = YAML_SAX_ALIAS; break;
+        case YAML_SCALAR_EVENT: type_val = YAML_SAX_SCALAR; break;
+        case YAML_SEQUENCE_START_EVENT: type_val = YAML_SAX_SEQUENCE_START; break;
+        case YAML_SEQUENCE_END_EVENT: type_val = YAML_SAX_SEQUENCE_END; break;
+        case YAML_MAPPING_START_EVENT: type_val = YAML_SAX_MAPPING_START; break;
+        case YAML_MAPPING_END_EVENT: type_val = YAML_SAX_MAPPING_END; break;
         default: break;
     }
 
-    h->setKeyValue("type", type, xsink);
+    const QoreEnumMember* type_member = enumYamlSaxEventType->findMemberByValue(QoreValue(type_val));
+    assert(type_member);
+    h->setKeyValue("type", QoreValue::makeEnum(type_member), xsink);
     h->setKeyValue("depth", depth, xsink);
     h->setKeyValue("line", (int64)event.start_mark.line + 1, xsink);
     h->setKeyValue("column", (int64)event.start_mark.column + 1, xsink);
@@ -82,15 +86,20 @@ QoreHashNode* QoreYamlSaxParser::createEventHash(yaml_event_t& event, int depth,
         bool is_implicit = event.data.scalar.plain_implicit || event.data.scalar.quoted_implicit;
         h->setKeyValue("implicit", is_implicit, xsink);
 
-        const char* style = "plain";
+        const char* style_str = "plain";
         switch (event.data.scalar.style) {
-            case YAML_SINGLE_QUOTED_SCALAR_STYLE: style = "single_quoted"; break;
-            case YAML_DOUBLE_QUOTED_SCALAR_STYLE: style = "double_quoted"; break;
-            case YAML_LITERAL_SCALAR_STYLE: style = "literal"; break;
-            case YAML_FOLDED_SCALAR_STYLE: style = "folded"; break;
+            case YAML_SINGLE_QUOTED_SCALAR_STYLE: style_str = "single_quoted"; break;
+            case YAML_DOUBLE_QUOTED_SCALAR_STYLE: style_str = "double_quoted"; break;
+            case YAML_LITERAL_SCALAR_STYLE: style_str = "literal"; break;
+            case YAML_FOLDED_SCALAR_STYLE: style_str = "folded"; break;
             default: break;
         }
-        h->setKeyValue("style", new QoreStringNode(style), xsink);
+        {
+            SimpleRefHolder<QoreStringNode> style_val(new QoreStringNode(style_str));
+            const QoreEnumMember* style_member = enumYamlScalarStyle->findMemberByValue(QoreValue(*style_val));
+            assert(style_member);
+            h->setKeyValue("style", QoreValue::makeEnum(style_member), xsink);
+        }
     }
     else if (event.type == YAML_ALIAS_EVENT) {
         h->setKeyValue("alias", new QoreStringNode((const char*)event.data.alias.anchor), xsink);

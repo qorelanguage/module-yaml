@@ -341,7 +341,7 @@ DataStreamClient ds({"url": "http://localhost:8001/rest"});
 
         # Set protocol preference from options
         if (opts.protocol) {
-            setProtocol(opts.protocol);
+            setProtocol(cast<enum<DataStreamProtocol>>(opts.protocol));
         }
         # Set max message size for Connect mode
         if (exists opts.max_message_size) {
@@ -359,19 +359,9 @@ DataStreamClient ds({"url": "http://localhost:8001/rest"});
     #! Set the protocol preference
     /** @param proto the protocol mode; see @ref DataStreamProtocol for valid values
 
-        @throw DATASTREAM-CLIENT-ERROR if the protocol value is not a valid @ref DataStreamProtocol value
-
         @since DataStreamClient 1.5
     */
     setProtocol(DataStreamProtocol proto) {
-        if (proto != DataStreamProtocol::Auto
-                && proto != DataStreamProtocol::Connect
-                && proto != DataStreamProtocol::DataStream) {
-            throw "DATASTREAM-CLIENT-ERROR",
-                sprintf("invalid protocol: %y; valid values: %y", proto,
-                    (DataStreamProtocol::Auto, DataStreamProtocol::Connect,
-                     DataStreamProtocol::DataStream));
-        }
         protocol_mode = proto;
     }
 
