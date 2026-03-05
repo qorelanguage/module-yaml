@@ -293,7 +293,7 @@ public class ConnectServerStream {
                 "content-type": ConnectStreamContentTypePrefix + m_codec.name(),
             };
             if (m_http3) {
-                m_socket.submitQuicResponseStreaming(m_stream_id, m_session_id, 200, headers);
+                m_socket.submitQuicResponseStreaming(m_session_id, m_stream_id, 200, headers);
             } else {
                 m_socket.submitHttp2StreamingResponseHeaders(m_stream_id, 200, headers);
             }

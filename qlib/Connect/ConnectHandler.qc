@@ -469,8 +469,10 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
             s.flushHttp2();
         }
 
+        bool is_multiplexed = http3 || (cx."header-info".http2 ?? False);
         return <HttpResponseInfo>{
             "reply_sent": True,
+            "streaming": is_multiplexed,
         };
     }
 
@@ -541,8 +543,10 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
             s.flushHttp2();
         }
 
+        bool is_multiplexed = http3 || (cx."header-info".http2 ?? False);
         return <HttpResponseInfo>{
             "reply_sent": True,
+            "streaming": is_multiplexed,
         };
     }
 
@@ -599,8 +603,10 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
             s.flushHttp2();
         }
 
+        bool is_multiplexed = http3 || (cx."header-info".http2 ?? False);
         return <HttpResponseInfo>{
             "reply_sent": True,
+            "streaming": is_multiplexed,
         };
     }
 
