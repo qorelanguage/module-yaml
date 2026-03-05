@@ -461,13 +461,13 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
             stream.getTrailingMetadata().size() > 0 ? stream.getTrailingMetadata() : NOTHING,
             error);
         if (http3) {
-            s.sendHttp2StreamData(stream_id, end_frame, True);
+            while (s.submitQuicStreamData(session_id, stream_id, end_frame, True) == 1) {
+                s.waitForQuicStreamDrain(session_id, stream_id, 5s);
+            }
         } else {
             s.sendHttp2StreamData(stream_id, end_frame, True);
+            s.flushHttp2();
         }
-
-        # Flush
-        s.flushHttp2();
 
         return <HttpResponseInfo>{
             "reply_sent": True,
@@ -519,15 +519,27 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
             # Send the response as a framed message
             binary encoded = codec.serialize(response);
             binary framed = ConnectHelper::frameMessage(encoded);
-            s.sendHttp2StreamData(stream_id, framed, False);
+            if (http3) {
+                while (s.submitQuicStreamData(session_id, stream_id, framed, False) == 1) {
+                    s.waitForQuicStreamDrain(session_id, stream_id, 5s);
+                }
+            } else {
+                s.sendHttp2StreamData(stream_id, framed, False);
+            }
         }
 
         # Send EndStreamResponse
         binary end_frame = ConnectHelper::frameEndStream(
             stream.getTrailingMetadata().size() > 0 ? stream.getTrailingMetadata() : NOTHING,
             error);
-        s.sendHttp2StreamData(stream_id, end_frame, True);
-        s.flushHttp2();
+        if (http3) {
+            while (s.submitQuicStreamData(session_id, stream_id, end_frame, True) == 1) {
+                s.waitForQuicStreamDrain(session_id, stream_id, 5s);
+            }
+        } else {
+            s.sendHttp2StreamData(stream_id, end_frame, True);
+            s.flushHttp2();
+        }
 
         return <HttpResponseInfo>{
             "reply_sent": True,
@@ -578,8 +590,14 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
         binary end_frame = ConnectHelper::frameEndStream(
             stream.getTrailingMetadata().size() > 0 ? stream.getTrailingMetadata() : NOTHING,
             error);
-        s.sendHttp2StreamData(stream_id, end_frame, True);
-        s.flushHttp2();
+        if (http3) {
+            while (s.submitQuicStreamData(session_id, stream_id, end_frame, True) == 1) {
+                s.waitForQuicStreamDrain(session_id, stream_id, 5s);
+            }
+        } else {
+            s.sendHttp2StreamData(stream_id, end_frame, True);
+            s.flushHttp2();
+        }
 
         return <HttpResponseInfo>{
             "reply_sent": True,

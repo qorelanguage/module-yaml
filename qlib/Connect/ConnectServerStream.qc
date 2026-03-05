@@ -345,9 +345,7 @@ public class ConnectServerStream {
     #! Check if the transport stream is complete
     private bool isStreamComplete() {
         if (m_http3) {
-            # HTTP/3: check if QUIC stream is done
-            # NOTE: may need adjustment based on actual HTTP/3 API
-            return m_socket.isHttp2StreamComplete(m_stream_id);
+            return m_socket.isQuicStreamComplete(m_session_id, m_stream_id);
         }
         return m_socket.isHttp2StreamComplete(m_stream_id);
     }
@@ -355,7 +353,7 @@ public class ConnectServerStream {
     #! Read data from the transport stream
     private *binary readStreamData(timeout timeout_ms) {
         if (m_http3) {
-            return m_socket.readHttp2StreamDataBlock(m_stream_id, timeout_ms);
+            return m_socket.readQuicStreamDataBlock(m_session_id, m_stream_id, timeout_ms);
         }
         return m_socket.readHttp2StreamDataBlock(m_stream_id, timeout_ms);
     }
@@ -363,7 +361,10 @@ public class ConnectServerStream {
     #! Send data on the transport stream
     private sendStreamData(binary data, bool end_stream) {
         if (m_http3) {
-            m_socket.sendHttp2StreamData(m_stream_id, data, end_stream);
+            while (m_socket.submitQuicStreamData(m_session_id, m_stream_id, data,
+                    end_stream) == 1) {
+                m_socket.waitForQuicStreamDrain(m_session_id, m_stream_id, 5s);
+            }
         } else {
             m_socket.sendHttp2StreamData(m_stream_id, data, end_stream);
         }
@@ -371,7 +372,10 @@ public class ConnectServerStream {
 
     #! Flush the transport stream
     private flushStream() {
-        m_socket.flushHttp2();
+        if (!m_http3) {
+            m_socket.flushHttp2();
+        }
+        # HTTP/3: I/O thread flushes automatically via writePackets()
     }
 }
 
