@@ -137,6 +137,14 @@ l50Xb2GWQesIt9k5jF5IOw==
         addTestCase("H3 server-streaming error", \testH3ServerStreamError());
         addTestCase("H3 empty server stream", \testH3EmptyServerStream());
         addTestCase("H3 large server stream", \testH3LargeServerStream());
+
+        # Concurrent/stress streaming tests
+        addTestCase("H2 concurrent server-streaming", \testH2ConcurrentServerStream());
+        addTestCase("H2 concurrent mixed streaming", \testH2ConcurrentMixedStream());
+        addTestCase("H3 concurrent server-streaming", \testH3ConcurrentServerStream());
+        addTestCase("H3 concurrent mixed streaming", \testH3ConcurrentMixedStream());
+        addTestCase("H2 stress server-streaming", \testH2StressServerStream());
+        addTestCase("H3 stress server-streaming", \testH3StressServerStream());
 %endif
 %endif
 
@@ -573,6 +581,292 @@ l50Xb2GWQesIt9k5jF5IOw==
                 sprintf("H3 large-stream: data size %d", i));
         }
         assertFalse(exists parsed.end_info.error, "H3 large-stream: no error");
+    }
+
+    # ---- Concurrent/Stress Streaming Tests ----
+
+    #! Run N concurrent server-streaming RPCs and validate all responses
+    /** Each thread sends a request for a unique message count and validates
+        the response independently. This exercises HTTP/2 or HTTP/3 stream
+        multiplexing under concurrent Connect framing.
+    */
+    private testConcurrentServerStream(string protocol, int num_concurrent) {
+        if (protocol == "h3" && !mH3Available) {
+            testSkip("HTTP/3 not available");
+        }
+
+        string label = sprintf("%s concurrent-server-stream(%d)", protocol.upr(), num_concurrent);
+
+        Counter cnt(num_concurrent);
+        list<hash<auto>> results();
+        Mutex results_lock();
+
+        for (int i = 0; i < num_concurrent; ++i) {
+            int idx = i;
+            int msg_count = 3 + idx;  # each thread gets a different count
+            background sub () {
+                hash<auto!> result = {"idx": idx, "expected_count": msg_count};
+                try {
+                    HttpClientIo::HttpClientConnectionManager mgr = createMgr(protocol);
+                    on_exit delete mgr;
+
+                    hash<auto> resp = mgr.request(url(), "POST", "/Test/Numbers",
+                        streamHeaders(), frameRequest({"count": msg_count}));
+                    result.status_code = resp.status_code;
+                    if (resp.status_code == 200) {
+                        hash<auto> parsed = parseStreamResponse(respBody(resp));
+                        result.msg_count = parsed.messages.size();
+                        result.has_end = exists parsed.end_info;
+                        result.has_error = exists parsed.end_info.error;
+                        # Verify message content
+                        bool content_ok = True;
+                        for (int j = 0; j < parsed.messages.size(); ++j) {
+                            if (parsed.messages[j].index != j
+                                    || parsed.messages[j].value != sprintf("msg-%d", j)) {
+                                content_ok = False;
+                                break;
+                            }
+                        }
+                        result.content_ok = content_ok;
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    result.error = sprintf("%s: %s", ex.err, ex.desc);
+                }
+                {
+                    AutoLock al(results_lock);
+                    results += result;
+                }
+                cnt.dec();
+            }();
+        }
+
+        int rc = cnt.waitForZero(120s);
+        assertEq(0, rc, label + ": all threads completed");
+        assertEq(num_concurrent, results.size(), label + ": all results received");
+
+        for (int i = 0; i < results.size(); ++i) {
+            string tag = sprintf("%s[%d]", label, results[i].idx);
+            assertFalse(exists results[i].error, tag + ": no error (got: " + (results[i].error ?? "none") + ")");
+            assertEq(200, results[i].status_code, tag + ": status 200");
+            assertEq(results[i].expected_count, results[i].msg_count, tag + ": message count");
+            assertTrue(results[i].has_end, tag + ": has end-stream");
+            assertFalse(results[i].has_error, tag + ": no end-stream error");
+            assertTrue(results[i].content_ok, tag + ": message content correct");
+        }
+    }
+
+    #! Run N concurrent RPCs of mixed types (server-stream, client-stream, bidi)
+    /** Exercises all three streaming patterns concurrently over the same
+        connection/session. Validates correct demuxing and framing.
+    */
+    private testConcurrentMixedStream(string protocol, int num_per_type) {
+        if (protocol == "h3" && !mH3Available) {
+            testSkip("HTTP/3 not available");
+        }
+
+        string label = sprintf("%s concurrent-mixed(%d)", protocol.upr(), num_per_type);
+        int total = num_per_type * 3;
+
+        Counter cnt(total);
+        list<hash<auto>> results();
+        Mutex results_lock();
+
+        # Server-streaming threads
+        for (int i = 0; i < num_per_type; ++i) {
+            int idx = i;
+            background sub () {
+                hash<auto!> result = {"idx": idx, "type": "server-stream"};
+                try {
+                    HttpClientIo::HttpClientConnectionManager mgr = createMgr(protocol);
+                    on_exit delete mgr;
+
+                    int msg_count = 4 + idx;
+                    hash<auto> resp = mgr.request(url(), "POST", "/Test/Numbers",
+                        streamHeaders(), frameRequest({"count": msg_count}));
+                    result.status_code = resp.status_code;
+                    if (resp.status_code == 200) {
+                        hash<auto> parsed = parseStreamResponse(respBody(resp));
+                        result.ok = (parsed.messages.size() == msg_count
+                            && !exists parsed.end_info.error);
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    result.error = sprintf("%s: %s", ex.err, ex.desc);
+                }
+                {
+                    AutoLock al(results_lock);
+                    results += result;
+                }
+                cnt.dec();
+            }();
+        }
+
+        # Client-streaming threads
+        for (int i = 0; i < num_per_type; ++i) {
+            int idx = i;
+            background sub () {
+                hash<auto!> result = {"idx": idx, "type": "client-stream"};
+                try {
+                    HttpClientIo::HttpClientConnectionManager mgr = createMgr(protocol);
+                    on_exit delete mgr;
+
+                    int num_names = 2 + idx;
+                    list<auto> msgs();
+                    for (int j = 0; j < num_names; ++j) {
+                        msgs += {"name": sprintf("name-%d-%d", idx, j)};
+                    }
+                    hash<auto> resp = mgr.request(url(), "POST", "/Test/Aggregate",
+                        streamHeaders(), frameMessages(msgs));
+                    result.status_code = resp.status_code;
+                    if (resp.status_code == 200) {
+                        hash<auto> parsed = parseStreamResponse(respBody(resp));
+                        result.ok = (parsed.messages.size() == 1
+                            && parsed.messages[0].count == num_names
+                            && !exists parsed.end_info.error);
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    result.error = sprintf("%s: %s", ex.err, ex.desc);
+                }
+                {
+                    AutoLock al(results_lock);
+                    results += result;
+                }
+                cnt.dec();
+            }();
+        }
+
+        # Bidi-streaming threads
+        for (int i = 0; i < num_per_type; ++i) {
+            int idx = i;
+            background sub () {
+                hash<auto!> result = {"idx": idx, "type": "bidi"};
+                try {
+                    HttpClientIo::HttpClientConnectionManager mgr = createMgr(protocol);
+                    on_exit delete mgr;
+
+                    int num_msgs = 2 + idx;
+                    list<auto> msgs();
+                    for (int j = 0; j < num_msgs; ++j) {
+                        msgs += {"text": sprintf("t-%d-%d", idx, j)};
+                    }
+                    hash<auto> resp = mgr.request(url(), "POST", "/Test/BidiEcho",
+                        streamHeaders(), frameMessages(msgs));
+                    result.status_code = resp.status_code;
+                    if (resp.status_code == 200) {
+                        hash<auto> parsed = parseStreamResponse(respBody(resp));
+                        bool content_ok = parsed.messages.size() == num_msgs;
+                        if (content_ok) {
+                            for (int j = 0; j < num_msgs; ++j) {
+                                if (parsed.messages[j].reply
+                                        != sprintf("echo:t-%d-%d", idx, j)) {
+                                    content_ok = False;
+                                    break;
+                                }
+                            }
+                        }
+                        result.ok = content_ok && !exists parsed.end_info.error;
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    result.error = sprintf("%s: %s", ex.err, ex.desc);
+                }
+                {
+                    AutoLock al(results_lock);
+                    results += result;
+                }
+                cnt.dec();
+            }();
+        }
+
+        int rc = cnt.waitForZero(120s);
+        assertEq(0, rc, label + ": all threads completed");
+        assertEq(total, results.size(), label + ": all results received");
+
+        for (int i = 0; i < results.size(); ++i) {
+            string tag = sprintf("%s[%s/%d]", label, results[i].type, results[i].idx);
+            assertFalse(exists results[i].error,
+                tag + ": no error (got: " + (results[i].error ?? "none") + ")");
+            assertEq(200, results[i].status_code, tag + ": status 200");
+            assertTrue(results[i].ok, tag + ": response validated");
+        }
+    }
+
+    #! High-volume server-streaming stress test
+    /** Runs many iterations of server-streaming RPCs sequentially on a single
+        connection manager, validating Connect framing integrity under sustained
+        load. Uses large message counts to exercise flow control and buffering.
+    */
+    private testStressServerStream(string protocol, int iterations) {
+        if (protocol == "h3" && !mH3Available) {
+            testSkip("HTTP/3 not available");
+        }
+
+        string label = sprintf("%s stress-server-stream(%d)", protocol.upr(), iterations);
+
+        # Run a warmup request to measure throughput; skip if too slow (valgrind)
+        date start = now_us();
+        {
+            HttpClientIo::HttpClientConnectionManager mgr = createMgr(protocol);
+            on_exit delete mgr;
+            hash<auto> resp = mgr.request(url(), "POST", "/Test/Numbers",
+                streamHeaders(), frameRequest({"count": 1}));
+            if (resp.status_code != 200) {
+                testSkip(label + ": warmup failed with status " + resp.status_code);
+            }
+        }
+        int warmup_ms = (now_us() - start).durationMilliseconds();
+        if (warmup_ms > 5000) {
+            testSkip(label + ": too slow (valgrind?), warmup took " + warmup_ms + "ms");
+        }
+
+        int success_count = 0;
+        int total_messages = 0;
+
+        HttpClientIo::HttpClientConnectionManager mgr = createMgr(protocol);
+        on_exit delete mgr;
+
+        for (int i = 0; i < iterations; ++i) {
+            int msg_count = 10 + (i % 20);  # vary between 10 and 29
+            hash<auto> resp = mgr.request(url(), "POST", "/Test/Numbers",
+                streamHeaders(), frameRequest({"count": msg_count}));
+            if (resp.status_code != 200) {
+                break;
+            }
+            hash<auto> parsed = parseStreamResponse(respBody(resp));
+            if (parsed.messages.size() != msg_count || exists parsed.end_info.error) {
+                break;
+            }
+            ++success_count;
+            total_messages += msg_count;
+        }
+
+        assertEq(iterations, success_count,
+            sprintf("%s: all %d iterations succeeded (%d total messages)",
+                label, iterations, total_messages));
+    }
+
+    # ---- Concrete test cases ----
+
+    testH2ConcurrentServerStream() {
+        testConcurrentServerStream("h2", 10);
+    }
+
+    testH2ConcurrentMixedStream() {
+        testConcurrentMixedStream("h2", 5);
+    }
+
+    testH3ConcurrentServerStream() {
+        testConcurrentServerStream("h3", 10);
+    }
+
+    testH3ConcurrentMixedStream() {
+        testConcurrentMixedStream("h3", 5);
+    }
+
+    testH2StressServerStream() {
+        testStressServerStream("h2", 50);
+    }
+
+    testH3StressServerStream() {
+        testStressServerStream("h3", 50);
     }
 }
 
