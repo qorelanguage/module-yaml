@@ -116,9 +116,11 @@ l50Xb2GWQesIt9k5jF5IOw==
     constructor() : Test("Connect streaming test", "1.0") {
 %ifdef NoHttpClientIo
         printf("SKIP: HttpClientIo module not available\n");
+        return;
 %else
 %ifdef NoHttpServerAsyncIo
         printf("SKIP: HttpServerAsyncIo module not available\n");
+        return;
 %else
         # HTTP/2 streaming tests
         addTestCase("H2 unary", \testH2Unary());
@@ -320,9 +322,6 @@ l50Xb2GWQesIt9k5jF5IOw==
     # ---- HTTP/2 Tests ----
 
     testH2Unary() {
-        HttpClientIo::HttpClientConnectionManager mgr = createMgr("h2");
-        on_exit delete mgr;
-
         Connect::ConnectClient client(url(), NOTHING,
             <Connect::ConnectClientOptions>{"protocol": "h2", "accept_all_certs": True});
         on_exit client.shutdown();
@@ -656,8 +655,9 @@ l50Xb2GWQesIt9k5jF5IOw==
     }
 
     #! Run N concurrent RPCs of mixed types (server-stream, client-stream, bidi)
-    /** Exercises all three streaming patterns concurrently over the same
-        connection/session. Validates correct demuxing and framing.
+    /** Exercises all three streaming patterns concurrently, with each
+        background task using its own connection/session. Validates correct
+        framing and concurrent behavior.
     */
     private testConcurrentMixedStream(string protocol, int num_per_type) {
         if (protocol == "h3" && !mH3Available) {
