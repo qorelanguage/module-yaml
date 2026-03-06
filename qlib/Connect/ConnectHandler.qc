@@ -239,8 +239,10 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s,
             hash<auto> cx, hash<auto> hdr, *data body) {
         @debug {
-            printf("ConnectHandler::handleRequest() method=%y path=%y ct=%y body_size=%d\n",
-                hdr.method, hdr.path, hdr."content-type", body.size());
+            if (m_debug) {
+                printf("ConnectHandler::handleRequest() method=%y path=%y ct=%y body_size=%d\n",
+                    hdr.method, hdr.path, hdr."content-type", body.size());
+            }
         }
 
         # Check for DataStream v1 backward compatibility (unary only)
@@ -639,7 +641,9 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
     private hash<HttpResponseInfo> handleDataStreamV1Request(Socket s, hash<auto> cx,
             hash<auto> hdr, *data body) {
         @debug {
-            printf("ConnectHandler::handleDataStreamV1Request() path=%y\n", hdr.path);
+            if (m_debug) {
+                printf("ConnectHandler::handleDataStreamV1Request() path=%y\n", hdr.path);
+            }
         }
 
         # Reject chunked DataStream v1 requests — body has been reassembled, so per-chunk
