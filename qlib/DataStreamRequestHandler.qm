@@ -143,6 +143,10 @@ private nothing recvDataImpl(auto data) {
       both Connect-framed and DataStream v1 chunked requests without any changes to subclasses
     - added @ref DataStreamRequestHandler::AbstractDataStreamRequestHandler::isConnectProtocol()
       "isConnectProtocol()" method to query the detected protocol
+    - added @ref DataStreamRequestHandler::AbstractDataStreamRequestHandler::getResponseHeaderMessage()
+      "getResponseHeaderMessage()" override: non-streaming responses (subclasses that return a body in
+      \c getResponseHeaderMessageImpl()) are automatically wrapped in a Connect frame when the request
+      used the Connect protocol, so clients always receive a well-formed Connect response
 
     @subsection datastreamrequesthandler_v1_1 DataStreamRequestHandler v1.1
     - added \c %strict-args compile-time requirement
@@ -215,6 +219,32 @@ public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRest
     */
     bool needsContentEncoding() {
         return False;
+    }
+
+    #! wraps non-streaming response bodies in Connect framing when in Connect mode
+    /** Subclasses like SqlUtilWriteStream may override getResponseHeaderMessageImpl() and return
+        a response with a body (non-streaming).  In Connect mode the client expects Connect-framed
+        data, so the body must be YAML-serialized, wrapped in a Connect frame, and marked as a raw
+        response to bypass further REST serialization.
+
+        @since DataStreamRequestHandler 1.2
+    */
+    hash<HttpServer::HttpHandlerResponseInfo> getResponseHeaderMessage() {
+        hash<HttpServer::HttpHandlerResponseInfo> h = AbstractRestStreamRequestHandler::getResponseHeaderMessage();
+        if (connect_mode && exists h.body
+                && (h.body.typeCode() == NT_HASH || h.body.typeCode() == NT_LIST)) {
+            binary payload = binary(make_yaml(h.body));
+            # Use flags=0 (regular data frame); the HTTP response completion signals end-of-stream
+            # naturally. CONNECT_FLAG_END_STREAM must not be used here because connect_get_recv()
+            # treats END_STREAM frames as end-of-data signals without delivering the payload.
+            h.body = connect_frame_message(payload, 0);
+            if (!h.hdr) {
+                h.hdr = {};
+            }
+            h.hdr."Content-Type" = "application/connect+yaml";
+            h.raw_response = True;
+        }
+        return h;
     }
 
     #! if an error occurred, then return a hash giving an error response, otherwise return @ref nothing

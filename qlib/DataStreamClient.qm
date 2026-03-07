@@ -29,8 +29,6 @@
 %requires RestClient >= 1.4
 %requires yaml
 %requires Mime
-%requires HttpClientIo
-%requires AsyncSocketIo
 
 %modern
 
@@ -347,9 +345,6 @@ DataStreamClient ds({"url": "http://localhost:8001/rest"});
         if (exists opts.max_message_size) {
             m_max_message_size = opts.max_message_size;
         }
-
-        # Save options for lazy Connect transport initialization
-        m_connect_opts = opts;
     }
 
     public string getEffectiveHttpVersion() {
@@ -421,21 +416,6 @@ DataStreamClient ds({"url": "http://localhost:8001/rest"});
         */
         *DataStreamProtocol cached_protocol;
 
-        #! HTTP/2+3 connection manager for Connect mode (lazily initialized)
-        /** @since DataStreamClient 1.5
-        */
-        *HttpClientIo::HttpClientConnectionManager m_connect_mgr;
-
-        #! Async I/O controller for Connect mode (lazily initialized)
-        /** @since DataStreamClient 1.5
-        */
-        *AsyncSocketIo::AsyncSocketIoController m_controller;
-
-        #! Saved constructor options for lazy Connect transport initialization
-        /** @since DataStreamClient 1.5
-        */
-        *hash<auto> m_connect_opts;
-
         #! Maximum message size for Connect mode in bytes (0 = no limit)
         /** @since DataStreamClient 1.5
         */
@@ -477,24 +457,15 @@ rest.recvDataStream(recvcallback, endcallback, "GET", "/orders/1", body);
             timeout timeout_ms = 0, *reference<hash<auto>> info, *hash<auto> hdr) {
         @debug(printf("DataStreamClient::recvDataStream() method=%y path=%y protocol=%y\n",
             method, path, protocol_mode));
-        if (getEffectiveProtocol() == DataStreamProtocol::Connect) {
-            try {
-                recvDataStreamConnect(recv_callback, eod_callback, method, path, body,
-                    timeout_ms, \info, hdr);
-                if (protocol_mode == DataStreamProtocol::Auto) {
-                    cached_protocol = DataStreamProtocol::Connect;
-                }
-                return;
-            } catch (hash<ExceptionInfo> ex) {
-                if (protocol_mode == DataStreamProtocol::Auto && isConnectRejection(ex)) {
-                    cached_protocol = DataStreamProtocol::DataStream;
-                    # Fall through to DataStream v1
-                } else {
-                    rethrow;
-                }
-            }
+        bool use_connect = (getEffectiveProtocol() == DataStreamProtocol::Connect);
+
+        if (use_connect) {
+            # Serialize body and set base headers via RestClient, then add Connect headers
+            RestClient::prepareMsg(method, path, \body, \hdr);
+            connect_set_non_chunked_headers(\hdr, seh.ce, True);
+        } else {
+            prepareMsg(method, path, \body, \hdr);
         }
-        prepareMsg(method, path, \body, \hdr);
 
         on_exit if (exists body) {
             info += {
@@ -506,8 +477,25 @@ rest.recvDataStream(recvcallback, endcallback, "GET", "/orders/1", body);
         # prepare path
         preparePath(\path);
 
-        sendWithRecvCallback(ds_get_recv(recv_callback, eod_callback), body, method, path, hdr, timeout_ms, False,
-            \info);
+        # get receive callback with appropriate framing
+        code recv_cb = use_connect
+            ? connect_get_recv(recv_callback, eod_callback)
+            : ds_get_recv(recv_callback, eod_callback);
+
+        try {
+            sendWithRecvCallback(recv_cb, body, method, path, hdr, timeout_ms, False, \info);
+        } catch (hash<ExceptionInfo> ex) {
+            if (use_connect && protocol_mode == DataStreamProtocol::Auto && isConnectRejection(ex)) {
+                # Cache DS v1 so future requests don't attempt Connect
+                cached_protocol = DataStreamProtocol::DataStream;
+            }
+            rethrow;
+        }
+
+        # cache protocol on success in Auto mode
+        if (use_connect && protocol_mode == DataStreamProtocol::Auto) {
+            cached_protocol = DataStreamProtocol::Connect;
+        }
     }
 
     #! sends an HTTP request to an HTTP REST server supporting the @ref datastreamprotocol "DataStream protocol" and returns the decoded and deserialized response in the given callback as each HTTP chunk is received
@@ -589,35 +577,14 @@ hash<auto> h = rest.sendDataStream(callback, "POST", "/path");
             *reference<hash<auto>> info, *hash<auto> hdr) {
         @debug(printf("DataStreamClient::sendDataStream() method=%y path=%y protocol=%y\n",
             method, path, protocol_mode));
-        if (getEffectiveProtocol() == DataStreamProtocol::Connect) {
-            # Collect all send data up front so it can be replayed if Connect fails
-            list<auto> items = collectSendData(scb);
-            try {
-                hash<auto> rv = sendDataStreamConnect(items, method, path, timeout_ms,
-                    \info, hdr);
-                if (protocol_mode == DataStreamProtocol::Auto) {
-                    cached_protocol = DataStreamProtocol::Connect;
-                }
-                return rv;
-            } catch (hash<ExceptionInfo> ex) {
-                if (protocol_mode == DataStreamProtocol::Auto && isConnectRejection(ex)) {
-                    cached_protocol = DataStreamProtocol::DataStream;
-                    # Replay collected data for DS v1 fallback
-                    int idx = 0;
-                    scb = auto sub () {
-                        if (idx >= items.size()) {
-                            return NOTHING;
-                        }
-                        return items[idx++];
-                    };
-                } else {
-                    rethrow;
-                }
-            }
-        }
+        bool use_connect = (getEffectiveProtocol() == DataStreamProtocol::Connect);
         hdr = headers + hdr;
 
-        ds_set_chunked_headers(\hdr, seh.ce, True);
+        if (use_connect) {
+            connect_set_chunked_headers(\hdr, seh.ce, True);
+        } else {
+            ds_set_chunked_headers(\hdr, seh.ce, True);
+        }
 
         # prepare path
         preparePath(\path);
@@ -636,17 +603,20 @@ hash<auto> h = rest.sendDataStream(callback, "POST", "/path");
         code recv_data_callback = sub (auto d) {
             if (exists d) {
                 if (chunked) {
-                    if (!rmd)
+                    if (!rmd) {
                         rmd = ();
+                    }
                     rmd += d;
-                }
-                else
+                } else {
                     rmd = d;
+                }
             }
         };
         code eod_callback = sub () {};
-        # get DataStream receive callback using our local data callback closure
-        code dsrecv_callback = ds_get_recv(recv_data_callback, eod_callback);
+        # get receive callback with appropriate framing
+        code dsrecv_callback = use_connect
+            ? connect_get_recv(recv_data_callback, eod_callback)
+            : ds_get_recv(recv_data_callback, eod_callback);
         # save response header
         hash<auto> rhdr;
         # send aborted flag
@@ -655,16 +625,34 @@ hash<auto> h = rest.sendDataStream(callback, "POST", "/path");
         code recv_callback = sub (hash<auto> h) {
             if (h.hdr) {
                 rhdr = h.hdr;
-                if (h.hdr."transfer-encoding" == "chunked")
+                if (h.hdr."transfer-encoding" == "chunked") {
                     chunked = True;
-                else if (h.send_aborted)
+                } else if (h.send_aborted) {
                     send_aborted = True;
+                }
             }
-            # call DataStream callback
             dsrecv_callback(h);
         };
 
-        sendWithCallbacks(ds_get_send(scb, seh.func), recv_callback, method, path, hdr, timeout_ms, False, \info);
+        # get send callback with appropriate framing
+        code send_cb = use_connect
+            ? connect_get_send(scb, seh.func)
+            : ds_get_send(scb, seh.func);
+
+        try {
+            sendWithCallbacks(send_cb, recv_callback, method, path, hdr, timeout_ms, False, \info);
+        } catch (hash<ExceptionInfo> ex) {
+            if (use_connect && protocol_mode == DataStreamProtocol::Auto && isConnectRejection(ex)) {
+                # Cache DS v1 so future requests don't attempt Connect
+                cached_protocol = DataStreamProtocol::DataStream;
+            }
+            rethrow;
+        }
+
+        # cache protocol on success in Auto mode
+        if (use_connect && protocol_mode == DataStreamProtocol::Auto) {
+            cached_protocol = DataStreamProtocol::Connect;
+        }
 
         # rethrow exceptions returned from the sender
         if (rhdr.status_code >= 300 && rmd.err && rmd.desc) {
@@ -780,41 +768,40 @@ rest.sendRecvDataStream(send_callback, reccallback, "POST", "/path");
             *reference<hash<auto>> info, *hash<auto> hdr) {
         @debug(printf("DataStreamClient::sendRecvDataStream() method=%y path=%y protocol=%y\n",
             method, path, protocol_mode));
-        if (getEffectiveProtocol() == DataStreamProtocol::Connect) {
-            # Collect all send data up front so it can be replayed if Connect fails
-            list<auto> items = collectSendData(scb);
-            try {
-                sendRecvDataStreamConnect(items, recv_callback, eod_callback, method, path,
-                    timeout_ms, \info, hdr);
-                if (protocol_mode == DataStreamProtocol::Auto) {
-                    cached_protocol = DataStreamProtocol::Connect;
-                }
-                return;
-            } catch (hash<ExceptionInfo> ex) {
-                if (protocol_mode == DataStreamProtocol::Auto && isConnectRejection(ex)) {
-                    cached_protocol = DataStreamProtocol::DataStream;
-                    # Replay collected data for DS v1 fallback
-                    int idx = 0;
-                    scb = auto sub () {
-                        if (idx >= items.size()) {
-                            return NOTHING;
-                        }
-                        return items[idx++];
-                    };
-                } else {
-                    rethrow;
-                }
-            }
-        }
+        bool use_connect = (getEffectiveProtocol() == DataStreamProtocol::Connect);
         hdr = headers + hdr;
 
-        ds_set_chunked_headers(\hdr, seh.ce, True);
+        if (use_connect) {
+            connect_set_chunked_headers(\hdr, seh.ce, True);
+        } else {
+            ds_set_chunked_headers(\hdr, seh.ce, True);
+        }
 
         # prepare path
         preparePath(\path);
 
-        sendWithCallbacks(ds_get_send(scb, seh.func), ds_get_recv(recv_callback, eod_callback), method, path, hdr,
-            timeout_ms, False, \info);
+        # get send and receive callbacks with appropriate framing
+        code send_cb = use_connect
+            ? connect_get_send(scb, seh.func)
+            : ds_get_send(scb, seh.func);
+        code recv_cb = use_connect
+            ? connect_get_recv(recv_callback, eod_callback)
+            : ds_get_recv(recv_callback, eod_callback);
+
+        try {
+            sendWithCallbacks(send_cb, recv_cb, method, path, hdr, timeout_ms, False, \info);
+        } catch (hash<ExceptionInfo> ex) {
+            if (use_connect && protocol_mode == DataStreamProtocol::Auto && isConnectRejection(ex)) {
+                # Cache DS v1 so future requests don't attempt Connect
+                cached_protocol = DataStreamProtocol::DataStream;
+            }
+            rethrow;
+        }
+
+        # cache protocol on success in Auto mode
+        if (use_connect && protocol_mode == DataStreamProtocol::Auto) {
+            cached_protocol = DataStreamProtocol::Connect;
+        }
     }
 
     #! Sends an HTTP request an HTTP REST server supporting the @ref datastreamprotocol "DataStream protocol" with the specified method and serialized and encoded chunked message body as given by a send callback; decoded and deserialized data received from the HTTP server are returned through a receive callback
@@ -983,63 +970,8 @@ rest.setContentEncoding("gzip");
         headers{DataStreamAcceptEncoding} = headers."Accept-Encoding";
     }
 
-    #! Destructor — release Connect mode resources
-    /** @since DataStreamClient 1.5
-    */
-    destructor() {
-        shutdownConnectTransport();
-    }
-
-
-    #! Lazily initialize the HttpClientIo-based Connect transport
-    /** Called on first DataStream streaming call that needs it. This avoids
-        creating an HttpClientConnectionManager and AsyncSocketIoController
-        for instances that only make regular REST calls.
-
-        @return True if Connect transport is available
-
-        @since DataStreamClient 1.5
-    */
-    private bool ensureConnectTransport() {
-        if (m_connect_mgr) {
-            return True;
-        }
-        if (protocol_mode == DataStreamProtocol::DataStream) {
-            return False;
-        }
-        initConnectTransport(m_connect_opts);
-        return True;
-    }
-
-    #! Initialize the HttpClientIo-based Connect transport
-    private initConnectTransport(*hash<auto> opts) {
-        hash<HttpClientIo::HttpClientConnectionManagerOptions> mgr_opts();
-        string url = getURL();
-        if (url =~ /^https:/) {
-            mgr_opts.accept_all_certs = True;
-        }
-        if (opts.http3_protocol) {
-            mgr_opts.protocol = opts.http3_protocol;
-        }
-        m_connect_mgr = new HttpClientIo::HttpClientConnectionManager(mgr_opts);
-        m_controller = new AsyncSocketIo::AsyncSocketIoController(False);
-        m_connect_mgr.setController(m_controller);
-        m_controller.start();
-    }
-
-    #! Shut down the Connect transport
-    private shutdownConnectTransport() {
-        if (m_controller) {
-            m_controller.stop();
-            delete m_controller;
-        }
-        delete m_connect_mgr;
-    }
-
     #! Get the effective protocol for this call
-    /** Lazily initializes Connect transport on first use.
-
-        @since DataStreamClient 1.5
+    /** @since DataStreamClient 1.5
     */
     private DataStreamProtocol getEffectiveProtocol() {
         if (protocol_mode == DataStreamProtocol::Connect) {
@@ -1052,18 +984,15 @@ rest.setContentEncoding("gzip");
         if (cached_protocol) {
             return cached_protocol;
         }
-        # Try Connect first if transport can be initialized
-        if (ensureConnectTransport()) {
-            return DataStreamProtocol::Connect;
-        }
-        return DataStreamProtocol::DataStream;
+        # Default to Connect — Connect framing is self-describing (5-byte length prefix)
+        # and works correctly over both HTTP/1.1 and HTTP/2
+        return DataStreamProtocol::Connect;
     }
 
     #! Check if an exception indicates the server rejected or doesn't support Connect
     /** Detects:
         - HTTP 415 (Unsupported Media Type) or 406 (Not Acceptable) — explicit rejection
         - Connect frame parse errors — server responded with non-Connect body (e.g. plain YAML)
-        - Connection-level errors — HttpClientIo transport failure (server may only support HTTP/1.1)
 
         @since DataStreamClient 1.5
     */
@@ -1079,158 +1008,9 @@ rest.setContentEncoding("gzip");
         if (ex.err == "CONNECT-FRAMING-ERROR") {
             return True;
         }
-        # HttpClientIo transport and connection errors — server may not support HTTP/2+3
-        if (ex.err == "CONNECT-ERROR" || ex.err == "HTTPCLIENT-TIMEOUT"
-                || ex.err =~ /^SOCKET-/ || ex.err =~ /^HTTP-CLIENT-/) {
-            return True;
-        }
         return False;
     }
 
-    #! Ensure the Connect stream handle connection is ready
-    private ensureConnectStreamReady(HttpClientIo::HttpClientStreamHandle stream,
-            timeout timeout_ms = 30s) {
-        HttpClientIo::HttpClientConnection conn = stream.getConnection();
-        if (!conn.isReady()) {
-            if (conn.isControllerMode()) {
-                if (!conn.waitForReady(timeout_ms)) {
-                    throw "CONNECT-ERROR", "HTTP connection establishment timed out";
-                }
-            } else {
-                if (!conn.driveToReady(timeout_ms)) {
-                    throw "CONNECT-ERROR", "HTTP connection establishment timed out";
-                }
-            }
-        }
-    }
-
-    #! Collect all data from a send callback into a list
-    /** @param scb the send callback; returns data items until NOTHING (end of stream)
-        @return a list of all collected data items
-
-        @since DataStreamClient 1.5
-    */
-    private list<auto> collectSendData(code<auto()> scb) {
-        list<auto> items = ();
-        while (True) {
-            auto data = scb();
-            if (!exists data) {
-                break;
-            }
-            items += data;
-        }
-        return items;
-    }
-
-    #! Send data via Connect mode (unary): sends pre-collected records as a single YAML body
-    /** @param items pre-collected list of data items to send
-        @since DataStreamClient 1.5
-    */
-    private hash<auto> sendDataStreamConnect(list<auto> items, string method, string path,
-            timeout timeout_ms = 0, *reference<hash<auto>> info, *hash<auto> hdr) {
-        HttpClientIo::HttpClientStreamHandle stream = m_connect_mgr.acquireStream(getURL());
-        ensureConnectStreamReady(stream, timeout_ms ? timeout_ms : 30s);
-
-        # Build Connect unary request
-        hash<auto> req_hdr = hdr ?? {};
-        connect_set_non_chunked_headers(\req_hdr);
-        binary body = binary(make_yaml(items));
-
-        # Send as a single unary request
-        hash<auto> response = stream.request("POST", path, req_hdr, body,
-            timeout_ms ? timeout_ms : NOTHING);
-        int status = response.status_code ?? 200;
-        if (status >= 400) {
-            throw "DATASTREAM-CLIENT-RECEIVE-ERROR",
-                sprintf("HTTP status code %d received", status), response;
-        }
-
-        # Parse unary YAML response
-        auto rmd;
-        if (response.body) {
-            string body_str = response.body.typeCode() == NT_BINARY
-                ? response.body.toString("utf-8") : string(response.body);
-            if (body_str.val()) {
-                rmd = parse_yaml(body_str);
-            }
-        }
-
-        return response + {"body": rmd};
-    }
-
-    #! Receive data via Connect mode (unary): sends request and delivers response records
-    /** @since DataStreamClient 1.5
-    */
-    private recvDataStreamConnect(code<nothing(auto)> recv_callback,
-            code<nothing(*string)> eod_callback, string method,
-            string path, auto body, timeout timeout_ms = 0,
-            *reference<hash<auto>> info, *hash<auto> hdr) {
-        HttpClientIo::HttpClientStreamHandle stream = m_connect_mgr.acquireStream(getURL());
-        ensureConnectStreamReady(stream, timeout_ms ? timeout_ms : 30s);
-
-        # Build Connect unary request
-        hash<auto> req_hdr = hdr ?? {};
-        connect_set_non_chunked_headers(\req_hdr);
-        *binary req_body;
-        if (exists body) {
-            req_body = binary(make_yaml(body));
-        }
-
-        # Send unary request
-        hash<auto> response = stream.request("POST", path, req_hdr, req_body,
-            timeout_ms ? timeout_ms : NOTHING);
-        int status = response.status_code ?? 200;
-        if (status >= 400) {
-            throw "DATASTREAM-CLIENT-RECEIVE-ERROR",
-                sprintf("HTTP status code %d received", status), response;
-        }
-
-        # Parse and deliver unary YAML response
-        if (response.body) {
-            string body_str = response.body.typeCode() == NT_BINARY
-                ? response.body.toString("utf-8") : string(response.body);
-            if (body_str.val()) {
-                auto parsed = parse_yaml(body_str);
-                recv_callback(parsed);
-            }
-        }
-        eod_callback();
-    }
-
-    #! Bidirectional via Connect mode (unary): sends pre-collected data as single request
-    /** @param items pre-collected list of data items to send
-        @since DataStreamClient 1.5
-    */
-    private sendRecvDataStreamConnect(list<auto> items, code<nothing(auto)> recv_callback,
-            code<nothing(*string)> eod_callback, string method, string path,
-            timeout timeout_ms = 0,
-            *reference<hash<auto>> info, *hash<auto> hdr) {
-        HttpClientIo::HttpClientStreamHandle stream = m_connect_mgr.acquireStream(getURL());
-        ensureConnectStreamReady(stream, timeout_ms ? timeout_ms : 30s);
-
-        hash<auto> req_hdr = hdr ?? {};
-        connect_set_non_chunked_headers(\req_hdr);
-        binary body = binary(make_yaml(items));
-
-        hash<auto> response = stream.request("POST", path, req_hdr, body,
-            timeout_ms ? timeout_ms : NOTHING);
-        int status = response.status_code ?? 200;
-        if (status >= 400) {
-            throw "DATASTREAM-CLIENT-RECEIVE-ERROR",
-                sprintf("HTTP status code %d received", status), response;
-        }
-
-        # Parse and deliver unary YAML response
-        if (response.body) {
-            string body_str = response.body.typeCode() == NT_BINARY
-                ? response.body.toString("utf-8") : string(response.body);
-            if (body_str.val()) {
-                auto parsed = parse_yaml(body_str);
-                recv_callback(parsed);
-            }
-        }
-        eod_callback();
-    }
 
     #! sets up headers and encodes any body for sending
     private nothing prepareMsg(string method, string path, reference<auto> body, reference<hash<auto>> hdr,

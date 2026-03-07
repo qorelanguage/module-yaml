@@ -430,6 +430,8 @@ public namespace DataStreamUtil {
         - \c "deflate", \c "x-deflate": returns a call reference to @ref Qore::uncompress_to_string() "uncompress_to_string()"
         - \c "gzip", \c "x-gzip": returns a call reference to @ref Qore::gunzip_to_string() "gunzip_to_string()"
         - \c "bzip2", \c "x-bzip2": returns a call reference to @ref Qore::bunzip2_to_string() "bunzip2_to_string()"
+        - \c "br": returns a call reference to @ref Qore::unbrotli_to_string() "unbrotli_to_string()"
+        - \c "zstd": returns a call reference to @ref Qore::unzstd_to_string() "unzstd_to_string()"
         - \c "identity", @ref nothing: returns @ref nothing
 
         @return a @ref call_reference "call reference" (or @ref nothing) based on an optional \c "Content-Encoding" header value for decoding HTTP encoded data
@@ -449,6 +451,10 @@ public namespace DataStreamUtil {
             case "bzip2":
             case "x-bzip2":
                 return \bunzip2_to_string();
+            case "br":
+                return \unbrotli_to_string();
+            case "zstd":
+                return \unzstd_to_string();
             case "identity":
             case NOTHING:
                 return;
@@ -466,6 +472,8 @@ public namespace DataStreamUtil {
         - \c "deflate": returns a call reference to @ref Qore::compress() "compress()"
         - \c "gzip": returns a call reference to @ref Qore::gzip() "gzip()"
         - \c "bzip2": returns a call reference to @ref Qore::bzip2() "bzip2()"
+        - \c "br": returns a call reference to @ref Qore::brotli() "brotli()"
+        - \c "zstd": returns a call reference to @ref Qore::zstd() "zstd()"
         - \c "identity", @ref nothing: returns @ref nothing
 
         @return a @ref call_reference "call reference" (or @ref nothing) based on an optional \c "Content-Encoding"
@@ -481,6 +489,10 @@ public namespace DataStreamUtil {
                 return \gzip();
             case "bzip2":
                 return \bzip2();
+            case "br":
+                return \brotli();
+            case "zstd":
+                return \zstd();
             case "identity":
             case NOTHING:
                 return;
