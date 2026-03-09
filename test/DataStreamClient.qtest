@@ -121,9 +121,40 @@ class DataStreamEchoHandler inherits AbstractHttpRequestHandler {
         return parsed;
     }
 
-    #! Parse a Connect unary YAML body — the body is a single YAML value (typically a list)
+    #! Parse a Connect body — handles both unary (plain YAML) and streaming (Connect-framed)
     private list<auto> parseConnectBody(data body) {
-        string body_str = body.typeCode() == NT_BINARY ? body.toString("UTF-8") : string(body);
+        binary buf = body.typeCode() == NT_BINARY ? body : binary(body);
+        # Check if the body starts with a Connect frame (5-byte header)
+        if (buf.size() >= 5) {
+            int maybe_len = (buf[1] << 24) | (buf[2] << 16) | (buf[3] << 8) | buf[4];
+            if (buf[0] <= 3 && maybe_len > 0 && maybe_len <= buf.size() - 5) {
+                # Looks like Connect-framed data — unframe each message
+                list<auto> parsed = ();
+                while (buf.size() >= 5) {
+                    int frame_size = connect_next_frame_size(buf);
+                    if (frame_size < 0) {
+                        break;
+                    }
+                    hash<auto> frame = connect_unframe_message(buf);
+                    # Advance buffer past consumed frame
+                    if (buf.size() > frame_size) {
+                        buf = buf.substr(frame_size);
+                    } else {
+                        buf = binary();
+                    }
+                    # Skip EndStreamResponse
+                    if (frame.flags & CONNECT_FLAG_END_STREAM) {
+                        break;
+                    }
+                    # Parse YAML payload
+                    string yaml_str = frame.data.toString("UTF-8");
+                    parsed += parse_yaml(yaml_str);
+                }
+                return parsed;
+            }
+        }
+        # Unary Connect: plain YAML body
+        string body_str = buf.toString("UTF-8");
         auto parsed = parse_yaml(body_str);
         # Connect unary sends records as a YAML list
         if (parsed.typeCode() == NT_LIST) {
@@ -133,10 +164,14 @@ class DataStreamEchoHandler inherits AbstractHttpRequestHandler {
         return (parsed,);
     }
 
-    #! Build a Connect unary YAML response (plain YAML body with Connect headers)
+    #! Build a Connect-framed response (data frame + EndStreamResponse)
     private hash<auto> makeConnectResponse(int code, auto data) {
-        return makeResponse(code, make_yaml(data), {
-            "Content-Type": ConnectMimeTypeYaml,
+        binary payload = binary(make_yaml(data));
+        # Data frame (flags=0) + EndStreamResponse frame (flags=END_STREAM, empty JSON)
+        binary body = connect_frame_message(payload, 0)
+            + connect_frame_message(binary("{}"), CONNECT_FLAG_END_STREAM);
+        return makeResponse(code, body, {
+            "Content-Type": ConnectStreamMimeTypeYaml,
             ConnectProtocolVersionHdr: ConnectProtocolVersionVal,
         });
     }

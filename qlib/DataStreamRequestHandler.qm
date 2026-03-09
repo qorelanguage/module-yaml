@@ -231,9 +231,14 @@ public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRest
     */
     hash<HttpServer::HttpHandlerResponseInfo> getResponseHeaderMessage() {
         hash<HttpServer::HttpHandlerResponseInfo> h = AbstractRestStreamRequestHandler::getResponseHeaderMessage();
-        if (connect_mode && exists h.body
-                && (h.body.typeCode() == NT_HASH || h.body.typeCode() == NT_LIST)) {
-            binary payload = binary(make_yaml(h.body));
+        if (connect_mode && exists h.body && h.body.typeCode() != NT_BINARY) {
+            # Serialize the body: hash/list → YAML, other types (strings, etc.) → raw bytes
+            binary payload;
+            if (h.body.typeCode() == NT_HASH || h.body.typeCode() == NT_LIST) {
+                payload = binary(make_yaml(h.body));
+            } else {
+                payload = binary(h.body);
+            }
             # Use flags=0 (regular data frame); the HTTP response completion signals end-of-stream
             # naturally. CONNECT_FLAG_END_STREAM must not be used here because connect_get_recv()
             # treats END_STREAM frames as end-of-data signals without delivering the payload.
@@ -241,7 +246,9 @@ public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRest
             if (!h.hdr) {
                 h.hdr = {};
             }
-            h.hdr."Content-Type" = "application/connect+yaml";
+            if (!h.hdr."Content-Type") {
+                h.hdr."Content-Type" = "application/connect+yaml";
+            }
             h.raw_response = True;
         }
         return h;
@@ -252,21 +259,18 @@ public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRest
     */
     *hash<auto> getErrorResponse() {
         if (connect_mode) {
-            # Connect mode: errors use JSON bodies
+            # Connect mode: errors use YAML-serialized hashes with "err" and "desc" keys
+            # to match DataStreamClient's error detection logic
             if (send_error) {
                 return {
                     "code": (err = 400),
-                    "body": "{\"code\":\"internal\",\"message\":\"sender reported an error\"}",
-                    "hdr": {"Content-Type": "application/json"},
+                    "body": {"err": "DATASTREAM-ERROR", "desc": "sender reported an error"},
                 };
             }
             if (ex) {
-                string msg = sprintf("%s: %s", ex.err, ex.desc);
-                msg =~ s/"/\\"/g;
                 return {
                     "code": (err = 500),
-                    "body": sprintf("{\"code\":\"internal\",\"message\":\"%s\"}", msg),
-                    "hdr": {"Content-Type": "application/json"},
+                    "body": {"err": ex.err, "desc": ex.desc},
                     "close": True,
                 };
             }
