@@ -166,7 +166,10 @@ public class ConnectClient {
                     }
                     err = ConnectError::parseError(body_str);
                 }
-            } catch () {
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "THREAD-CANCELLED" || ex.err == "PROGRAM-INTERRUPTED") {
+                    rethrow;
+                }
                 # Ignore parse errors — construct error from HTTP status
             }
             if (!err) {
@@ -210,9 +213,14 @@ public class ConnectClient {
     */
     ConnectClientStream serverStream(string service, string method, auto request,
             *hash<ConnectCallOptions> opts) {
-        # Serialize and frame the request
+        # Serialize and frame the request (compress if encoding specified)
         binary encoded = m_codec.serialize(request);
-        binary framed = ConnectHelper::frameMessage(encoded);
+        int flags = 0;
+        if (opts.encoding) {
+            encoded = ConnectCompression::compress(encoded, opts.encoding);
+            flags = CONNECT_FLAG_COMPRESSED;
+        }
+        binary framed = ConnectHelper::frameMessage(encoded, flags);
 
         # Build streaming headers
         hash<string, string> headers = ConnectHelper::buildStreamRequestHeaders(
@@ -227,7 +235,9 @@ public class ConnectClient {
         # Send request with END_STREAM (client has one message)
         stream.sendData(framed, True);
 
-        return new ConnectClientStream(stream, m_codec, True, m_max_message_size);
+        # Writes are done; recv_encoding is the same encoding we advertised
+        return new ConnectClientStream(stream, m_codec, True, m_max_message_size,
+            NOTHING, opts.encoding);
     }
 
     #! Client streaming: stream of requests, single response
@@ -251,7 +261,8 @@ public class ConnectClient {
         ensureStreamReady(stream);
         stream.startStreaming("POST", path, headers);
 
-        return new ConnectClientStream(stream, m_codec, False, m_max_message_size);
+        return new ConnectClientStream(stream, m_codec, False, m_max_message_size,
+            opts.encoding, opts.encoding);
     }
 
     #! Bidirectional streaming: stream of requests and responses

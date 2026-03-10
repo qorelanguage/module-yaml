@@ -83,6 +83,7 @@ qore_external_user_module("qlib/YamlDocumentDataProvider" "")
 qore_external_user_module("qlib/YamlTagHandler.qm" "")
 qore_external_user_module("qlib/YamlSchema.qm" "")
 qore_external_user_module("qlib/Connect" "")
+qore_external_user_module("qlib/ConnectDataProvider" "")
 
 # install qpp metadata files
 if (COMMAND qore_install_qpp_metadata)

@@ -32,6 +32,7 @@
 
     Also included with the binary yaml module:
     - <a href="../../Connect/html/index.html">Connect user module</a>
+    - <a href="../../ConnectDataProvider/html/index.html">ConnectDataProvider user module</a>
     - <a href="../../DataStreamUtil/html/index.html">DataStreamUtil user module</a>
     - <a href="../../DataStreamClient/html/index.html">DataStreamClient user module</a>
     - <a href="../../DataStreamRequestHandler/html/index.html">DataStreamRequestHandler user module</a>
@@ -121,16 +122,29 @@ auto data = parse_yaml(yaml_str);
     @subsection yaml_1_2_0 yaml Module Version 1.2.0
 
     <b>New User Modules</b>
-    - added <a href="../../Connect/html/index.html">Connect</a> (v1.0): Connect RPC protocol
+    - added <a href="../../Connect/html/index.html">Connect</a> (v1.1): Connect RPC protocol
       module implementing DataStream 2.0 with YAML as the primary codec; supports unary,
       server-streaming, client-streaming, and bidirectional-streaming RPC patterns over
       HTTP/1.1, HTTP/2, and HTTP/3
       - standard 5-byte framed envelopes compatible with gRPC tooling
       - extensible codec system via \c AbstractConnectCodec
+      - JSON codec (\c JsonConnectCodec) for JSON serialization
+      - CBOR codec (\c CborConnectCodec) for compact binary serialization (RFC 8949;
+        requires \c json module 1.12+)
+      - per-message compression for streaming RPCs (\c gzip and \c deflate)
+      - automatic compression negotiation via \c connect-content-encoding and
+        \c connect-accept-encoding headers
       - conditional gRPC and gRPC-Web interoperability when the \c grpc module is available
       - Connect protocol error model with 16 status codes matching gRPC semantics
       - \c GrpcDetection utility class for gRPC/gRPC-Web content-type detection and
         \c grpc-timeout header parsing (always available, no \c grpc module dependency)
+      - HTTP/3 (QUIC) transport with 0-RTT and connection migration support
+    - added <a href="../../ConnectDataProvider/html/index.html">ConnectDataProvider</a> (v1.0):
+      DataProvider and ConnectionProvider integration for the Connect RPC protocol
+      - factory registered as \c "connect" in the DataProvider framework
+      - \c connect:// (plaintext) and \c connects:// (TLS) URL schemes for ConnectionProvider
+      - hierarchical provider: root → service → method with dynamic child creation
+      - unary RPC via \c doRequest() on method-level providers
 
     <b>Improvements</b>
     - <a href="../../DataStreamUtil/html/index.html">DataStreamUtil</a>: added Connect protocol
@@ -155,7 +169,8 @@ auto data = parse_yaml(yaml_str);
       added usage documentation with subclassing example and protocol transparency explanation
 
     <b>User Module Version Updates</b>
-    - <a href="../../Connect/html/index.html">Connect</a>: new module (1.0)
+    - <a href="../../Connect/html/index.html">Connect</a>: new module (1.1)
+    - <a href="../../ConnectDataProvider/html/index.html">ConnectDataProvider</a>: new module (1.0)
     - <a href="../../DataStreamUtil/html/index.html">DataStreamUtil</a>: 1.2 -> 1.3
     - <a href="../../DataStreamClient/html/index.html">DataStreamClient</a>: 1.4 -> 1.5
     - <a href="../../DataStreamRequestHandler/html/index.html">DataStreamRequestHandler</a>: 1.1 -> 1.2

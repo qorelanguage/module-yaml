@@ -1,0 +1,114 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file ConnectDataProvider.qm Connect RPC data provider module
+
+/*  ConnectDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires qore >= 2.0
+%requires(reexport) DataProvider
+%requires(reexport) ConnectionProvider
+%requires Connect
+
+module ConnectDataProvider {
+    version = "1.0";
+    desc = "Data provider module for Connect RPC protocol, providing DataProvider and "
+        "ConnectionProvider integration for Connect services";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Register the data provider factory
+        DataProvider::registerFactory(new ConnectDataProviderFactory());
+
+        # Register connection schemes
+        ConnectionSchemeCache::registerScheme("connect",
+            ConnectConnection::ConnectionScheme);
+        ConnectionSchemeCache::registerScheme("connects",
+            ConnectConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage ConnectDataProvider Module
+
+    @tableofcontents
+
+    @section connectdataproviderintro ConnectDataProvider Module Introduction
+
+    The %ConnectDataProvider module provides DataProvider and ConnectionProvider
+    integration for the Connect RPC protocol (DataStream 2.0).
+
+    This enables Connect services to be discovered, configured, and invoked
+    through Qore's generic data provider framework.
+
+    @section connectdataproviderusage Usage
+
+    @code{.py}
+%modern
+%requires ConnectDataProvider
+
+# Create via factory
+auto provider = DataProvider::create("connect", {"url": "https://example.com:8080"});
+
+# Navigate to a method
+auto method = provider.getChildProvider("Greeter").getChildProvider("SayHello");
+
+# Make a unary RPC call
+auto result = method.doRequest({"name": "World"});
+printf("Response: %y\n", result);
+    @endcode
+
+    @subsection connectdataproviderconnection Using Connections
+
+    @code{.py}
+# Register a connection
+auto conn = ConnectionSchemeCache::getConnection("connect://localhost:8080");
+auto provider = conn.getDataProvider();
+auto result = provider.getChildProvider("Greeter/SayHello").doRequest({"name": "World"});
+    @endcode
+
+    @section connectdataproviderclasses Classes
+
+    - @ref ConnectDataProvider::ConnectDataProvider "ConnectDataProvider":
+      root data provider for a Connect server
+    - @ref ConnectDataProvider::ConnectServiceDataProvider "ConnectServiceDataProvider":
+      service-level data provider
+    - @ref ConnectDataProvider::ConnectMethodDataProvider "ConnectMethodDataProvider":
+      method-level data provider (supports requests)
+    - @ref ConnectDataProvider::ConnectDataProviderFactory "ConnectDataProviderFactory":
+      factory for creating Connect data providers
+    - @ref ConnectDataProvider::ConnectConnection "ConnectConnection":
+      connection provider for \c connect:// and \c connects:// URL schemes
+
+    @section connectdataproviderrelnotes Release Notes
+
+    @subsection connectdataprovider_v1_0 ConnectDataProvider Module Version 1.0
+
+    - initial release
+    - DataProvider integration for Connect RPC unary calls
+    - ConnectionProvider with \c connect:// (plaintext) and \c connects:// (TLS) schemes
+    - factory registration as \c "connect"
+*/
+
+#! Main ConnectDataProvider namespace
+public namespace ConnectDataProvider {
+}

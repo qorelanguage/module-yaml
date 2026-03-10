@@ -33,6 +33,10 @@
 %define NoJson
 %endtry
 
+%try-module json >= 1.12
+%define NoCbor
+%endtry
+
 %try-module HttpClientIo
 %define NoHttpClientIo
 %endtry
@@ -46,7 +50,7 @@
 %endtry
 
 module Connect {
-    version = "1.0";
+    version = "1.1";
     desc = "Connect RPC protocol module implementing DataStream 2.0 with YAML as the primary "
         "codec; supports unary, server-streaming, client-streaming, and bidirectional-streaming "
         "RPC patterns over HTTP/1.1, HTTP/2, and HTTP/3";
@@ -205,6 +209,61 @@ hash<ConnectCallResult> result = stream.finish();
     For unary RPCs, errors are returned as JSON bodies with an HTTP error status.
     For streaming RPCs, errors are carried in the EndStreamResponse frame.
 
+    @section connecttransport Transport Protocols
+
+    The Connect module supports three HTTP transport protocols:
+
+    @subsection connecttransport_h2 HTTP/2
+
+    HTTP/2 is the primary transport for Connect streaming RPCs.  It provides
+    multiplexed streams over a single TCP connection with TLS.  All four RPC
+    patterns (unary, server streaming, client streaming, bidirectional) are
+    supported.
+
+    To force HTTP/2, set the \c protocol option to \c "h2" when creating a
+    @ref Connect::ConnectClient "ConnectClient":
+
+    @code{.py}
+ConnectClient client("https://example.com:8080", NOTHING,
+    <ConnectClientOptions>{"protocol": "h2"});
+    @endcode
+
+    @subsection connecttransport_h3 HTTP/3 (QUIC)
+
+    HTTP/3 runs over QUIC, providing several advantages over HTTP/2:
+
+    - <b>0-RTT connection establishment</b>: QUIC can establish connections with
+      zero round trips for previously-visited servers, reducing latency for
+      the first RPC call
+    - <b>Connection migration</b>: QUIC connections survive network changes
+      (e.g., switching from Wi-Fi to cellular) because connections are identified
+      by connection IDs rather than IP/port tuples
+    - <b>Head-of-line blocking elimination</b>: unlike HTTP/2 over TCP, packet
+      loss on one stream does not block other streams
+    - <b>Built-in encryption</b>: TLS 1.3 is integrated into the QUIC handshake
+
+    To force HTTP/3, set the \c protocol option to \c "h3":
+
+    @code{.py}
+ConnectClient client("https://example.com:8080", NOTHING,
+    <ConnectClientOptions>{"protocol": "h3"});
+    @endcode
+
+    The default protocol is \c "auto", which tries HTTP/3 first and falls back
+    to HTTP/2 if QUIC is not available.
+
+    @note HTTP/3 support requires the Qore runtime to be compiled with QUIC
+    support.  Use \c "h2" if QUIC is not available in your environment.
+
+    @note QUIC datagrams (RFC 9221) are not yet supported for Connect RPCs.
+    All streaming patterns use QUIC streams, which provide reliable, ordered
+    delivery.
+
+    @subsection connecttransport_h1 HTTP/1.1
+
+    HTTP/1.1 is supported for unary RPCs only.  Streaming patterns require
+    HTTP/2 or HTTP/3 for multiplexed framing.
+
     @section connectclasses Classes
 
     - @ref Connect::ConnectHandler "ConnectHandler": server-side HTTP request handler
@@ -213,11 +272,28 @@ hash<ConnectCallResult> result = stream.finish();
     - @ref Connect::ConnectServerStream "ConnectServerStream": server-side streaming handle
     - @ref Connect::ConnectHelper "ConnectHelper": framing, headers, protocol utilities
     - @ref Connect::ConnectError "ConnectError": error model and serialization
+    - @ref Connect::ConnectCompression "ConnectCompression": per-message compression utilities
     - @ref Connect::AbstractConnectCodec "AbstractConnectCodec": codec interface
     - @ref Connect::YamlConnectCodec "YamlConnectCodec": YAML codec implementation
     - @ref Connect::GrpcDetection "GrpcDetection": gRPC/gRPC-Web protocol detection (always available)
 
     @section connectrelnotes Release Notes
+
+    @subsection connect_v1_1 Connect Module Version 1.1
+
+    - added per-message compression for streaming RPCs
+      (@ref Connect::ConnectCompression "ConnectCompression")
+    - supported encodings: \c gzip and \c deflate
+    - automatic compression negotiation via \c connect-content-encoding
+      and \c connect-accept-encoding headers
+    - server decompresses incoming compressed frames and optionally compresses responses
+    - client compresses outgoing messages when encoding is specified in
+      @ref Connect::ConnectCallOptions "ConnectCallOptions"
+    - zip-bomb protection: decompressed payload size validated against max_message_size
+    - added @ref Connect::JsonConnectCodec "JsonConnectCodec" for JSON serialization
+      (available when the \c json module is installed)
+    - added @ref Connect::CborConnectCodec "CborConnectCodec" for compact binary
+      serialization via CBOR (RFC 8949; available when the \c json module is installed)
 
     @subsection connect_v1_0 Connect Module Version 1.0
 

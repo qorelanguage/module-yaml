@@ -359,6 +359,8 @@ public class ConnectHelper {
         }
         if (opts.encoding) {
             headers{ConnectContentEncodingHeader} = opts.encoding;
+            # Also advertise that we accept compressed responses
+            headers{ConnectAcceptEncodingHeader} = ConnectCompression::acceptEncodingValue();
         }
         if (opts.metadata) {
             map headers{$1.key} = $1.value, opts.metadata.pairIterator();

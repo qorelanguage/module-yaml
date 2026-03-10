@@ -11,6 +11,10 @@
 %requires ../qlib/Connect
 %requires QUnit
 
+%try-module json >= 1.12
+%define NoCbor
+%endtry
+
 %exec-class ConnectTest
 
 class ConnectTest inherits QUnit::Test {
@@ -35,6 +39,12 @@ class ConnectTest inherits QUnit::Test {
         addTestCase("end-stream serialization", \testEndStream());
         addTestCase("datastream v1 compat", \testDataStreamV1Compat());
         addTestCase("datastream v1 compat negative", \testDataStreamV1CompatNeg());
+        addTestCase("json codec tests", \testJsonCodec());
+%ifndef NoCbor
+        addTestCase("cbor codec tests", \testCborCodec());
+%endif
+        addTestCase("compression utilities", \testCompression());
+        addTestCase("compressed framing", \testCompressedFraming());
         addTestCase("grpc wire compatibility", \testGrpcWireCompatibility());
 
         Logger logger("test", LoggerLevel::getLevelInfo());
@@ -163,6 +173,103 @@ class ConnectTest inherits QUnit::Test {
         assertEq(False, deser.outer.flag, "nested round-trip: bool");
         assertEq(2, deser.list[1].b, "nested round-trip: list of hashes");
     }
+
+    testJsonCodec() {
+        Connect::JsonConnectCodec codec();
+
+        # Codec name
+        assertEq("json", codec.name());
+
+        # Round-trip: hash
+        hash<auto> h = {"key": "value", "num": 42, "flag": True};
+        binary ser = codec.serialize(h);
+        auto deser = codec.deserialize(ser);
+        assertEq(h.key, deser.key, "json hash: string value");
+        assertEq(h.num, deser.num, "json hash: int value");
+        assertEq(h.flag, deser.flag, "json hash: bool value");
+
+        # Round-trip: list
+        list<auto> l = (1, 2, 3, "four");
+        ser = codec.serialize(l);
+        deser = codec.deserialize(ser);
+        assertEq(4, deser.size(), "json list: size");
+        assertEq(1, deser[0], "json list: first element");
+        assertEq("four", deser[3], "json list: last element");
+
+        # Round-trip: int
+        ser = codec.serialize(12345);
+        deser = codec.deserialize(ser);
+        assertEq(12345, deser, "json int");
+
+        # Round-trip: null
+        ser = codec.serialize(NULL);
+        deser = codec.deserialize(ser);
+        assertNothing(deser, "json null");
+    }
+
+%ifndef NoCbor
+    testCborCodec() {
+        Connect::CborConnectCodec codec();
+
+        # Codec name
+        assertEq("cbor", codec.name());
+
+        # Round-trip: hash
+        hash<auto> h = {"key": "value", "num": 42, "flag": True};
+        binary ser = codec.serialize(h);
+        auto deser = codec.deserialize(ser);
+        assertEq(h.key, deser.key, "cbor hash: string value");
+        assertEq(h.num, deser.num, "cbor hash: int value");
+        assertEq(h.flag, deser.flag, "cbor hash: bool value");
+
+        # Round-trip: list
+        list<auto> l = (1, 2, 3, "four");
+        ser = codec.serialize(l);
+        deser = codec.deserialize(ser);
+        assertEq(4, deser.size(), "cbor list: size");
+        assertEq(1, deser[0], "cbor list: first element");
+        assertEq("four", deser[3], "cbor list: last element");
+
+        # Round-trip: int
+        ser = codec.serialize(12345);
+        deser = codec.deserialize(ser);
+        assertEq(12345, deser, "cbor int");
+
+        # Round-trip: float
+        ser = codec.serialize(3.14);
+        deser = codec.deserialize(ser);
+        assertEq(3.14, deser, "cbor float");
+
+        # Round-trip: binary
+        binary b = <deadbeef>;
+        ser = codec.serialize(b);
+        deser = codec.deserialize(ser);
+        assertEq(b, deser, "cbor binary");
+
+        # Round-trip: date
+        date d = 2026-03-10T12:30:45Z;
+        ser = codec.serialize(d);
+        deser = codec.deserialize(ser);
+        assertEq(NT_DATE, deser.typeCode(), "cbor date type");
+        assertEq(d.getEpochSeconds(), deser.getEpochSeconds(), "cbor date epoch");
+
+        # Round-trip: null
+        ser = codec.serialize(NOTHING);
+        deser = codec.deserialize(ser);
+        assertNothing(deser, "cbor null");
+
+        # Round-trip: nested structure
+        hash<auto> nested = {
+            "outer": {"inner": (1, 2, 3), "flag": False},
+            "items": ({"a": 1}, {"b": 2}),
+        };
+        ser = codec.serialize(nested);
+        deser = codec.deserialize(ser);
+        assertEq(1, deser.outer.inner[0], "cbor nested: deep value");
+        assertEq(False, deser.outer.flag, "cbor nested: bool");
+        assertEq(2, deser.items[1].b, "cbor nested: list of hashes");
+    }
+%endif
 
     # ---- Framing tests ----
 
@@ -642,6 +749,144 @@ class ConnectTest inherits QUnit::Test {
         assertEq(0x70, xlarge_frame[4], "xlarge frame: length byte 4");
         info = Connect::ConnectHelper::unframeMessage(xlarge_frame);
         assertEq(xlarge_payload.size(), info.data.size(), "xlarge frame: payload size round-trip");
+    }
+
+    # ---- Compression tests ----
+
+    testCompression() {
+        # gzip round-trip
+        binary data = binary("hello world, this is a test of gzip compression");
+        binary compressed = Connect::ConnectCompression::compress(data, "gzip");
+        assertTrue(compressed.size() > 0, "gzip compressed is non-empty");
+        binary decompressed = Connect::ConnectCompression::decompress(compressed, "gzip");
+        assertEq(data, decompressed, "gzip round-trip");
+
+        # deflate round-trip
+        compressed = Connect::ConnectCompression::compress(data, "deflate");
+        assertTrue(compressed.size() > 0, "deflate compressed is non-empty");
+        decompressed = Connect::ConnectCompression::decompress(compressed, "deflate");
+        assertEq(data, decompressed, "deflate round-trip");
+
+        # supported encodings
+        assertTrue(Connect::ConnectCompression::isSupported("gzip"), "gzip supported");
+        assertTrue(Connect::ConnectCompression::isSupported("deflate"), "deflate supported");
+        assertFalse(Connect::ConnectCompression::isSupported("brotli"), "brotli not supported");
+        assertFalse(Connect::ConnectCompression::isSupported("zstd"), "zstd not supported");
+
+        # unsupported encoding error
+        assertThrows("CONNECT-COMPRESSION-ERROR",
+            \Connect::ConnectCompression::compress(), (data, "brotli"));
+        assertThrows("CONNECT-COMPRESSION-ERROR",
+            \Connect::ConnectCompression::decompress(), (data, "brotli"));
+
+        # negotiate encoding
+        assertEq("gzip", Connect::ConnectCompression::negotiateEncoding("gzip,deflate"));
+        assertEq("gzip", Connect::ConnectCompression::negotiateEncoding("gzip"));
+        assertEq("deflate", Connect::ConnectCompression::negotiateEncoding("brotli,deflate"));
+        assertNothing(Connect::ConnectCompression::negotiateEncoding("brotli,zstd"));
+        assertNothing(Connect::ConnectCompression::negotiateEncoding(NOTHING));
+
+        # negotiate encoding with quality parameters
+        assertEq("gzip",
+            Connect::ConnectCompression::negotiateEncoding("gzip;q=1.0,deflate;q=0.5"));
+        assertEq("deflate",
+            Connect::ConnectCompression::negotiateEncoding("brotli;q=1.0, deflate;q=0.5"));
+
+        # accept-encoding value
+        string accept = Connect::ConnectCompression::acceptEncodingValue();
+        assertTrue(accept.find("gzip") >= 0, "accept value contains gzip");
+        assertTrue(accept.find("deflate") >= 0, "accept value contains deflate");
+
+        # small data compression (minimum real payload)
+        binary small = binary("x");
+        compressed = Connect::ConnectCompression::compress(small, "gzip");
+        decompressed = Connect::ConnectCompression::decompress(compressed, "gzip");
+        assertEq(small, decompressed, "gzip small round-trip");
+
+        # large data compression
+        binary large = binary(strmul("X", 100000));
+        compressed = Connect::ConnectCompression::compress(large, "gzip");
+        assertTrue(compressed.size() < large.size(), "gzip actually compresses");
+        decompressed = Connect::ConnectCompression::decompress(compressed, "gzip");
+        assertEq(large, decompressed, "gzip large round-trip");
+
+        # large data with deflate
+        compressed = Connect::ConnectCompression::compress(large, "deflate");
+        assertTrue(compressed.size() < large.size(), "deflate actually compresses");
+        decompressed = Connect::ConnectCompression::decompress(compressed, "deflate");
+        assertEq(large, decompressed, "deflate large round-trip");
+    }
+
+    testCompressedFraming() {
+        binary payload = binary("test payload for compression in Connect framing");
+
+        # Frame with compression: compress manually, set flag, verify round-trip
+        binary compressed = Connect::ConnectCompression::compress(payload, "gzip");
+        binary framed = Connect::ConnectHelper::frameMessage(compressed,
+            Connect::CONNECT_FLAG_COMPRESSED);
+        hash<Connect::ConnectFrameInfo> info = Connect::ConnectHelper::unframeMessage(framed);
+        assertEq(Connect::CONNECT_FLAG_COMPRESSED,
+            info.flags & Connect::CONNECT_FLAG_COMPRESSED, "compressed frame: flag set");
+        binary decompressed = Connect::ConnectCompression::decompress(info.data, "gzip");
+        assertEq(payload, decompressed, "compressed frame: payload round-trip");
+
+        # Multiple compressed frames
+        binary payload2 = binary("second compressed message");
+        binary compressed2 = Connect::ConnectCompression::compress(payload2, "gzip");
+        binary combined = Connect::ConnectHelper::frameMessage(compressed,
+                Connect::CONNECT_FLAG_COMPRESSED)
+            + Connect::ConnectHelper::frameMessage(compressed2,
+                Connect::CONNECT_FLAG_COMPRESSED);
+        list<hash<Connect::ConnectFrameInfo>> frames =
+            Connect::ConnectHelper::unframeMessages(combined);
+        assertEq(2, frames.size(), "two compressed frames");
+        assertEq(payload,
+            Connect::ConnectCompression::decompress(frames[0].data, "gzip"),
+            "first compressed frame");
+        assertEq(payload2,
+            Connect::ConnectCompression::decompress(frames[1].data, "gzip"),
+            "second compressed frame");
+
+        # Mixed compressed and uncompressed frames
+        combined = Connect::ConnectHelper::frameMessage(payload)
+            + Connect::ConnectHelper::frameMessage(compressed,
+                Connect::CONNECT_FLAG_COMPRESSED);
+        frames = Connect::ConnectHelper::unframeMessages(combined);
+        assertEq(2, frames.size(), "mixed frames count");
+        assertEq(0, frames[0].flags & Connect::CONNECT_FLAG_COMPRESSED,
+            "first frame uncompressed");
+        assertEq(payload, frames[0].data, "first frame data");
+        assertEq(Connect::CONNECT_FLAG_COMPRESSED,
+            frames[1].flags & Connect::CONNECT_FLAG_COMPRESSED,
+            "second frame compressed");
+        assertEq(payload,
+            Connect::ConnectCompression::decompress(frames[1].data, "gzip"),
+            "second frame decompressed");
+
+        # Compressed end-stream frame (end-stream flag takes priority)
+        binary end_payload = binary("{}");
+        binary end_compressed = Connect::ConnectCompression::compress(end_payload, "gzip");
+        binary end_framed = Connect::ConnectHelper::frameMessage(end_compressed,
+            Connect::CONNECT_FLAG_END_STREAM | Connect::CONNECT_FLAG_COMPRESSED);
+        info = Connect::ConnectHelper::unframeMessage(end_framed);
+        assertTrue((info.flags & Connect::CONNECT_FLAG_END_STREAM) > 0,
+            "end-stream + compressed: end-stream flag set");
+        assertTrue((info.flags & Connect::CONNECT_FLAG_COMPRESSED) > 0,
+            "end-stream + compressed: compressed flag set");
+
+        # Codec-level round-trip with compression (simulates stream write/read)
+        Connect::YamlConnectCodec codec();
+        hash<auto> msg = {"key": "value", "num": 42, "items": (1, 2, 3)};
+        binary serialized = codec.serialize(msg);
+        binary msg_compressed = Connect::ConnectCompression::compress(serialized, "gzip");
+        binary msg_framed = Connect::ConnectHelper::frameMessage(msg_compressed,
+            Connect::CONNECT_FLAG_COMPRESSED);
+        info = Connect::ConnectHelper::unframeMessage(msg_framed);
+        binary msg_decompressed = Connect::ConnectCompression::decompress(info.data, "gzip");
+        auto result = codec.deserialize(msg_decompressed);
+        assertEq("value", result.key, "codec compressed round-trip: string");
+        assertEq(42, result.num, "codec compressed round-trip: int");
+        assertEq((1, 2, 3), result.items, "codec compressed round-trip: list");
     }
 
     # ---- Helper methods ----

@@ -87,6 +87,10 @@ public class ConnectClientStream {
         *auto m_last_body;
         #! Maximum message size in bytes (0 = no limit)
         int m_max_message_size;
+        #! Compression encoding for outgoing messages (client→server)
+        *string m_send_encoding;
+        #! Compression encoding for incoming messages (server→client)
+        *string m_recv_encoding;
     }
 
     #! Create a client stream
@@ -95,16 +99,23 @@ public class ConnectClientStream {
         @param writes_done if True, writes are already complete (server-streaming)
         @param max_message_size maximum message size in bytes (0 = no limit);
         defaults to @ref CONNECT_DEFAULT_MAX_MESSAGE_SIZE
+        @param send_encoding optional compression encoding for outgoing messages
+        (client→server); when set, all written messages are compressed
+        @param recv_encoding optional compression encoding for incoming messages
+        (server→client); when set, compressed frames from the server are decompressed
 
         @since Connect 1.0
     */
     constructor(HttpClientIo::HttpClientStreamHandle stream,
             AbstractConnectCodec codec, bool writes_done = False,
-            int max_message_size = CONNECT_DEFAULT_MAX_MESSAGE_SIZE) {
+            int max_message_size = CONNECT_DEFAULT_MAX_MESSAGE_SIZE,
+            *string send_encoding, *string recv_encoding) {
         m_stream = stream;
         m_codec = codec;
         m_writes_done = writes_done;
         m_max_message_size = max_message_size;
+        m_send_encoding = send_encoding;
+        m_recv_encoding = recv_encoding;
     }
 
     #! Read the next message from the stream
@@ -184,7 +195,12 @@ public class ConnectClientStream {
             throw "CONNECT-STREAM-ERROR", "writes already done";
         }
         binary encoded = m_codec.serialize(message);
-        binary framed = ConnectHelper::frameMessage(encoded);
+        int flags = 0;
+        if (m_send_encoding) {
+            encoded = ConnectCompression::compress(encoded, m_send_encoding);
+            flags = CONNECT_FLAG_COMPRESSED;
+        }
+        binary framed = ConnectHelper::frameMessage(encoded, flags);
         m_stream.sendData(framed, False);
     }
 
@@ -300,6 +316,16 @@ public class ConnectClientStream {
             m_error = end_info.error;
             m_reads_done = True;
             return NOTHING;
+        }
+
+        # Decompress if needed
+        if ((flags & CONNECT_FLAG_COMPRESSED) && m_recv_encoding) {
+            payload = ConnectCompression::decompress(payload, m_recv_encoding);
+            if (m_max_message_size > 0 && payload.size() > m_max_message_size) {
+                throw "CONNECT-MESSAGE-SIZE-ERROR",
+                    sprintf("decompressed payload size %d exceeds maximum %d bytes",
+                        payload.size(), m_max_message_size);
+            }
         }
 
         # Regular data frame — deserialize with codec

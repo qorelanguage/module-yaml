@@ -87,6 +87,10 @@ public class ConnectServerStream {
         hash<auto> m_trailing_metadata();
         #! Maximum message size in bytes (0 = no limit)
         int m_max_message_size;
+        #! Compression encoding for outgoing messages (server→client)
+        *string m_send_encoding;
+        #! Compression encoding for incoming messages (client→server)
+        *string m_recv_encoding;
     }
 
     #! Create a server stream in buffered mode
@@ -98,12 +102,17 @@ public class ConnectServerStream {
         @param messages pre-parsed list of client messages
         @param max_message_size maximum message size in bytes (0 = no limit);
         defaults to @ref CONNECT_DEFAULT_MAX_MESSAGE_SIZE
+        @param send_encoding optional compression encoding for outgoing messages
+        (server→client); when set, all written messages are compressed
+        @param recv_encoding optional compression encoding for incoming messages
+        (client→server); when set, compressed frames from the client are decompressed
 
         @since Connect 1.0
     */
     constructor(Socket socket, AbstractConnectCodec codec, int stream_id,
             bool http3, *int session_id, list<auto> messages = (),
-            int max_message_size = CONNECT_DEFAULT_MAX_MESSAGE_SIZE) {
+            int max_message_size = CONNECT_DEFAULT_MAX_MESSAGE_SIZE,
+            *string send_encoding, *string recv_encoding) {
         m_socket = socket;
         m_codec = codec;
         m_stream_id = stream_id;
@@ -111,6 +120,8 @@ public class ConnectServerStream {
         m_session_id = session_id;
         m_messages = messages;
         m_max_message_size = max_message_size;
+        m_send_encoding = send_encoding;
+        m_recv_encoding = recv_encoding;
     }
 
     #! Create a server stream in live mode
@@ -122,12 +133,15 @@ public class ConnectServerStream {
         @param live if True, read from the stream incrementally
         @param max_message_size maximum message size in bytes (0 = no limit);
         defaults to @ref CONNECT_DEFAULT_MAX_MESSAGE_SIZE
+        @param send_encoding optional compression encoding for outgoing messages
+        @param recv_encoding optional compression encoding for incoming messages
 
         @since Connect 1.0
     */
     constructor(Socket socket, AbstractConnectCodec codec, int stream_id,
             bool http3, *int session_id, bool live,
-            int max_message_size = CONNECT_DEFAULT_MAX_MESSAGE_SIZE) {
+            int max_message_size = CONNECT_DEFAULT_MAX_MESSAGE_SIZE,
+            *string send_encoding, *string recv_encoding) {
         m_socket = socket;
         m_codec = codec;
         m_stream_id = stream_id;
@@ -135,6 +149,8 @@ public class ConnectServerStream {
         m_session_id = session_id;
         m_live = live;
         m_max_message_size = max_message_size;
+        m_send_encoding = send_encoding;
+        m_recv_encoding = recv_encoding;
     }
 
     #! Read the next client message
@@ -232,7 +248,12 @@ public class ConnectServerStream {
     write(auto message) {
         ensureHeadersSent();
         binary encoded = m_codec.serialize(message);
-        binary framed = ConnectHelper::frameMessage(encoded);
+        int flags = 0;
+        if (m_send_encoding) {
+            encoded = ConnectCompression::compress(encoded, m_send_encoding);
+            flags = CONNECT_FLAG_COMPRESSED;
+        }
+        binary framed = ConnectHelper::frameMessage(encoded, flags);
         sendStreamData(framed, False);
         if (m_live) {
             flushStream();
@@ -292,6 +313,9 @@ public class ConnectServerStream {
             hash<auto> headers = {
                 "content-type": ConnectStreamContentTypePrefix + m_codec.name(),
             };
+            if (m_send_encoding) {
+                headers{ConnectContentEncodingHeader} = m_send_encoding;
+            }
             if (m_http3) {
                 m_socket.submitQuicResponseStreaming(m_session_id, m_stream_id, 200, headers);
             } else {
@@ -336,6 +360,16 @@ public class ConnectServerStream {
         if (flags & CONNECT_FLAG_END_STREAM) {
             m_reads_done = True;
             return NOTHING;
+        }
+
+        # Decompress if needed
+        if ((flags & CONNECT_FLAG_COMPRESSED) && m_recv_encoding) {
+            payload = ConnectCompression::decompress(payload, m_recv_encoding);
+            if (m_max_message_size > 0 && payload.size() > m_max_message_size) {
+                throw "CONNECT-MESSAGE-SIZE-ERROR",
+                    sprintf("decompressed payload size %d exceeds maximum %d bytes",
+                        payload.size(), m_max_message_size);
+            }
         }
 
         # Regular data frame — deserialize with codec

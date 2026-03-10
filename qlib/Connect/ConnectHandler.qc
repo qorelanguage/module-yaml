@@ -412,6 +412,15 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
         int stream_id = cx."header-info".stream_id ?? 0;
         *int session_id = cx."header-info".session_id;
 
+        # Negotiate compression
+        *string recv_encoding = hdr{ConnectContentEncodingHeader};
+        if (recv_encoding && !ConnectCompression::isSupported(recv_encoding)) {
+            return makeErrorResponse(400, CONNECT_ERROR_INVALID_ARGUMENT,
+                sprintf("unsupported connect-content-encoding: %y", recv_encoding));
+        }
+        *string send_encoding =
+            ConnectCompression::negotiateEncoding(hdr{ConnectAcceptEncodingHeader});
+
         # Deserialize request from streaming frames
         auto request;
         if (body) {
@@ -425,14 +434,19 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
                 hash<ConnectFrameInfo> frame = ConnectHelper::unframeMessage(body_bin,
                     m_max_message_size);
                 if (!(frame.flags & CONNECT_FLAG_END_STREAM)) {
-                    request = codec.deserialize(frame.data);
+                    binary frame_data = frame.data;
+                    if ((frame.flags & CONNECT_FLAG_COMPRESSED) && recv_encoding) {
+                        frame_data = ConnectCompression::decompress(frame_data,
+                            recv_encoding);
+                    }
+                    request = codec.deserialize(frame_data);
                 }
             }
         }
 
         # Create server stream for handler to write responses
         ConnectServerStream stream(s, codec, stream_id, http3, session_id, (),
-            m_max_message_size);
+            m_max_message_size, send_encoding, recv_encoding);
 
         *hash<ConnectErrorInfo> error;
         try {
@@ -487,12 +501,21 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
         int stream_id = cx."header-info".stream_id ?? 0;
         *int session_id = cx."header-info".session_id;
 
+        # Negotiate compression
+        *string recv_encoding = hdr{ConnectContentEncodingHeader};
+        if (recv_encoding && !ConnectCompression::isSupported(recv_encoding)) {
+            return makeErrorResponse(400, CONNECT_ERROR_INVALID_ARGUMENT,
+                sprintf("unsupported connect-content-encoding: %y", recv_encoding));
+        }
+        *string send_encoding =
+            ConnectCompression::negotiateEncoding(hdr{ConnectAcceptEncodingHeader});
+
         # Parse all client messages from the buffered body
-        list<auto> messages = parseStreamMessages(body, codec);
+        list<auto> messages = parseStreamMessages(body, codec, recv_encoding);
 
         # Create server stream with pre-parsed messages
         ConnectServerStream stream(s, codec, stream_id, http3, session_id, messages,
-            m_max_message_size);
+            m_max_message_size, send_encoding, recv_encoding);
 
         auto response;
         *hash<ConnectErrorInfo> error;
@@ -561,12 +584,21 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
         int stream_id = cx."header-info".stream_id ?? 0;
         *int session_id = cx."header-info".session_id;
 
+        # Negotiate compression
+        *string recv_encoding = hdr{ConnectContentEncodingHeader};
+        if (recv_encoding && !ConnectCompression::isSupported(recv_encoding)) {
+            return makeErrorResponse(400, CONNECT_ERROR_INVALID_ARGUMENT,
+                sprintf("unsupported connect-content-encoding: %y", recv_encoding));
+        }
+        *string send_encoding =
+            ConnectCompression::negotiateEncoding(hdr{ConnectAcceptEncodingHeader});
+
         # Parse all client messages from the buffered body
-        list<auto> messages = parseStreamMessages(body, codec);
+        list<auto> messages = parseStreamMessages(body, codec, recv_encoding);
 
         # Create server stream with pre-parsed messages
         ConnectServerStream stream(s, codec, stream_id, http3, session_id, messages,
-            m_max_message_size);
+            m_max_message_size, send_encoding, recv_encoding);
 
         *hash<ConnectErrorInfo> error;
         try {
@@ -797,7 +829,13 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
     }
 
     #! Parse streaming messages from a request body
-    private list<auto> parseStreamMessages(*data body, AbstractConnectCodec codec) {
+    /** @param body the raw request body
+        @param codec the codec for deserialization
+        @param recv_encoding optional compression encoding for decompressing
+        compressed frames
+    */
+    private list<auto> parseStreamMessages(*data body, AbstractConnectCodec codec,
+            *string recv_encoding) {
         list<auto> messages = ();
         if (!body) {
             return messages;
@@ -818,7 +856,11 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
                 # End-of-stream frame — skip (it's the client's end marker)
                 continue;
             }
-            messages += codec.deserialize(frames[i].data);
+            binary frame_data = frames[i].data;
+            if ((frames[i].flags & CONNECT_FLAG_COMPRESSED) && recv_encoding) {
+                frame_data = ConnectCompression::decompress(frame_data, recv_encoding);
+            }
+            messages += codec.deserialize(frame_data);
         }
         return messages;
     }

@@ -140,6 +140,15 @@ l50Xb2GWQesIt9k5jF5IOw==
         addTestCase("H3 empty server stream", \testH3EmptyServerStream());
         addTestCase("H3 large server stream", \testH3LargeServerStream());
 
+        # Compression streaming tests
+        addTestCase("H2 compressed server-streaming gzip", \testH2CompressedServerStreamGzip());
+        addTestCase("H2 compressed server-streaming deflate",
+            \testH2CompressedServerStreamDeflate());
+        addTestCase("H2 compressed client-streaming", \testH2CompressedClientStream());
+        addTestCase("H2 compressed bidi-streaming", \testH2CompressedBidiStream());
+        addTestCase("H3 compressed server-streaming gzip", \testH3CompressedServerStreamGzip());
+        addTestCase("H3 compressed client-streaming", \testH3CompressedClientStream());
+
         # Concurrent/stress streaming tests
         addTestCase("H2 concurrent server-streaming", \testH2ConcurrentServerStream());
         addTestCase("H2 concurrent mixed streaming", \testH2ConcurrentMixedStream());
@@ -290,7 +299,10 @@ l50Xb2GWQesIt9k5jF5IOw==
     }
 
     #! Parse a streaming response into data messages and end-stream info
-    private hash<auto> parseStreamResponse(binary body) {
+    /** @param body the raw response body
+        @param encoding optional compression encoding for decompressing compressed frames
+    */
+    private hash<auto> parseStreamResponse(binary body, *string encoding) {
         list<hash<Connect::ConnectFrameInfo>> frames =
             Connect::ConnectHelper::unframeMessages(body);
         list<auto> messages();
@@ -299,7 +311,12 @@ l50Xb2GWQesIt9k5jF5IOw==
             if (frames[i].flags & Connect::CONNECT_FLAG_END_STREAM) {
                 end_info = Connect::ConnectHelper::parseEndStream(frames[i].data);
             } else {
-                messages += mCodec.deserialize(frames[i].data);
+                binary frame_data = frames[i].data;
+                if ((frames[i].flags & Connect::CONNECT_FLAG_COMPRESSED) && encoding) {
+                    frame_data = Connect::ConnectCompression::decompress(frame_data,
+                        encoding);
+                }
+                messages += mCodec.deserialize(frame_data);
             }
         }
         return {
@@ -580,6 +597,158 @@ l50Xb2GWQesIt9k5jF5IOw==
                 sprintf("H3 large-stream: data size %d", i));
         }
         assertFalse(exists parsed.end_info.error, "H3 large-stream: no error");
+    }
+
+    # ---- Compression Streaming Tests ----
+
+    #! Encode a single request as a compressed streaming body
+    private binary frameCompressedRequest(auto request, string encoding) {
+        binary serialized = mCodec.serialize(request);
+        binary compressed = Connect::ConnectCompression::compress(serialized, encoding);
+        return Connect::ConnectHelper::frameMessage(compressed,
+            Connect::CONNECT_FLAG_COMPRESSED);
+    }
+
+    #! Encode multiple messages as compressed streaming frames
+    private binary frameCompressedMessages(list<auto> messages, string encoding) {
+        binary body = binary();
+        for (int i = 0; i < messages.size(); ++i) {
+            binary serialized = mCodec.serialize(messages[i]);
+            binary compressed = Connect::ConnectCompression::compress(serialized, encoding);
+            body += Connect::ConnectHelper::frameMessage(compressed,
+                Connect::CONNECT_FLAG_COMPRESSED);
+        }
+        return body;
+    }
+
+    #! Build streaming headers with compression
+    private hash<auto> compressedStreamHeaders(string encoding) {
+        hash<auto> headers = streamHeaders();
+        headers{Connect::ConnectContentEncodingHeader} = encoding;
+        headers{Connect::ConnectAcceptEncodingHeader} =
+            Connect::ConnectCompression::acceptEncodingValue();
+        return headers;
+    }
+
+    testH2CompressedServerStreamGzip() {
+        HttpClientIo::HttpClientConnectionManager mgr = createMgr("h2");
+        on_exit delete mgr;
+
+        # Send compressed request with gzip, expect compressed responses
+        hash<auto> resp = mgr.request(url(), "POST", "/Test/Numbers",
+            compressedStreamHeaders("gzip"), frameCompressedRequest({"count": 5}, "gzip"));
+        assertEq(200, resp.status_code, "H2 gzip-server-stream: status");
+        hash<auto> parsed = parseStreamResponse(respBody(resp), "gzip");
+        assertEq(5, parsed.messages.size(), "H2 gzip-server-stream: message count");
+        for (int i = 0; i < 5; ++i) {
+            assertEq(i, parsed.messages[i].index,
+                sprintf("H2 gzip-server-stream: index %d", i));
+            assertEq(sprintf("msg-%d", i), parsed.messages[i].value,
+                sprintf("H2 gzip-server-stream: value %d", i));
+        }
+        assertTrue(exists parsed.end_info, "H2 gzip-server-stream: has end-stream");
+        assertFalse(exists parsed.end_info.error, "H2 gzip-server-stream: no error");
+    }
+
+    testH2CompressedServerStreamDeflate() {
+        HttpClientIo::HttpClientConnectionManager mgr = createMgr("h2");
+        on_exit delete mgr;
+
+        # Send compressed request with deflate, only accept deflate back
+        hash<auto> headers = streamHeaders();
+        headers{Connect::ConnectContentEncodingHeader} = "deflate";
+        headers{Connect::ConnectAcceptEncodingHeader} = "deflate";
+        hash<auto> resp = mgr.request(url(), "POST", "/Test/Numbers",
+            headers, frameCompressedRequest({"count": 3}, "deflate"));
+        assertEq(200, resp.status_code, "H2 deflate-server-stream: status");
+        # Server should respond with deflate since that's the only accepted encoding
+        hash<auto> parsed = parseStreamResponse(respBody(resp), "deflate");
+        assertEq(3, parsed.messages.size(), "H2 deflate-server-stream: message count");
+        for (int i = 0; i < 3; ++i) {
+            assertEq(i, parsed.messages[i].index,
+                sprintf("H2 deflate-server-stream: index %d", i));
+        }
+        assertFalse(exists parsed.end_info.error, "H2 deflate-server-stream: no error");
+    }
+
+    testH2CompressedClientStream() {
+        HttpClientIo::HttpClientConnectionManager mgr = createMgr("h2");
+        on_exit delete mgr;
+
+        # Send 3 compressed framed messages
+        binary body = frameCompressedMessages((
+            {"name": "alice"},
+            {"name": "bob"},
+            {"name": "charlie"},
+        ), "gzip");
+        hash<auto> resp = mgr.request(url(), "POST", "/Test/Aggregate",
+            compressedStreamHeaders("gzip"), body);
+        assertEq(200, resp.status_code, "H2 compressed-client-stream: status");
+        hash<auto> parsed = parseStreamResponse(respBody(resp), "gzip");
+        assertEq(1, parsed.messages.size(), "H2 compressed-client-stream: one response");
+        assertEq(3, parsed.messages[0].count, "H2 compressed-client-stream: count");
+        assertEq(("alice", "bob", "charlie"), parsed.messages[0].names,
+            "H2 compressed-client-stream: names");
+        assertFalse(exists parsed.end_info.error,
+            "H2 compressed-client-stream: no error");
+    }
+
+    testH2CompressedBidiStream() {
+        HttpClientIo::HttpClientConnectionManager mgr = createMgr("h2");
+        on_exit delete mgr;
+
+        binary body = frameCompressedMessages((
+            {"text": "hello"},
+            {"text": "world"},
+        ), "gzip");
+        hash<auto> resp = mgr.request(url(), "POST", "/Test/BidiEcho",
+            compressedStreamHeaders("gzip"), body);
+        assertEq(200, resp.status_code, "H2 compressed-bidi: status");
+        hash<auto> parsed = parseStreamResponse(respBody(resp), "gzip");
+        assertEq(2, parsed.messages.size(), "H2 compressed-bidi: reply count");
+        assertEq("echo:hello", parsed.messages[0].reply, "H2 compressed-bidi: reply 0");
+        assertEq("echo:world", parsed.messages[1].reply, "H2 compressed-bidi: reply 1");
+        assertFalse(exists parsed.end_info.error, "H2 compressed-bidi: no error");
+    }
+
+    testH3CompressedServerStreamGzip() {
+        if (!mH3Available) {
+            testSkip("HTTP/3 not available");
+        }
+        HttpClientIo::HttpClientConnectionManager mgr = createMgr("h3");
+        on_exit delete mgr;
+
+        hash<auto> resp = mgr.request(url(), "POST", "/Test/Numbers",
+            compressedStreamHeaders("gzip"), frameCompressedRequest({"count": 5}, "gzip"));
+        assertEq(200, resp.status_code, "H3 gzip-server-stream: status");
+        hash<auto> parsed = parseStreamResponse(respBody(resp), "gzip");
+        assertEq(5, parsed.messages.size(), "H3 gzip-server-stream: message count");
+        for (int i = 0; i < 5; ++i) {
+            assertEq(i, parsed.messages[i].index,
+                sprintf("H3 gzip-server-stream: index %d", i));
+        }
+        assertFalse(exists parsed.end_info.error, "H3 gzip-server-stream: no error");
+    }
+
+    testH3CompressedClientStream() {
+        if (!mH3Available) {
+            testSkip("HTTP/3 not available");
+        }
+        HttpClientIo::HttpClientConnectionManager mgr = createMgr("h3");
+        on_exit delete mgr;
+
+        binary body = frameCompressedMessages((
+            {"name": "alice"},
+            {"name": "bob"},
+        ), "gzip");
+        hash<auto> resp = mgr.request(url(), "POST", "/Test/Aggregate",
+            compressedStreamHeaders("gzip"), body);
+        assertEq(200, resp.status_code, "H3 compressed-client-stream: status");
+        hash<auto> parsed = parseStreamResponse(respBody(resp), "gzip");
+        assertEq(1, parsed.messages.size(), "H3 compressed-client-stream: one response");
+        assertEq(2, parsed.messages[0].count, "H3 compressed-client-stream: count");
+        assertFalse(exists parsed.end_info.error,
+            "H3 compressed-client-stream: no error");
     }
 
     # ---- Concurrent/Stress Streaming Tests ----
