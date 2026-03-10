@@ -26,7 +26,7 @@
 %requires qore >= 1.7.3
 
 %requires yaml
-%requires Mime
+%requires Mime >= 1.7
 
 %try-module xml
 %define NoXml
@@ -39,7 +39,7 @@
 %modern
 
 module DataStreamUtil {
-    version = "1.3";
+    version = "1.3.1";
     desc = "user module supporting YAML-encoded HTTP chunked transfers where each chunk is a unique data entity";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -300,6 +300,10 @@ message: "Hello, Hello, World!!"
 
     @section datastreamutilrelnotes Release Notes
 
+    @subsection datastreamutil_v1_3_1 DataStreamUtil v1.3.1
+    - added the official \c "application/yaml" MIME type (RFC 9512) to
+      @ref DataStreamUtil::DataStreamDeserializationSupport "DataStreamDeserializationSupport"
+
     @subsection datastreamutil_v1_3 DataStreamUtil v1.3
     - added Connect protocol (DataStream 2.0) framing utility functions:
       @ref DataStreamUtil::connect_frame_message() "connect_frame_message()",
@@ -400,6 +404,7 @@ public namespace DataStreamUtil {
         Supported content types:
         - \c "application/x-yaml": YAML deserialization
         - \c "text/x-yaml": YAML deserialization
+        - \c "application/yaml": YAML deserialization (RFC 9512)
         - \c "application/json": JSON deserialization (if json module is available)
         - \c "text/xml": XML deserialization (if xml module is available)
         - \c "application/xml": XML deserialization (if xml module is available)
@@ -407,6 +412,7 @@ public namespace DataStreamUtil {
     public const DataStreamDeserializationSupport = {
         MimeTypeYamlRpc: DataStreamDeserializeYaml,
         MimeTypeYaml: DataStreamDeserializeYaml,
+        MimeTypeYamlApp: DataStreamDeserializeYaml,
 %ifndef NoJson
         MimeTypeJson: {
             "code": "json",

@@ -28,12 +28,12 @@
 %requires DataStreamUtil
 %requires RestClient >= 1.4
 %requires yaml
-%requires Mime
+%requires Mime >= 1.7
 
 %modern
 
 module DataStreamClient {
-    version = "1.5";
+    version = "1.5.1";
     desc = "user module implementing client support for the DataStream protocol: YAML-encoded HTTP chunked transfers "
         "where each chunk is a unique data entity";
     author = "David Nichols <david@qore.org>";
@@ -145,6 +145,9 @@ client.setMaxMessageSize(8 * 1024 * 1024);  # 8 MB
     @endcode
 
     @section datastreamclientrelnotes Release Notes
+
+    @subsection datastreamclient_v1_5_1 DataStreamClient v1.5.1
+    - accept the official \c "application/yaml" MIME type (RFC 9512) in non-DataStream responses
 
     @subsection datastreamclient_v1_5 DataStreamClient v1.5
     - added Connect protocol (DataStream 2.0) support with auto-negotiation: the client tries
@@ -879,7 +882,7 @@ hash<auto> h = rest.sendRawStream(sender, "POST", uri_path, 20s);
         if (!hdr.Accept)
             hdr.Accept = MimeTypeYaml;
         hash<auto> h = sendWithSendCallback(scb, method, path, hdr, timeout_ms, False, \info);
-        if (h."content-type" == MimeTypeYaml && h.body)
+        if ((h."content-type" == MimeTypeYaml || h."content-type" == MimeTypeYamlApp) && h.body)
             h.body = parse_yaml(h.body);
         return h;
     }
