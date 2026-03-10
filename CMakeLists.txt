@@ -40,10 +40,8 @@ set(QMOD
     qlib/YamlRpcHandler.qm
     qlib/DataStreamRequestHandler.qm
     qlib/YamlRpcClient.qm
-    qlib/YamlDocumentDataProvider/YamlDocumentDataProvider.qm
     qlib/YamlTagHandler.qm
     qlib/YamlSchema.qm
-    qlib/Connect/Connect.qm
 )
 
 # Check for C++11.
