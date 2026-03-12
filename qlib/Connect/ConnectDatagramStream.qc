@@ -198,14 +198,17 @@ public class ConnectDatagramStream {
     }
 
     #! Close the datagram channel
-    /** Marks the channel as closed. The anchor stream was already submitted
-        with a complete request body via submitAsync(); the server detects
-        channel termination when its datagram read times out or the QUIC
-        session closes.
+    /** Cancels the underlying HTTP/3 anchor stream, which resets the QUIC
+        stream and releases the connection resource. The server handler will
+        receive a read error or timeout, causing it to exit its message loop.
+
+        This must be called when the datagram channel is no longer needed to
+        avoid leaking HTTP/3 streams on persistent connections.
     */
     close() {
         if (m_open) {
             m_open = False;
+            m_stream.cancel();
         }
     }
 
