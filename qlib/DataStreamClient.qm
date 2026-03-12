@@ -1094,7 +1094,7 @@ rest.setContentEncoding("gzip");
             });
         }
 
-        sendWithRecvCallback(recv_callback, body, m, path, hdr, 60s, False, \info);
+        sendWithRecvCallback(recv_callback, body, m, path, hdr, getTimeout(), False, \info);
 
         # we can get a binary response if we received a chunked non-DataStream message
         # in which case we need to decode it here (issue 1438)
