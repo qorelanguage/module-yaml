@@ -323,22 +323,19 @@ client.sendDatagram("Telemetry", "Report", {"cpu": 42.5, "mem": 1024});
                     framed.size(), max_size);
         }
 
-        # Submit async POST to establish the anchor stream; the server reads
-        # datagrams associated with this stream's quarter-stream-ID (RFC 9297).
-        # The request body is empty — all payload flows as QUIC datagrams.
+        # Submit async POST and datagram atomically; both are queued before
+        # the I/O controller is woken, ensuring the HEADERS and DATAGRAM are
+        # written in the same QUIC packet batch (avoids a race where the
+        # server processes the HEADERS before the datagram is sent).
         Counter done(1);
         *hash<auto> async_err;
-        stream.submitAsync("POST", path, headers, binary(),
+        stream.submitAsyncWithDatagram("POST", path, headers, binary(),
             sub (hash<auto> resp, *hash<auto> err) {
                 if (err) {
                     async_err = err;
                 }
                 done.dec();
-            });
-
-        # Send the datagram; the I/O controller sends both the HTTP/3 request
-        # headers and the datagram in the same write cycle
-        stream.sendDatagram(framed);
+            }, framed);
 
         # Wait for the server to close the anchor stream (fire-and-forget)
         timeout wait_ms = opts.timeout_ms ?? 30s;
