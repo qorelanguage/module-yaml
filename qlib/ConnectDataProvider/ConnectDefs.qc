@@ -36,6 +36,21 @@ public namespace ConnectDataProvider {
     #! Message ID: send a message on a bidirectional Connect stream
     public const MESSAGE_CONNECT_STREAM_SEND = "connect-stream-send";
 
+    #! Event ID: a message received from a Connect datagram channel
+    public const EVENT_CONNECT_DATAGRAM_MESSAGE = "connect-datagram-message";
+
+    #! Event ID: a Connect datagram channel closed
+    public const EVENT_CONNECT_DATAGRAM_CLOSED = "connect-datagram-closed";
+
+    #! Event ID: a Connect datagram channel error occurred
+    public const EVENT_CONNECT_DATAGRAM_ERROR = "connect-datagram-error";
+
+    #! Message ID: send a message on a bidirectional Connect datagram channel
+    public const MESSAGE_CONNECT_DATAGRAM_SEND = "connect-datagram-send";
+
+    #! Data type for datagram closed events
+    public const ConnectDatagramClosedDataType = new HashDataType("ConnectDatagramClosed");
+
     #! Data type for stream error events
     public const ConnectStreamErrorDataType = new HashDataType("ConnectStreamError", {
         "err": {

@@ -24,6 +24,16 @@
 
 public namespace Connect {
 
+#! Connect datagram frame info hashdecl
+public hashdecl ConnectDatagramFrameInfo {
+    #! Frame flags (combination of CONNECT_FLAG_* constants)
+    int flags;
+    #! Sequence number (0-255, wrapping application-level ordering hint)
+    int seq;
+    #! Frame payload data
+    binary data;
+}
+
 #! Connect frame info hashdecl
 public hashdecl ConnectFrameInfo {
     #! Frame flags (combination of CONNECT_FLAG_* constants)
@@ -62,11 +72,20 @@ public const CONNECT_RPC_CLIENT_STREAM = 2;
 #! Bidirectional streaming RPC type
 public const CONNECT_RPC_BIDI = 3;
 
+#! Datagram fire-and-forget RPC type (client→server, no response)
+public const CONNECT_RPC_DATAGRAM_FIRE_AND_FORGET = 4;
+
+#! Datagram bidirectional RPC type (unreliable both directions)
+public const CONNECT_RPC_DATAGRAM_BIDI = 5;
+
 #! Content-Type prefix for unary requests: application/{codec}
 public const ConnectContentTypePrefix = "application/";
 
 #! Content-Type prefix for streaming requests: application/connect+{codec}
 public const ConnectStreamContentTypePrefix = "application/connect+";
+
+#! Content-Type prefix for datagram requests: application/connect+datagram+{codec}
+public const ConnectDatagramContentTypePrefix = "application/connect+datagram+";
 
 #! Connect protocol version header name
 public const ConnectProtocolVersionHeader = "connect-protocol-version";
@@ -88,6 +107,15 @@ public const CONNECT_FLAG_COMPRESSED = 0x01;
 
 #! Envelope flag: end-of-stream marker (bit 1)
 public const CONNECT_FLAG_END_STREAM = 0x02;
+
+#! Datagram envelope flag: request application-level ACK (bit 2)
+public const CONNECT_FLAG_DATAGRAM_ACK_REQ = 0x04;
+
+#! Datagram envelope flag: payload is an error (bit 3)
+public const CONNECT_FLAG_DATAGRAM_ERROR = 0x08;
+
+#! Capsule-Protocol header name (RFC 9297)
+public const ConnectCapsuleProtocolHeader = "capsule-protocol";
 
 #! Default maximum message size: 4 MB (matches gRPC default)
 /** Used to prevent unbounded memory allocation from malicious or malformed
@@ -266,6 +294,65 @@ public class ConnectHelper {
         return result;
     }
 
+    #! Frame a datagram message with the 2-byte envelope (flags + seq)
+    /** Datagram envelope format (minimal for low-latency):
+        - Byte 0: flags (\c CONNECT_FLAG_COMPRESSED, \c CONNECT_FLAG_DATAGRAM_ACK_REQ,
+          \c CONNECT_FLAG_DATAGRAM_ERROR)
+        - Byte 1: sequence number (0-255, wrapping)
+        - Bytes 2+: codec-encoded payload
+
+        No length field — QUIC datagrams are self-delimiting.
+
+        @param payload the message payload
+        @param flags envelope flags (combination of \c CONNECT_FLAG_* constants)
+        @param seq application-level sequence number (0-255)
+        @return the framed datagram (2-byte header + payload)
+    */
+    static binary frameDatagramMessage(binary payload, int flags = 0, int seq = 0) {
+        string header_str = chr(flags & 0xFF);
+        header_str += chr(seq & 0xFF);
+        return binary(header_str) + payload;
+    }
+
+    #! Parse a datagram-framed message
+    /** @param data the framed datagram data (must be >= 2 bytes)
+        @return the datagram frame info with flags, sequence number, and payload
+
+        @throw CONNECT-FRAMING-ERROR if the data is too short
+    */
+    static hash<ConnectDatagramFrameInfo> unframeDatagramMessage(binary data) {
+        if (data.size() < 2) {
+            throw "CONNECT-FRAMING-ERROR",
+                sprintf("Connect datagram frame too short: %d bytes (minimum 2)", data.size());
+        }
+        return <ConnectDatagramFrameInfo>{
+            "flags": data[0],
+            "seq": data[1],
+            "data": data.size() > 2 ? data.substr(2) : binary(),
+        };
+    }
+
+    #! Build HTTP headers for a datagram channel setup request
+    /** @param codec_name the codec name (e.g., \c "yaml")
+        @param opts optional call options
+        @return the HTTP headers hash
+    */
+    static hash<string, string> buildDatagramRequestHeaders(string codec_name,
+            *hash<ConnectCallOptions> opts) {
+        hash<string, string> headers = {
+            "content-type": ConnectDatagramContentTypePrefix + codec_name,
+            ConnectProtocolVersionHeader: ConnectProtocolVersion,
+            ConnectCapsuleProtocolHeader: "?1",
+        };
+        if (opts.timeout_ms) {
+            headers{ConnectTimeoutHeader} = string(opts.timeout_ms);
+        }
+        if (opts.metadata) {
+            map headers{$1.key} = $1.value, opts.metadata.pairIterator();
+        }
+        return headers;
+    }
+
     #! Build HTTP headers for a unary Connect request
     /** @param codec_name the codec name (e.g., \c "yaml")
         @param opts optional call options
@@ -329,7 +416,18 @@ public class ConnectHelper {
         }
         content_type = content_type.lwr();
 
-        # Check streaming prefix first (longer match)
+        # Check datagram prefix first (longest match)
+        if (content_type =~ /^application\/connect\+datagram\+/) {
+            string codec_name = content_type.substr(ConnectDatagramContentTypePrefix.size());
+            if (codec_name.val()) {
+                return {
+                    "codec_name": codec_name,
+                    "streaming": False,
+                    "datagram": True,
+                };
+            }
+        }
+        # Check streaming prefix (longer match than unary)
         if (content_type =~ /^application\/connect\+/) {
             string codec_name = content_type.substr(ConnectStreamContentTypePrefix.size());
             if (codec_name.val()) {

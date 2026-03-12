@@ -187,6 +187,14 @@ public class ConnectMethodDataProvider inherits DataProvider::AbstractDataProvid
                 return doClientStreamingCall(client, req, call_opts);
             case Connect::CONNECT_RPC_BIDI:
                 return doBidiStreamingCall(client, req, call_opts);
+            case Connect::CONNECT_RPC_DATAGRAM_FIRE_AND_FORGET:
+                client.sendDatagram(m_service, m_method, req, call_opts);
+                return NOTHING;
+            case Connect::CONNECT_RPC_DATAGRAM_BIDI:
+                # Bidi datagram: handled via event provider
+                throw "CONNECT-PROVIDER-ERROR",
+                    "datagram-bidi methods should be used via the 'datagram-events' child "
+                    "provider; direct doRequest() is not supported for bidirectional datagrams";
         }
     }
 
@@ -195,10 +203,12 @@ public class ConnectMethodDataProvider inherits DataProvider::AbstractDataProvid
         hash<DataProviderInfo> info = ProviderInfo;
         int rpc_type = m_rpc_type ?? Connect::CONNECT_RPC_UNARY;
         if (rpc_type == Connect::CONNECT_RPC_SERVER_STREAM
-                || rpc_type == Connect::CONNECT_RPC_BIDI) {
+                || rpc_type == Connect::CONNECT_RPC_BIDI
+                || rpc_type == Connect::CONNECT_RPC_DATAGRAM_BIDI) {
             info.supports_children = True;
             info.children_can_support_observers = True;
-            if (rpc_type == Connect::CONNECT_RPC_BIDI) {
+            if (rpc_type == Connect::CONNECT_RPC_BIDI
+                    || rpc_type == Connect::CONNECT_RPC_DATAGRAM_BIDI) {
                 info.children_can_support_messages = True;
             }
         }
@@ -207,12 +217,16 @@ public class ConnectMethodDataProvider inherits DataProvider::AbstractDataProvid
 
     #! Returns child provider names
     /** Server-streaming and bidi-streaming methods expose an "events" child provider.
+        Datagram-bidi methods expose a "datagram-events" child provider.
     */
     private *list<string> getChildProviderNamesImpl() {
         int rpc_type = m_rpc_type ?? Connect::CONNECT_RPC_UNARY;
         if (rpc_type == Connect::CONNECT_RPC_SERVER_STREAM
                 || rpc_type == Connect::CONNECT_RPC_BIDI) {
             return ("events",);
+        }
+        if (rpc_type == Connect::CONNECT_RPC_DATAGRAM_BIDI) {
+            return ("datagram-events",);
         }
     }
 
@@ -222,6 +236,11 @@ public class ConnectMethodDataProvider inherits DataProvider::AbstractDataProvid
         if (name == "events" && (rpc_type == Connect::CONNECT_RPC_SERVER_STREAM
                 || rpc_type == Connect::CONNECT_RPC_BIDI)) {
             return new ConnectStreamEventDataProvider(m_service, m_method, rpc_type,
+                m_opts, m_request_type, m_response_type);
+        }
+        if (name == "datagram-events"
+                && rpc_type == Connect::CONNECT_RPC_DATAGRAM_BIDI) {
+            return new ConnectDatagramEventDataProvider(m_service, m_method,
                 m_opts, m_request_type, m_response_type);
         }
     }

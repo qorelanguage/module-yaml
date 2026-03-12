@@ -51,10 +51,10 @@
 %endtry
 
 module Connect {
-    version = "1.2";
+    version = "1.3";
     desc = "Connect RPC protocol module implementing DataStream 2.0 with YAML as the primary "
-        "codec; supports unary, server-streaming, client-streaming, and bidirectional-streaming "
-        "RPC patterns over HTTP/1.1, HTTP/2, and HTTP/3";
+        "codec; supports unary, server-streaming, client-streaming, bidirectional-streaming, "
+        "and datagram RPC patterns over HTTP/1.1, HTTP/2, and HTTP/3";
     author = "Qore Technologies, s.r.o.";
     url = "https://qore.org";
     license = "MIT";
@@ -256,9 +256,39 @@ ConnectClient client("https://example.com:8080", NOTHING,
     @note HTTP/3 support requires the Qore runtime to be compiled with QUIC
     support.  Use \c "h2" if QUIC is not available in your environment.
 
-    @note QUIC datagrams (RFC 9221) are not yet supported for Connect RPCs.
-    All streaming patterns use QUIC streams, which provide reliable, ordered
-    delivery.
+    @subsection connecttransport_datagram QUIC Datagrams (RFC 9221)
+
+    QUIC datagrams (RFC 9221) enable unreliable, unordered message delivery with
+    lower latency than streams — no head-of-line blocking, no retransmission delay.
+    HTTP/3 datagrams (RFC 9297) associate QUIC datagrams with HTTP/3 requests via
+    the quarter-stream-ID.
+
+    Two datagram RPC patterns are supported:
+    - <b>Fire-and-forget</b>: client sends a single unreliable message, no response
+    - <b>Datagram bidirectional</b>: both sides exchange unreliable messages
+
+    Use cases: fire-and-forget notifications, telemetry/metrics, real-time sensor
+    data, low-latency game state, any scenario where latest-value > guaranteed-delivery.
+
+    @code{.py}
+# Fire-and-forget datagram
+ConnectClient client("https://localhost:8080", NOTHING,
+    <ConnectClientOptions>{"protocol": "h3"});
+client.sendDatagram("Telemetry", "Report", {"cpu": 42.5, "mem": 1024});
+
+# Bidirectional datagram channel
+ConnectDatagramStream dg = client.datagramBidi("Sensor", "Exchange");
+dg.send({"reading": 99.1});
+*auto reply = dg.read(5s);
+dg.close();
+    @endcode
+
+    Datagram messages use a minimal 2-byte envelope (flags + sequence number),
+    with no length field since QUIC datagrams are self-delimiting. Compression
+    is optional and off by default to preserve low-latency characteristics.
+
+    @note Datagram support requires HTTP/3 (QUIC). Attempting to use datagrams
+    over HTTP/2 or HTTP/1.1 will throw \c CONNECT-DATAGRAM-NOT-SUPPORTED.
 
     @subsection connecttransport_h1 HTTP/1.1
 
@@ -316,11 +346,34 @@ hash<string, hash<auto>> all = refl.discoverAll();
     - @ref Connect::ConnectCompression "ConnectCompression": per-message compression utilities
     - @ref Connect::ConnectTypeHelper "ConnectTypeHelper": type serialization for reflection
     - @ref Connect::ConnectReflectionClient "ConnectReflectionClient": client-side reflection helper
+    - @ref Connect::ConnectDatagramStream "ConnectDatagramStream": client-side datagram stream handle
+    - @ref Connect::ConnectServerDatagramStream "ConnectServerDatagramStream": server-side datagram stream handle
     - @ref Connect::AbstractConnectCodec "AbstractConnectCodec": codec interface
     - @ref Connect::YamlConnectCodec "YamlConnectCodec": YAML codec implementation
     - @ref Connect::GrpcDetection "GrpcDetection": gRPC/gRPC-Web protocol detection (always available)
 
     @section connectrelnotes Release Notes
+
+    @subsection connect_v1_3 Connect Module Version 1.3
+
+    - added QUIC datagram support (RFC 9221/9297) for low-latency unreliable RPC
+    - two new RPC patterns: datagram fire-and-forget and datagram bidirectional
+    - new constants: \c CONNECT_RPC_DATAGRAM_FIRE_AND_FORGET, \c CONNECT_RPC_DATAGRAM_BIDI,
+      \c CONNECT_FLAG_DATAGRAM_ACK_REQ, \c CONNECT_FLAG_DATAGRAM_ERROR
+    - new @ref Connect::ConnectDatagramStream "ConnectDatagramStream" class for client-side
+      datagram communication
+    - new @ref Connect::ConnectServerDatagramStream "ConnectServerDatagramStream" class for
+      server-side datagram handlers
+    - new registration methods on @ref Connect::ConnectHandler "ConnectHandler":
+      \c registerDatagramFireAndForget() and \c registerDatagramBidi()
+    - new client methods on @ref Connect::ConnectClient "ConnectClient":
+      \c sendDatagram() and \c datagramBidi()
+    - minimal 2-byte datagram envelope (flags + sequence number, no length field)
+    - \c application/connect+datagram+{codec} content type for datagram channel setup
+    - \c Capsule-Protocol: ?1 header per RFC 9297
+    - datagram errors sent via \c CONNECT_FLAG_DATAGRAM_ERROR flag
+    - RPC type name mapping in reflection descriptors via
+      @ref Connect::ConnectTypeHelper::rpcTypeName "ConnectTypeHelper::rpcTypeName()"
 
     @subsection connect_v1_2 Connect Module Version 1.2
 

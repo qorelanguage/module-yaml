@@ -265,6 +265,99 @@ public class ConnectClient {
         return clientStream(service, method, opts);
     }
 
+    #! Fire-and-forget: send an unreliable datagram with no response
+    /** Sends a single datagram message to the server. The server handler
+        receives the message but sends no response. Delivery is not guaranteed.
+
+        @param service the service name
+        @param method the method name
+        @param message the message data
+        @param opts optional call options (metadata)
+
+        @throw CONNECT-DATAGRAM-NOT-SUPPORTED if the connection does not support
+        QUIC datagrams (HTTP/2 or HTTP/1.1)
+        @throw CONNECT-DATAGRAM-SIZE-ERROR if the message exceeds max datagram size
+    */
+    nothing sendDatagram(string service, string method, auto message,
+            *hash<ConnectCallOptions> opts) {
+        # Build headers for datagram channel setup
+        hash<string, string> headers = ConnectHelper::buildDatagramRequestHeaders(
+            m_codec.name(), opts);
+
+        # Acquire a stream and establish the datagram anchor
+        string path = "/" + service + "/" + method;
+        HttpClientIo::HttpClientStreamHandle stream = m_mgr.acquireStream(m_url);
+        ensureStreamReady(stream);
+
+        # Verify datagram support
+        if (!stream.isDatagramSupported()) {
+            throw "CONNECT-DATAGRAM-NOT-SUPPORTED",
+                "QUIC datagrams require HTTP/3; current connection does not support datagrams";
+        }
+
+        # Start streaming (opens the anchor stream)
+        stream.startStreaming("POST", path, headers);
+
+        # Serialize and frame the datagram
+        binary encoded = m_codec.serialize(message);
+        int flags = 0;
+        if (opts.encoding) {
+            encoded = ConnectCompression::compress(encoded, opts.encoding);
+            flags = CONNECT_FLAG_COMPRESSED;
+        }
+        binary framed = ConnectHelper::frameDatagramMessage(encoded, flags, 0);
+
+        # Check size
+        int max_size = stream.getMaxDatagramSize();
+        if (max_size > 0 && framed.size() > max_size) {
+            throw "CONNECT-DATAGRAM-SIZE-ERROR",
+                sprintf("datagram size %d exceeds maximum %d bytes",
+                    framed.size(), max_size);
+        }
+
+        # Send the datagram and close the anchor stream
+        stream.sendDatagram(framed);
+        stream.sendData(binary(), True);
+    }
+
+    #! Open a bidirectional datagram channel
+    /** Establishes a datagram channel for unreliable bidirectional message
+        exchange. The returned stream allows sending and receiving datagrams
+        until close() is called.
+
+        @param service the service name
+        @param method the method name
+        @param opts optional call options (metadata)
+
+        @return a @ref ConnectDatagramStream for sending and receiving datagrams
+
+        @throw CONNECT-DATAGRAM-NOT-SUPPORTED if the connection does not support
+        QUIC datagrams
+    */
+    ConnectDatagramStream datagramBidi(string service, string method,
+            *hash<ConnectCallOptions> opts) {
+        # Build headers for datagram channel setup
+        hash<string, string> headers = ConnectHelper::buildDatagramRequestHeaders(
+            m_codec.name(), opts);
+
+        # Acquire a stream and establish the datagram anchor
+        string path = "/" + service + "/" + method;
+        HttpClientIo::HttpClientStreamHandle stream = m_mgr.acquireStream(m_url);
+        ensureStreamReady(stream);
+
+        # Verify datagram support
+        if (!stream.isDatagramSupported()) {
+            throw "CONNECT-DATAGRAM-NOT-SUPPORTED",
+                "QUIC datagrams require HTTP/3; current connection does not support datagrams";
+        }
+
+        # Start streaming (opens the anchor stream)
+        stream.startStreaming("POST", path, headers);
+
+        return new ConnectDatagramStream(stream, m_codec, m_max_message_size,
+            opts.encoding);
+    }
+
     #! Shut down the client and release resources
         shutdown() {
         m_controller.stop();

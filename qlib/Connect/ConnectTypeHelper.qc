@@ -188,6 +188,29 @@ public class ConnectTypeHelper {
         }
     }
 
+    #! Maps an RPC type integer to a human-readable name
+    /** @param rpc_type the RPC type constant
+        @return the human-readable name (e.g., \c "unary", \c "datagram_fire_and_forget")
+    */
+    static string rpcTypeName(int rpc_type) {
+        switch (rpc_type) {
+            case CONNECT_RPC_UNARY:
+                return "unary";
+            case CONNECT_RPC_SERVER_STREAM:
+                return "server_stream";
+            case CONNECT_RPC_CLIENT_STREAM:
+                return "client_stream";
+            case CONNECT_RPC_BIDI:
+                return "bidi";
+            case CONNECT_RPC_DATAGRAM_FIRE_AND_FORGET:
+                return "datagram_fire_and_forget";
+            case CONNECT_RPC_DATAGRAM_BIDI:
+                return "datagram_bidi";
+            default:
+                return sprintf("unknown_%d", rpc_type);
+        }
+    }
+
     #! Converts a ConnectServerMethodInfo to a wire-safe descriptor hash
     /** @param info the method info
 
@@ -199,6 +222,7 @@ public class ConnectTypeHelper {
             "method": info.method,
             "path": info.path,
             "rpc_type": info.rpc_type,
+            "rpc_type_name": ConnectTypeHelper::rpcTypeName(info.rpc_type),
         };
         if (info.request_type) {
             desc.request_type = ConnectTypeHelper::typeToDescriptor(info.request_type);
