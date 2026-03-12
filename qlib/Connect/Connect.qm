@@ -258,18 +258,43 @@ ConnectClient client("https://example.com:8080", NOTHING,
 
     @subsection connecttransport_datagram QUIC Datagrams (RFC 9221)
 
-    QUIC datagrams (RFC 9221) enable unreliable, unordered message delivery with
-    lower latency than streams — no head-of-line blocking, no retransmission delay.
+    QUIC datagrams (RFC 9221) provide an alternative to QUIC streams for sending
+    messages.  Unlike streams, datagrams are:
+    - <b>Unreliable</b>: lost datagrams are not retransmitted
+    - <b>Unordered</b>: no head-of-line blocking; each message is independent
+    - <b>Lower latency</b>: no retransmission delay or flow-control backpressure
+
     HTTP/3 datagrams (RFC 9297) associate QUIC datagrams with HTTP/3 requests via
     the quarter-stream-ID.
 
+    @par When to use datagrams vs. streams
+
+    Use <b>datagram</b> RPCs when:
+    - Message loss is acceptable (the next message supersedes the previous one)
+    - Low latency matters more than guaranteed delivery
+    - Messages are small (bounded by the QUIC MTU, typically ~1200 bytes)
+
+    Use <b>stream</b> RPCs (@ref ConnectClient::serverStream() "serverStream()",
+    @ref ConnectClient::clientStream() "clientStream()",
+    @ref ConnectClient::bidiStream() "bidiStream()") when:
+    - Every message must be delivered (reliable, ordered)
+    - Messages may be large (streams support arbitrary sizes with framing)
+    - Backpressure / flow control is needed
+
+    Examples where datagrams are a good fit: telemetry/metrics reporting,
+    real-time sensor readings, live position updates, heartbeats, and any
+    fire-and-forget notification where the latest value matters more than
+    completeness.
+
+    @par Datagram RPC patterns
+
     Two datagram RPC patterns are supported:
-    - <b>Fire-and-forget</b>: client sends a single unreliable message, no response
-    - <b>Datagram bidirectional</b>: both sides exchange unreliable messages
+    - <b>Fire-and-forget</b> (@ref ConnectClient::sendDatagram() "sendDatagram()"):
+      client sends a single unreliable message, no response expected
+    - <b>Datagram bidirectional</b> (@ref ConnectClient::datagramBidi() "datagramBidi()"):
+      both sides exchange unreliable messages until the channel is closed
 
-    Use cases: fire-and-forget notifications, telemetry/metrics, real-time sensor
-    data, low-latency game state, any scenario where latest-value > guaranteed-delivery.
-
+    @par Client example
     @code{.py}
 # Fire-and-forget datagram
 ConnectClient client("https://localhost:8080", NOTHING,
@@ -278,9 +303,26 @@ client.sendDatagram("Telemetry", "Report", {"cpu": 42.5, "mem": 1024});
 
 # Bidirectional datagram channel
 ConnectDatagramStream dg = client.datagramBidi("Sensor", "Exchange");
+on_exit dg.close();
 dg.send({"reading": 99.1});
 *auto reply = dg.read(5s);
-dg.close();
+    @endcode
+
+    @par Server example
+    @code{.py}
+# Register a fire-and-forget handler
+handler.registerDatagramFireAndForget("Telemetry", "Report",
+    sub (auto message, hash<auto> metadata) {
+        logger.info("telemetry: %y", message);
+    });
+
+# Register a bidirectional datagram handler
+handler.registerDatagramBidi("Sensor", "Exchange",
+    sub (ConnectServerDatagramStream stream, hash<auto> metadata) {
+        while (*auto msg = stream.read(30s)) {
+            stream.send({"ack": msg.reading});
+        }
+    });
     @endcode
 
     Datagram messages use a minimal 2-byte envelope (flags + sequence number),

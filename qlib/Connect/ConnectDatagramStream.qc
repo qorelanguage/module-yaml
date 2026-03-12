@@ -71,6 +71,8 @@ public class ConnectDatagramStream {
         *string m_send_encoding;
         #! Whether the channel is open
         bool m_open = True;
+        #! Cached max payload size (negotiated at connection setup, doesn't change)
+        int m_cached_max_payload_size;
     }
 
     #! Create a client-side datagram stream
@@ -85,6 +87,9 @@ public class ConnectDatagramStream {
         m_codec = codec;
         m_max_message_size = max_message_size;
         m_send_encoding = send_encoding;
+        # Cache max payload size — it's negotiated at connection setup and won't change
+        m_cached_max_payload_size = m_stream.isDatagramSupported()
+            ? m_stream.getMaxDatagramSize() : 0;
     }
 
     #! Send an unreliable datagram message
@@ -107,12 +112,11 @@ public class ConnectDatagramStream {
         binary framed = ConnectHelper::frameDatagramMessage(encoded, flags, m_seq);
         m_seq = (m_seq + 1) & 0xFF;
 
-        # Check size against max datagram size
-        int max_size = getMaxPayloadSize();
-        if (max_size > 0 && framed.size() > max_size) {
+        # Check size against cached max datagram size
+        if (m_cached_max_payload_size > 0 && framed.size() > m_cached_max_payload_size) {
             throw "CONNECT-DATAGRAM-SIZE-ERROR",
                 sprintf("datagram size %d exceeds maximum %d bytes",
-                    framed.size(), max_size);
+                    framed.size(), m_cached_max_payload_size);
         }
 
         m_stream.sendDatagram(framed);
@@ -121,6 +125,10 @@ public class ConnectDatagramStream {
     #! Read the next incoming datagram
     /** @param timeout_ms read timeout (default 30s)
         @return the deserialized message, or NOTHING on timeout or channel close
+
+        @throw CONNECT-DATAGRAM-ERROR if the remote side sent an error datagram
+        @throw CONNECT-DATAGRAM-SIZE-ERROR if the received payload exceeds the
+        maximum message size
     */
     *auto read(*timeout timeout_ms) {
         if (!m_open) {
@@ -179,13 +187,7 @@ public class ConnectDatagramStream {
     /** @return the maximum payload size in bytes, or 0 if unknown
     */
     int getMaxPayloadSize() {
-        if (!m_open) {
-            return 0;
-        }
-        if (!m_stream.isDatagramSupported()) {
-            return 0;
-        }
-        return m_stream.getMaxDatagramSize();
+        return m_cached_max_payload_size;
     }
 
     #! Check if the datagram channel is still open
@@ -196,12 +198,14 @@ public class ConnectDatagramStream {
     }
 
     #! Close the datagram channel
-    /** Closes the HTTP/3 anchor stream, terminating the datagram channel.
+    /** Marks the channel as closed. The anchor stream was already submitted
+        with a complete request body via submitAsync(); the server detects
+        channel termination when its datagram read times out or the QUIC
+        session closes.
     */
     close() {
         if (m_open) {
             m_open = False;
-            m_stream.sendData(binary(), True);
         }
     }
 

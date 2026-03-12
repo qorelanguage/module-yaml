@@ -269,6 +269,14 @@ public class ConnectClient {
     /** Sends a single datagram message to the server. The server handler
         receives the message but sends no response. Delivery is not guaranteed.
 
+        @par Example:
+        @code{.py}
+ConnectClient client("https://host:8443", NOTHING,
+    <ConnectClientOptions>{"protocol": "h3"});
+# Send a telemetry report — fire-and-forget, no response expected
+client.sendDatagram("Telemetry", "Report", {"cpu": 42.5, "mem": 1024});
+        @endcode
+
         @param service the service name
         @param method the method name
         @param message the message data
@@ -277,6 +285,9 @@ public class ConnectClient {
         @throw CONNECT-DATAGRAM-NOT-SUPPORTED if the connection does not support
         QUIC datagrams (HTTP/2 or HTTP/1.1)
         @throw CONNECT-DATAGRAM-SIZE-ERROR if the message exceeds max datagram size
+        @throw CONNECT-TIMEOUT if the server does not acknowledge within the timeout
+        (default 30s; override with \c opts.timeout_ms)
+        @throw CONNECT-DATAGRAM-ERROR if the server returned an error
     */
     nothing sendDatagram(string service, string method, auto message,
             *hash<ConnectCallOptions> opts) {
@@ -295,9 +306,6 @@ public class ConnectClient {
                 "QUIC datagrams require HTTP/3; current connection does not support datagrams";
         }
 
-        # Start streaming (opens the anchor stream)
-        stream.startStreaming("POST", path, headers);
-
         # Serialize and frame the datagram
         binary encoded = m_codec.serialize(message);
         int flags = 0;
@@ -315,15 +323,56 @@ public class ConnectClient {
                     framed.size(), max_size);
         }
 
-        # Send the datagram and close the anchor stream
+        # Submit async POST to establish the anchor stream; the server reads
+        # datagrams associated with this stream's quarter-stream-ID (RFC 9297).
+        # The request body is empty — all payload flows as QUIC datagrams.
+        Counter done(1);
+        *hash<auto> async_err;
+        stream.submitAsync("POST", path, headers, binary(),
+            sub (hash<auto> resp, *hash<auto> err) {
+                if (err) {
+                    async_err = err;
+                }
+                done.dec();
+            });
+
+        # Send the datagram; the I/O controller sends both the HTTP/3 request
+        # headers and the datagram in the same write cycle
         stream.sendDatagram(framed);
-        stream.sendData(binary(), True);
+
+        # Wait for the server to close the anchor stream (fire-and-forget)
+        timeout wait_ms = opts.timeout_ms ?? 30s;
+        if (done.waitForZero(wait_ms)) {
+            stream.cancel();
+            throw "CONNECT-TIMEOUT",
+                sprintf("datagram fire-and-forget timed out after %d ms", wait_ms);
+        }
+        if (async_err) {
+            throw "CONNECT-DATAGRAM-ERROR",
+                sprintf("%s: %s", async_err.err ?? "unknown", async_err.desc ?? "unknown error"),
+                async_err;
+        }
     }
 
     #! Open a bidirectional datagram channel
     /** Establishes a datagram channel for unreliable bidirectional message
         exchange. The returned stream allows sending and receiving datagrams
         until close() is called.
+
+        @par Example:
+        @code{.py}
+ConnectClient client("https://host:8443", NOTHING,
+    <ConnectClientOptions>{"protocol": "h3"});
+ConnectDatagramStream dg = client.datagramBidi("Sensor", "Exchange");
+on_exit dg.close();
+
+# Send a reading and wait for the server's response
+dg.send({"reading": 99.1});
+*auto reply = dg.read(10s);
+if (exists reply) {
+    printf("server replied: %y\n", reply);
+}
+        @endcode
 
         @param service the service name
         @param method the method name
@@ -351,8 +400,13 @@ public class ConnectClient {
                 "QUIC datagrams require HTTP/3; current connection does not support datagrams";
         }
 
-        # Start streaming (opens the anchor stream)
-        stream.startStreaming("POST", path, headers);
+        # Submit async POST to establish the anchor stream (RFC 9297).
+        # The request body is empty — all payload flows as QUIC datagrams.
+        # The callback fires when the server closes the anchor stream.
+        stream.submitAsync("POST", path, headers, binary(),
+            sub (hash<auto> resp, *hash<auto> err) {
+                # Server closed the datagram channel
+            });
 
         return new ConnectDatagramStream(stream, m_codec, m_max_message_size,
             opts.encoding);

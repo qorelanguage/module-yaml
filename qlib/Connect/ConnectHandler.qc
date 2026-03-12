@@ -266,6 +266,15 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
         Fire-and-forget: client sends a single unreliable datagram message;
         no response is expected.
 
+        @par Example:
+        @code{.py}
+handler.registerDatagramFireAndForget("Telemetry", "Report",
+    sub (auto message, hash<auto> metadata) {
+        logger.info("received telemetry: cpu=%y mem=%y",
+            message.cpu, message.mem);
+    });
+        @endcode
+
         @param service the service name
         @param method the method name
         @param handler the handler callback
@@ -308,6 +317,17 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
 
         Bidirectional datagrams: both client and server exchange unreliable
         messages until the anchor stream is closed.
+
+        @par Example:
+        @code{.py}
+handler.registerDatagramBidi("Sensor", "Exchange",
+    sub (ConnectServerDatagramStream stream, hash<auto> metadata) {
+        while (*auto msg = stream.read(30s)) {
+            # Echo each message back to the client
+            stream.send({"echo": msg});
+        }
+    });
+        @endcode
 
         @param service the service name
         @param method the method name
@@ -838,6 +858,8 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
             AbstractConnectCodec codec, hash<auto> metadata) {
         int stream_id = cx."header-info".stream_id ?? 0;
         *int session_id = cx."header-info".session_id;
+        code<nothing(*binary, bool)> send_stream_data = cx."header-info".send_stream_data;
+        code<nothing()> io_wake = cx."header-info".io_wake;
 
         # Send 200 OK with Capsule-Protocol: ?1 to establish datagram channel
         hash<auto> resp_headers = {
@@ -845,6 +867,7 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
             ConnectCapsuleProtocolHeader: "?1",
         };
         s.submitQuicResponseStreaming(session_id, stream_id, 200, resp_headers);
+        io_wake();
 
         # Create server datagram stream for reading the client's datagram
         ConnectServerDatagramStream dg_stream(s, codec, stream_id, session_id,
@@ -858,7 +881,6 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
             if (ex.err == "THREAD-CANCELLED" || ex.err == "PROGRAM-INTERRUPTED") {
                 rethrow;
             }
-            # Ignore read errors for fire-and-forget
         }
 
         # Dispatch to handler if we got a message
@@ -878,10 +900,8 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
             }
         }
 
-        # Close the anchor stream
-        while (s.submitQuicStreamData(session_id, stream_id, binary(), True) == 1) {
-            s.waitForQuicStreamDrain(session_id, stream_id, 5s);
-        }
+        # Close the anchor stream (uses send_stream_data for proper I/O wake)
+        send_stream_data(binary(), True);
 
         return <HttpResponseInfo>{
             "reply_sent": True,
@@ -897,6 +917,8 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
             AbstractConnectCodec codec, hash<auto> metadata) {
         int stream_id = cx."header-info".stream_id ?? 0;
         *int session_id = cx."header-info".session_id;
+        code<nothing(*binary, bool)> send_stream_data = cx."header-info".send_stream_data;
+        code<nothing()> io_wake = cx."header-info".io_wake;
 
         # Send 200 OK with Capsule-Protocol: ?1 to establish datagram channel
         hash<auto> resp_headers = {
@@ -904,10 +926,11 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
             ConnectCapsuleProtocolHeader: "?1",
         };
         s.submitQuicResponseStreaming(session_id, stream_id, 200, resp_headers);
+        io_wake();
 
-        # Create server datagram stream
+        # Create server datagram stream with I/O wake callback for flushing datagrams
         ConnectServerDatagramStream dg_stream(s, codec, stream_id, session_id,
-            m_max_message_size);
+            m_max_message_size, io_wake);
 
         # Dispatch to handler — handler is responsible for the read/write loop
         try {
@@ -930,10 +953,8 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
             }
         }
 
-        # Close the anchor stream
-        while (s.submitQuicStreamData(session_id, stream_id, binary(), True) == 1) {
-            s.waitForQuicStreamDrain(session_id, stream_id, 5s);
-        }
+        # Close the anchor stream (uses send_stream_data for proper I/O wake)
+        send_stream_data(binary(), True);
 
         return <HttpResponseInfo>{
             "reply_sent": True,
