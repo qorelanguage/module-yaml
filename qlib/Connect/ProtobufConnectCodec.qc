@@ -38,8 +38,6 @@ public namespace Connect {
     - Streaming: \c application/connect+proto
 
     This codec is only available when the \c grpc binary module is installed.
-
-    @since Connect 1.0
 */
 public class ProtobufConnectCodec inherits AbstractConnectCodec {
     private {
@@ -52,8 +50,6 @@ public class ProtobufConnectCodec inherits AbstractConnectCodec {
     #! Create a protobuf codec
     /** @param schema the protobuf schema
         @param default_type the default message type for serialize/deserialize
-
-        @since Connect 1.0
     */
     constructor(ProtobufSchema schema, string default_type) {
         m_schema = schema;
@@ -62,8 +58,6 @@ public class ProtobufConnectCodec inherits AbstractConnectCodec {
 
     #! Returns the codec name
     /** @return \c "proto"
-
-        @since Connect 1.0
     */
     string name() {
         return "proto";
@@ -72,8 +66,6 @@ public class ProtobufConnectCodec inherits AbstractConnectCodec {
     #! Serializes a value to protobuf binary using the default message type
     /** @param value the value to serialize (must be a hash)
         @return the protobuf-encoded binary data
-
-        @since Connect 1.0
     */
     binary serialize(auto value) {
         return m_schema.encode(m_default_type, value);
@@ -82,8 +74,6 @@ public class ProtobufConnectCodec inherits AbstractConnectCodec {
     #! Deserializes protobuf binary data using the default message type
     /** @param data the protobuf-encoded binary data
         @return the deserialized hash
-
-        @since Connect 1.0
     */
     auto deserialize(binary data) {
         return m_schema.decode(m_default_type, data);
@@ -93,8 +83,6 @@ public class ProtobufConnectCodec inherits AbstractConnectCodec {
     /** @param message_type the protobuf message type name
         @param value the value to serialize
         @return the protobuf-encoded binary data
-
-        @since Connect 1.0
     */
     binary serializeTyped(string message_type, auto value) {
         return m_schema.encode(message_type, value);
@@ -104,8 +92,6 @@ public class ProtobufConnectCodec inherits AbstractConnectCodec {
     /** @param message_type the protobuf message type name
         @param data the protobuf-encoded binary data
         @return the deserialized hash
-
-        @since Connect 1.0
     */
     auto deserializeTyped(string message_type, binary data) {
         return m_schema.decode(message_type, data);
@@ -113,8 +99,6 @@ public class ProtobufConnectCodec inherits AbstractConnectCodec {
 
     #! Get the underlying protobuf schema
     /** @return the ProtobufSchema
-
-        @since Connect 1.0
     */
     ProtobufSchema getSchema() {
         return m_schema;

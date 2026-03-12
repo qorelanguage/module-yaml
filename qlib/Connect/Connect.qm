@@ -28,6 +28,7 @@
 %requires yaml >= 0.7
 %requires Mime >= 1.0
 %requires HttpServerUtil
+%requires(reexport) DataProvider
 
 %try-module json
 %define NoJson
@@ -50,7 +51,7 @@
 %endtry
 
 module Connect {
-    version = "1.1";
+    version = "1.2";
     desc = "Connect RPC protocol module implementing DataStream 2.0 with YAML as the primary "
         "codec; supports unary, server-streaming, client-streaming, and bidirectional-streaming "
         "RPC patterns over HTTP/1.1, HTTP/2, and HTTP/3";
@@ -264,6 +265,46 @@ ConnectClient client("https://example.com:8080", NOTHING,
     HTTP/1.1 is supported for unary RPCs only.  Streaming patterns require
     HTTP/2 or HTTP/3 for multiplexed framing.
 
+    @section connectreflection Service Reflection (Discovery)
+
+    Connect servers automatically register a built-in reflection service
+    (\c qore.connect.reflection) that enables clients to discover available
+    services, methods, RPC types, and request/response type schemas at runtime.
+
+    @subsection connectreflection_server Server Side
+
+    Type information is attached to methods via overloaded \c register* methods
+    that accept optional @ref AbstractDataProviderType parameters:
+
+    @code{.py}
+HashDataType req_type("SayHelloRequest");
+req_type.addField(new QoreDataField("name", "User name",
+    AbstractDataProviderType::get(StringType)));
+HashDataType resp_type("SayHelloResponse");
+resp_type.addField(new QoreDataField("message", "Greeting message",
+    AbstractDataProviderType::get(StringType)));
+
+handler.registerUnary("Greeter", "SayHello", \sayHelloHandler(), req_type, resp_type);
+    @endcode
+
+    The reflection service is registered automatically in the ConnectHandler
+    constructor and exposes three methods:
+    - \c ListServices — returns all registered services (excluding reflection itself)
+    - \c GetServiceDescriptor — returns full descriptor for a named service
+    - \c GetMethodDescriptor — returns descriptor for a named method
+
+    @subsection connectreflection_client Client Side
+
+    Use @ref Connect::ConnectReflectionClient "ConnectReflectionClient" to discover
+    services from a running server:
+
+    @code{.py}
+ConnectClient client("https://example.com:8080");
+ConnectReflectionClient refl(client);
+list<string> services = refl.listServices();
+hash<string, hash<auto>> all = refl.discoverAll();
+    @endcode
+
     @section connectclasses Classes
 
     - @ref Connect::ConnectHandler "ConnectHandler": server-side HTTP request handler
@@ -273,11 +314,25 @@ ConnectClient client("https://example.com:8080", NOTHING,
     - @ref Connect::ConnectHelper "ConnectHelper": framing, headers, protocol utilities
     - @ref Connect::ConnectError "ConnectError": error model and serialization
     - @ref Connect::ConnectCompression "ConnectCompression": per-message compression utilities
+    - @ref Connect::ConnectTypeHelper "ConnectTypeHelper": type serialization for reflection
+    - @ref Connect::ConnectReflectionClient "ConnectReflectionClient": client-side reflection helper
     - @ref Connect::AbstractConnectCodec "AbstractConnectCodec": codec interface
     - @ref Connect::YamlConnectCodec "YamlConnectCodec": YAML codec implementation
     - @ref Connect::GrpcDetection "GrpcDetection": gRPC/gRPC-Web protocol detection (always available)
 
     @section connectrelnotes Release Notes
+
+    @subsection connect_v1_2 Connect Module Version 1.2
+
+    - added automatic service reflection via \c qore.connect.reflection built-in service
+      (@ref Connect::ConnectTypeHelper "ConnectTypeHelper",
+       @ref Connect::ConnectReflectionClient "ConnectReflectionClient")
+    - extended @ref Connect::ConnectServerMethodInfo "ConnectServerMethodInfo" with optional
+      \c request_type and \c response_type fields
+    - overloaded \c register* methods on @ref Connect::ConnectHandler "ConnectHandler" to
+      accept optional type parameters for reflection
+    - added \c getMethodRegistry() method to @ref Connect::ConnectHandler "ConnectHandler"
+    - added \c %requires(reexport) \c DataProvider dependency for type system access
 
     @subsection connect_v1_1 Connect Module Version 1.1
 

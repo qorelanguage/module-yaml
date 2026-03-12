@@ -25,8 +25,6 @@
 public namespace Connect {
 
 #! Connect server method info hashdecl
-/** @since Connect 1.0
-*/
 public hashdecl ConnectServerMethodInfo {
     #! Service name
     string service;
@@ -38,6 +36,10 @@ public hashdecl ConnectServerMethodInfo {
     code handler;
     #! RPC type (one of CONNECT_RPC_* constants)
     int rpc_type;
+    #! Optional request type descriptor for reflection
+        *AbstractDataProviderType request_type;
+    #! Optional response type descriptor for reflection
+        *AbstractDataProviderType response_type;
 }
 
 #! Connect RPC server handler for HttpServer
@@ -59,8 +61,6 @@ handler.registerUnary("Greeter", "SayHello",
 # Add to HttpServer
 http.setHandler("connect", "", NOTHING, handler);
     @endcode
-
-    @since Connect 1.0
 */
 public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
     private {
@@ -79,8 +79,6 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
     #! Create a Connect handler
     /** @param auth optional authenticator (use new AbstractAuthenticator() for no auth)
         @param codec optional default codec (defaults to YamlConnectCodec)
-
-        @since Connect 1.0
     */
     constructor(*HttpServer::AbstractAuthenticator auth, *AbstractConnectCodec codec)
             : HttpServer::AbstractHttpRequestHandler(auth) {
@@ -89,6 +87,7 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
         }
         m_default_codec = codec;
         m_codecs{codec.name()} = codec;
+        registerReflectionService();
     }
 
     #! Register a unary RPC handler
@@ -97,8 +96,6 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
         @param service the service name (e.g., \c "Greeter")
         @param method the method name (e.g., \c "SayHello")
         @param handler the handler callback
-
-        @since Connect 1.0
     */
     registerUnary(string service, string method, code handler) {
         string key = service + "/" + method;
@@ -118,8 +115,6 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
         @param service the service name
         @param method the method name
         @param handler the handler callback
-
-        @since Connect 1.0
     */
     registerServerStream(string service, string method, code handler) {
         string key = service + "/" + method;
@@ -139,8 +134,6 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
         @param service the service name
         @param method the method name
         @param handler the handler callback
-
-        @since Connect 1.0
     */
     registerClientStream(string service, string method, code handler) {
         string key = service + "/" + method;
@@ -160,8 +153,6 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
         @param service the service name
         @param method the method name
         @param handler the handler callback
-
-        @since Connect 1.0
     */
     registerBidiStream(string service, string method, code handler) {
         string key = service + "/" + method;
@@ -174,10 +165,110 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
         };
     }
 
+    #! Register a unary RPC handler with type information
+    /** Handler signature: \c auto \c sub(auto \c request, hash<auto> \c metadata)
+
+        @param service the service name (e.g., \c "Greeter")
+        @param method the method name (e.g., \c "SayHello")
+        @param handler the handler callback
+        @param request_type optional request type for reflection
+        @param response_type optional response type for reflection
+    */
+    registerUnary(string service, string method, code handler,
+            *AbstractDataProviderType request_type, *AbstractDataProviderType response_type) {
+        string key = service + "/" + method;
+        m_methods{key} = <ConnectServerMethodInfo>{
+            "service": service,
+            "method": method,
+            "path": "/" + service + "/" + method,
+            "handler": handler,
+            "rpc_type": CONNECT_RPC_UNARY,
+            "request_type": request_type,
+            "response_type": response_type,
+        };
+    }
+
+    #! Register a server-streaming RPC handler with type information
+    /** Handler signature: \c nothing \c sub(auto \c request,
+        ConnectServerStream \c stream, hash<auto> \c metadata)
+
+        @param service the service name
+        @param method the method name
+        @param handler the handler callback
+        @param request_type optional request type for reflection
+        @param response_type optional response type for reflection
+    */
+    registerServerStream(string service, string method, code handler,
+            *AbstractDataProviderType request_type, *AbstractDataProviderType response_type) {
+        string key = service + "/" + method;
+        m_methods{key} = <ConnectServerMethodInfo>{
+            "service": service,
+            "method": method,
+            "path": "/" + service + "/" + method,
+            "handler": handler,
+            "rpc_type": CONNECT_RPC_SERVER_STREAM,
+            "request_type": request_type,
+            "response_type": response_type,
+        };
+    }
+
+    #! Register a client-streaming RPC handler with type information
+    /** Handler signature: \c auto \c sub(ConnectServerStream \c stream,
+        hash<auto> \c metadata)
+
+        @param service the service name
+        @param method the method name
+        @param handler the handler callback
+        @param request_type optional request type for reflection
+        @param response_type optional response type for reflection
+    */
+    registerClientStream(string service, string method, code handler,
+            *AbstractDataProviderType request_type, *AbstractDataProviderType response_type) {
+        string key = service + "/" + method;
+        m_methods{key} = <ConnectServerMethodInfo>{
+            "service": service,
+            "method": method,
+            "path": "/" + service + "/" + method,
+            "handler": handler,
+            "rpc_type": CONNECT_RPC_CLIENT_STREAM,
+            "request_type": request_type,
+            "response_type": response_type,
+        };
+    }
+
+    #! Register a bidirectional streaming RPC handler with type information
+    /** Handler signature: \c nothing \c sub(ConnectServerStream \c stream,
+        hash<auto> \c metadata)
+
+        @param service the service name
+        @param method the method name
+        @param handler the handler callback
+        @param request_type optional request type for reflection
+        @param response_type optional response type for reflection
+    */
+    registerBidiStream(string service, string method, code handler,
+            *AbstractDataProviderType request_type, *AbstractDataProviderType response_type) {
+        string key = service + "/" + method;
+        m_methods{key} = <ConnectServerMethodInfo>{
+            "service": service,
+            "method": method,
+            "path": "/" + service + "/" + method,
+            "handler": handler,
+            "rpc_type": CONNECT_RPC_BIDI,
+            "request_type": request_type,
+            "response_type": response_type,
+        };
+    }
+
+    #! Returns the method registry (for reflection service access)
+    /** @return the method registry hash
+    */
+    hash<string, hash<ConnectServerMethodInfo>> getMethodRegistry() {
+        return m_methods;
+    }
+
     #! Add a codec to the registry
     /** @param codec the codec to add
-
-        @since Connect 1.0
     */
     addCodec(AbstractConnectCodec codec) {
         m_codecs{codec.name()} = codec;
@@ -185,8 +276,6 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
 
     #! Set the default codec
     /** @param codec the default codec (also added to registry if not present)
-
-        @since Connect 1.0
     */
     setDefaultCodec(AbstractConnectCodec codec) {
         m_default_codec = codec;
@@ -197,8 +286,6 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
 
     #! Enable or disable debug logging
     /** @param dbg True to enable debug logging
-
-        @since Connect 1.0
     */
     setDebug(bool dbg = True) {
         m_debug = dbg;
@@ -206,8 +293,6 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
 
     #! Set the maximum message size
     /** @param size maximum message size in bytes; 0 means no limit
-
-        @since Connect 1.0
     */
     setMaxMessageSize(int size) {
         m_max_message_size = size;
@@ -215,8 +300,6 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
 
     #! Get the maximum message size
     /** @return the maximum message size in bytes; 0 means no limit
-
-        @since Connect 1.0
     */
     int getMaxMessageSize() {
         return m_max_message_size;
@@ -233,8 +316,6 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
         @param body the request body
 
         @return an HttpResponseInfo hash
-
-        @since Connect 1.0
     */
     hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s,
             hash<auto> cx, hash<auto> hdr, *data body) {
@@ -243,11 +324,6 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
                 printf("ConnectHandler::handleRequest() method=%y path=%y ct=%y body_size=%d\n",
                     hdr.method, hdr.path, hdr."content-type", body.size());
             }
-        }
-
-        # Check for DataStream v1 backward compatibility (unary only)
-        if (isDataStreamV1Request(hdr)) {
-            return handleDataStreamV1Request(s, cx, hdr, body);
         }
 
         # Only POST is valid for Connect RPC
@@ -644,152 +720,6 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
         };
     }
 
-    #! Check if this is a DataStream v1 request (backward compatibility)
-    /** @param hdr the HTTP request headers
-        @return True if the request uses DataStream v1 protocol (has DataStream-Accept header
-        and no Connect protocol version header)
-
-        @since Connect 1.0
-    */
-    private bool isDataStreamV1Request(hash<auto> hdr) {
-        # DataStream v1 is indicated by DataStream-Accept header without Connect protocol header
-        if (hdr{"datastream-accept"}.val() && !hdr{ConnectProtocolVersionHeader}.val()) {
-            return True;
-        }
-        return False;
-    }
-
-    #! Handle a DataStream v1 request (unary only — chunked not supported)
-    /** DataStream v1 chunked requests cannot be supported because the body is already
-        reassembled by HttpServer. Only non-chunked (unary) requests are supported.
-
-        @param s the socket
-        @param cx the connection context
-        @param hdr the HTTP headers
-        @param body the reassembled request body
-
-        @since Connect 1.0
-    */
-    private hash<HttpResponseInfo> handleDataStreamV1Request(Socket s, hash<auto> cx,
-            hash<auto> hdr, *data body) {
-        @debug {
-            if (m_debug) {
-                printf("ConnectHandler::handleDataStreamV1Request() path=%y\n", hdr.path);
-            }
-        }
-
-        # Reject chunked DataStream v1 requests — body has been reassembled, so per-chunk
-        # encoding is lost. Only non-chunked (unary) requests are supported.
-        if (hdr."transfer-encoding" == "chunked") {
-            return <HttpResponseInfo>{
-                "code": 400,
-                "body": make_yaml({"err": "DATASTREAM-ERROR",
-                    "desc": "chunked DataStream v1 is not supported by this handler; "
-                        "use non-chunked requests or upgrade to Connect protocol"}),
-                "hdr": {"Content-Type": MimeTypeYaml + ";charset=utf8"},
-            };
-        }
-
-        # Only POST is supported
-        if (hdr.method != "POST") {
-            return <HttpResponseInfo>{
-                "code": 405,
-                "body": make_yaml({"err": "DATASTREAM-ERROR",
-                    "desc": sprintf("method %y not allowed; POST required", hdr.method)}),
-                "hdr": {"Content-Type": MimeTypeYaml + ";charset=utf8"},
-            };
-        }
-
-        # Extract service/method from path
-        string path = hdr.path;
-        int qpos = path.find("?");
-        if (qpos >= 0) {
-            path = path.substr(0, qpos);
-        }
-        if (path[0] == "/") {
-            path = path.substr(1);
-        }
-        int slash = path.find("/");
-        if (slash < 0) {
-            return <HttpResponseInfo>{
-                "code": 404,
-                "body": make_yaml({"err": "DATASTREAM-ERROR",
-                    "desc": sprintf("invalid path: %y; expected /{service}/{method}",
-                        hdr.path)}),
-                "hdr": {"Content-Type": MimeTypeYaml + ";charset=utf8"},
-            };
-        }
-        string service = path.substr(0, slash);
-        string method_name = path.substr(slash + 1);
-        int slash2 = method_name.find("/");
-        if (slash2 >= 0) {
-            method_name = method_name.substr(0, slash2);
-        }
-
-        # Look up the handler
-        string handler_key = service + "/" + method_name;
-        *hash<ConnectServerMethodInfo> method_info = m_methods{handler_key};
-        if (!method_info) {
-            return <HttpResponseInfo>{
-                "code": 404,
-                "body": make_yaml({"err": "DATASTREAM-ERROR",
-                    "desc": sprintf("unknown method: %s/%s", service, method_name)}),
-                "hdr": {"Content-Type": MimeTypeYaml + ";charset=utf8"},
-            };
-        }
-
-        # Only unary handlers are supported via DataStream v1
-        if (method_info.rpc_type != CONNECT_RPC_UNARY) {
-            return <HttpResponseInfo>{
-                "code": 400,
-                "body": make_yaml({"err": "DATASTREAM-ERROR",
-                    "desc": sprintf("method %s/%s is a streaming method; "
-                        "DataStream v1 only supports unary methods", service, method_name)}),
-                "hdr": {"Content-Type": MimeTypeYaml + ";charset=utf8"},
-            };
-        }
-
-        # Deserialize the YAML request body
-        auto request;
-        if (body) {
-            string body_str;
-            if (body.typeCode() == NT_BINARY) {
-                body_str = body.toString("utf-8");
-            } else {
-                body_str = body;
-            }
-            if (body_str.val()) {
-                request = parse_yaml(body_str);
-            }
-        }
-
-        # Extract metadata
-        hash<auto> metadata = extractMetadata(hdr);
-
-        # Call the handler
-        auto response;
-        try {
-            response = method_info.handler(request, metadata);
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "THREAD-CANCELLED" || ex.err == "PROGRAM-INTERRUPTED") {
-                rethrow;
-            }
-            return <HttpResponseInfo>{
-                "code": 409,
-                "body": make_yaml({"err": ex.err, "desc": ex.desc}),
-                "hdr": {"Content-Type": MimeTypeYaml + ";charset=utf8"},
-                "close": True,
-            };
-        }
-
-        # Serialize response as YAML
-        return <HttpResponseInfo>{
-            "code": 200,
-            "body": make_yaml(response),
-            "hdr": {"Content-Type": MimeTypeYaml + ";charset=utf8"},
-        };
-    }
-
     #! Create an error response for unary requests
     private hash<HttpResponseInfo> makeErrorResponse(int http_status, string error_code,
             string message) {
@@ -826,6 +756,66 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
                 && $1.key != ConnectProtocolVersionHeader
                 && $1.key != ConnectTimeoutHeader;
         return metadata;
+    }
+
+    #! Registers the built-in reflection service (qore.connect.reflection)
+    /** Registers three unary methods for service discovery:
+        - \c ListServices: returns all registered services
+        - \c GetServiceDescriptor: returns full descriptor for a named service
+        - \c GetMethodDescriptor: returns descriptor for a named method
+
+        Handlers read \c m_methods at call time (late binding) so methods registered
+        after handler construction are discoverable.
+    */
+    private registerReflectionService() {
+        # ListServices — returns {"services": [{"name": "Greeter"}, ...]}
+        registerUnary("qore.connect.reflection", "ListServices",
+            auto sub (auto request, hash<auto> metadata) {
+                hash<string, bool> seen;
+                list<hash<auto>> services = ();
+                map (seen{$1.value.service} = True), m_methods.pairIterator(),
+                    !seen{$1.value.service} && $1.value.service != "qore.connect.reflection";
+                map services += {"name": $1}, keys seen;
+                return {"services": services};
+            });
+
+        # GetServiceDescriptor — takes {"service": "Greeter"}, returns full info
+        registerUnary("qore.connect.reflection", "GetServiceDescriptor",
+            auto sub (auto request, hash<auto> metadata) {
+                string svc_name = request.service;
+                if (!svc_name.val()) {
+                    throw "CONNECT-ERROR", "missing 'service' field in request";
+                }
+                list<hash<auto>> methods = ();
+                map methods += ConnectTypeHelper::methodInfoToDescriptor($1.value),
+                    m_methods.pairIterator(),
+                    $1.value.service == svc_name;
+                if (!methods) {
+                    throw "CONNECT-ERROR", sprintf("unknown service: %y", svc_name);
+                }
+                return {
+                    "service": svc_name,
+                    "methods": methods,
+                };
+            });
+
+        # GetMethodDescriptor — takes {"service": "Greeter", "method": "SayHello"}
+        registerUnary("qore.connect.reflection", "GetMethodDescriptor",
+            auto sub (auto request, hash<auto> metadata) {
+                string svc_name = request.service;
+                string meth_name = request.method;
+                if (!svc_name.val() || !meth_name.val()) {
+                    throw "CONNECT-ERROR",
+                        "missing 'service' and/or 'method' fields in request";
+                }
+                string key = svc_name + "/" + meth_name;
+                *hash<ConnectServerMethodInfo> info = m_methods{key};
+                if (!info) {
+                    throw "CONNECT-ERROR",
+                        sprintf("unknown method: %y/%y", svc_name, meth_name);
+                }
+                return ConnectTypeHelper::methodInfoToDescriptor(info);
+            });
     }
 
     #! Parse streaming messages from a request body

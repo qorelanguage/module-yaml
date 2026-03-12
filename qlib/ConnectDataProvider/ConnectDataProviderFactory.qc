@@ -27,7 +27,15 @@ public namespace ConnectDataProvider {
 #! Factory for creating Connect data providers
 /** Registered as \c "connect" in the DataProvider framework.
 
-    @since ConnectDataProvider 1.0
+    @par Example
+    @code{.py}
+# Create a provider via the global factory registry
+auto provider = DataProvider::create("connect", {"url": "https://example.com:8080"});
+
+# Or create the factory directly
+ConnectDataProviderFactory factory();
+auto provider2 = factory.create({"url": "https://example.com:8080"});
+    @endcode
 */
 public class ConnectDataProviderFactory inherits DataProvider::AbstractDataProviderFactory {
     public {
@@ -35,7 +43,7 @@ public class ConnectDataProviderFactory inherits DataProvider::AbstractDataProvi
         const FactoryInfo = <DataProviderFactoryInfo>{
             "name": "connect",
             "desc": "Data provider factory for Connect RPC protocol",
-            "children_can_support_observers": False,
+            "children_can_support_observers": True,
         };
     }
 

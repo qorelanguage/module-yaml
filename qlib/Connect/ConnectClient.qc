@@ -25,8 +25,6 @@
 public namespace Connect {
 
 #! Connect client options hashdecl
-/** @since Connect 1.0
-*/
 public hashdecl ConnectClientOptions {
     #! TLS options (hash passed to connection manager)
     *hash<auto> ssl;
@@ -68,8 +66,6 @@ while (*auto msg = stream.read()) {
     printf("Event: %y\n", msg);
 }
     @endcode
-
-    @since Connect 1.0
 */
 public class ConnectClient {
     private {
@@ -89,8 +85,6 @@ public class ConnectClient {
     /** @param url base URL (e.g., \c "https://example.com:8080")
         @param codec serialization codec (default: @ref YamlConnectCodec)
         @param opts connection options
-
-        @since Connect 1.0
     */
     constructor(string url, *AbstractConnectCodec codec, *hash<ConnectClientOptions> opts) {
         m_url = url;
@@ -126,8 +120,6 @@ public class ConnectClient {
         @return the deserialized response
 
         @throw CONNECT-ERROR if the server returns an error
-
-        @since Connect 1.0
     */
     auto call(string service, string method, auto request, *hash<ConnectCallOptions> opts) {
         # Serialize request
@@ -208,8 +200,6 @@ public class ConnectClient {
         @param opts optional call options
 
         @return a @ref ConnectClientStream for reading responses
-
-        @since Connect 1.0
     */
     ConnectClientStream serverStream(string service, string method, auto request,
             *hash<ConnectCallOptions> opts) {
@@ -246,8 +236,6 @@ public class ConnectClient {
         @param opts optional call options
 
         @return a @ref ConnectClientStream for writing requests and reading the response
-
-        @since Connect 1.0
     */
     ConnectClientStream clientStream(string service, string method,
             *hash<ConnectCallOptions> opts) {
@@ -271,8 +259,6 @@ public class ConnectClient {
         @param opts optional call options
 
         @return a @ref ConnectClientStream for reading and writing
-
-        @since Connect 1.0
     */
     ConnectClientStream bidiStream(string service, string method,
             *hash<ConnectCallOptions> opts) {
@@ -280,16 +266,12 @@ public class ConnectClient {
     }
 
     #! Shut down the client and release resources
-    /** @since Connect 1.0
-    */
-    shutdown() {
+        shutdown() {
         m_controller.stop();
     }
 
     #! Destructor — ensures resources are released
-    /** @since Connect 1.0
-    */
-    destructor() {
+        destructor() {
         m_controller.stop();
     }
 

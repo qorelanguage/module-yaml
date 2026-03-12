@@ -26,8 +26,6 @@
 public namespace Connect {
 
 #! Connect error info
-/** @since Connect 1.0
-*/
 public hashdecl ConnectErrorInfo {
     #! The error code (one of the \c CONNECT_ERROR_* constants)
     string code;
@@ -36,88 +34,54 @@ public hashdecl ConnectErrorInfo {
 }
 
 #! Connect error code: the operation was canceled
-/** @since Connect 1.0
-*/
 public const CONNECT_ERROR_CANCELED = "canceled";
 
 #! Connect error code: unknown error
-/** @since Connect 1.0
-*/
 public const CONNECT_ERROR_UNKNOWN = "unknown";
 
 #! Connect error code: invalid argument
-/** @since Connect 1.0
-*/
 public const CONNECT_ERROR_INVALID_ARGUMENT = "invalid_argument";
 
 #! Connect error code: deadline exceeded
-/** @since Connect 1.0
-*/
 public const CONNECT_ERROR_DEADLINE_EXCEEDED = "deadline_exceeded";
 
 #! Connect error code: resource not found
-/** @since Connect 1.0
-*/
 public const CONNECT_ERROR_NOT_FOUND = "not_found";
 
 #! Connect error code: resource already exists
-/** @since Connect 1.0
-*/
 public const CONNECT_ERROR_ALREADY_EXISTS = "already_exists";
 
 #! Connect error code: permission denied
-/** @since Connect 1.0
-*/
 public const CONNECT_ERROR_PERMISSION_DENIED = "permission_denied";
 
 #! Connect error code: resource exhausted
-/** @since Connect 1.0
-*/
 public const CONNECT_ERROR_RESOURCE_EXHAUSTED = "resource_exhausted";
 
 #! Connect error code: failed precondition
-/** @since Connect 1.0
-*/
 public const CONNECT_ERROR_FAILED_PRECONDITION = "failed_precondition";
 
 #! Connect error code: operation aborted
-/** @since Connect 1.0
-*/
 public const CONNECT_ERROR_ABORTED = "aborted";
 
 #! Connect error code: out of range
-/** @since Connect 1.0
-*/
 public const CONNECT_ERROR_OUT_OF_RANGE = "out_of_range";
 
 #! Connect error code: method not implemented
-/** @since Connect 1.0
-*/
 public const CONNECT_ERROR_UNIMPLEMENTED = "unimplemented";
 
 #! Connect error code: internal error
-/** @since Connect 1.0
-*/
 public const CONNECT_ERROR_INTERNAL = "internal";
 
 #! Connect error code: service unavailable
-/** @since Connect 1.0
-*/
 public const CONNECT_ERROR_UNAVAILABLE = "unavailable";
 
 #! Connect error code: data loss
-/** @since Connect 1.0
-*/
 public const CONNECT_ERROR_DATA_LOSS = "data_loss";
 
 #! Connect error code: unauthenticated
-/** @since Connect 1.0
-*/
 public const CONNECT_ERROR_UNAUTHENTICATED = "unauthenticated";
 
 #! Maps Connect error codes to HTTP status codes (for unary error responses)
-/** @since Connect 1.0
-*/
 public const ConnectErrorToHttpStatus = {
     CONNECT_ERROR_CANCELED: 408,
     CONNECT_ERROR_UNKNOWN: 500,
@@ -138,8 +102,6 @@ public const ConnectErrorToHttpStatus = {
 };
 
 #! Maps HTTP status codes to Connect error codes (for client-side inference)
-/** @since Connect 1.0
-*/
 public const HttpStatusToConnectError = {
     400: CONNECT_ERROR_INVALID_ARGUMENT,
     401: CONNECT_ERROR_UNAUTHENTICATED,
@@ -160,15 +122,11 @@ public const HttpStatusToConnectError = {
 
     Connect protocol errors are always serialized as JSON, regardless of the
     codec used for messages.
-
-    @since Connect 1.0
 */
 public class ConnectError {
     #! Serialize a Connect error to JSON
     /** @param err the error info
         @return the JSON string
-
-        @since Connect 1.0
     */
     static string serializeError(hash<ConnectErrorInfo> err) {
         hash<auto> obj = {"code": err.code};
@@ -187,8 +145,6 @@ public class ConnectError {
         @return the parsed error info
 
         @throw CONNECT-ERROR-PARSE-ERROR if the JSON cannot be parsed
-
-        @since Connect 1.0
     */
     static hash<ConnectErrorInfo> parseError(string json) {
         hash<auto> obj;
@@ -209,8 +165,6 @@ public class ConnectError {
     #! Get the HTTP status code for a Connect error code
     /** @param code the Connect error code
         @return the HTTP status code, or 500 if the code is unknown
-
-        @since Connect 1.0
     */
     static int httpStatusForError(string code) {
         return ConnectErrorToHttpStatus{code} ?? 500;
@@ -219,8 +173,6 @@ public class ConnectError {
     #! Get the Connect error code for an HTTP status code
     /** @param status the HTTP status code
         @return the Connect error code, or \c CONNECT_ERROR_UNKNOWN if the status is unmapped
-
-        @since Connect 1.0
     */
     static string errorForHttpStatus(int status) {
         return HttpStatusToConnectError{status} ?? CONNECT_ERROR_UNKNOWN;
@@ -233,8 +185,6 @@ public class ConnectError {
 
         @param val the value to encode
         @return the JSON string
-
-        @since Connect 1.0
     */
     static string simpleJsonEncode(auto val) {
         if (!exists val || val === NULL) {
@@ -280,8 +230,6 @@ public class ConnectError {
         @return the decoded value
 
         @throw CONNECT-JSON-PARSE-ERROR if the JSON cannot be parsed
-
-        @since Connect 1.0
     */
     static auto simpleJsonDecode(string json) {
         json = json.trim();

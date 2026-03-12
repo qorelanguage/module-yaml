@@ -56,8 +56,6 @@ handler.registerClientStream("MyService", "ClientStream",
         return {"names": names};
     });
     @endcode
-
-    @since Connect 1.0
 */
 public class ConnectServerStream {
     private {
@@ -106,8 +104,6 @@ public class ConnectServerStream {
         (server→client); when set, all written messages are compressed
         @param recv_encoding optional compression encoding for incoming messages
         (client→server); when set, compressed frames from the client are decompressed
-
-        @since Connect 1.0
     */
     constructor(Socket socket, AbstractConnectCodec codec, int stream_id,
             bool http3, *int session_id, list<auto> messages = (),
@@ -135,8 +131,6 @@ public class ConnectServerStream {
         defaults to @ref CONNECT_DEFAULT_MAX_MESSAGE_SIZE
         @param send_encoding optional compression encoding for outgoing messages
         @param recv_encoding optional compression encoding for incoming messages
-
-        @since Connect 1.0
     */
     constructor(Socket socket, AbstractConnectCodec codec, int stream_id,
             bool http3, *int session_id, bool live,
@@ -164,8 +158,6 @@ public class ConnectServerStream {
 
         @return the next deserialized message, or NOTHING when all messages
         have been read
-
-        @since Connect 1.0
     */
     *auto read(*timeout timeout_ms) {
         if (!m_live) {
@@ -242,8 +234,6 @@ public class ConnectServerStream {
         immediate delivery.
 
         @param message the message data to send
-
-        @since Connect 1.0
     */
     write(auto message) {
         ensureHeadersSent();
@@ -262,8 +252,6 @@ public class ConnectServerStream {
 
     #! Check if all client messages have been consumed
     /** @return True if all messages have been read
-
-        @since Connect 1.0
     */
     bool readsDone() {
         if (!m_live) {
@@ -286,8 +274,6 @@ public class ConnectServerStream {
 
     #! Set custom trailing metadata to send with the response
     /** @param metadata the trailing metadata key-value pairs
-
-        @since Connect 1.0
     */
     setTrailingMetadata(hash<auto> metadata) {
         map m_trailing_metadata{$1.key} = $1.value, metadata.pairIterator();
@@ -295,8 +281,6 @@ public class ConnectServerStream {
 
     #! Get the custom trailing metadata set by the handler
     /** @return the custom trailing metadata
-
-        @since Connect 1.0
     */
     hash<auto> getTrailingMetadata() {
         return m_trailing_metadata;
@@ -305,8 +289,6 @@ public class ConnectServerStream {
     #! Ensure response headers have been sent
     /** Called automatically by write(), but also called by the handler
         before sending the EndStreamResponse in case the handler wrote nothing.
-
-        @since Connect 1.0
     */
     ensureHeadersSent() {
         if (!m_headers_sent) {

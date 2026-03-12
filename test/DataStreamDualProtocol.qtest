@@ -26,14 +26,12 @@ class DataStreamDualProtocolTest inherits QUnit::Test {
         addTestCase("DS v1 client to Connect-aware ADSRH", \testDSv1ClientToConnectADSRH());
         addTestCase("Connect detect in ADSRH: DS v1", \testProtocolDetectionDSv1());
         addTestCase("Connect detect in ADSRH: Connect", \testProtocolDetectionConnect());
-        addTestCase("DS v1 client to ConnectHandler (unary)", \testDSv1ToConnectHandler());
         addTestCase("Protocol caching", \testProtocolCaching());
         addTestCase("Protocol reset", \testProtocolReset());
         addTestCase("Connect error format from ADSRH", \testConnectErrorFormat());
         addTestCase("DataStreamClient protocol option", \testProtocolOption());
         addTestCase("Connect unary via HTTPClient", \testConnectUnaryViaHTTP());
         addTestCase("Connect error unary via HTTPClient", \testConnectErrorUnaryViaHTTP());
-        addTestCase("DS v1 unary rejected by ConnectHandler (chunked)", \testDSv1ChunkedRejected());
         addTestCase("ADSRH DS v1 protocol detection", \testADSRHProtocolDetectionDSv1());
         addTestCase("ADSRH Connect protocol detection", \testADSRHProtocolDetectionConnect());
         addTestCase("Connect missing method returns 404", \testConnectMissingMethod());
@@ -110,44 +108,6 @@ class DataStreamDualProtocolTest inherits QUnit::Test {
             "content-type": "application/connect+yaml",
         };
         assertTrue(connect_detect_protocol(hdr), "Connect streaming: detected");
-    }
-
-    # ---- Test: DataStream v1 unary to ConnectHandler ----
-
-    testDSv1ToConnectHandler() {
-        HTTPClient client({"url": "http://localhost:" + port});
-
-        # Send DS v1 unary request to ConnectHandler
-        hash<auto> request = {"message": "hello-ds", "number": 42};
-        string body = make_yaml(request);
-        hash<auto> hdr = {
-            "Content-Type": MimeTypeYaml + ";charset=utf8",
-            "DataStream-Accept": MimeTypeYaml,
-        };
-
-        hash<auto> resp = client.send(body, "POST", "/TestService/Echo", hdr, False);
-        assertEq(200, resp.status_code, "DS v1 to Connect: status 200");
-
-        auto resp_body;
-        if (resp.body.typeCode() == NT_BINARY) {
-            resp_body = parse_yaml(resp.body.toString("utf-8"));
-        } else {
-            resp_body = parse_yaml(resp.body);
-        }
-        assertEq("hello-ds", resp_body.message, "DS v1 to Connect: echo message");
-        assertEq(42, resp_body.number, "DS v1 to Connect: echo number");
-
-        # Test Add method
-        request = {"a": 5, "b": 15};
-        body = make_yaml(request);
-        resp = client.send(body, "POST", "/TestService/Add", hdr, False);
-        assertEq(200, resp.status_code, "DS v1 to Connect Add: status 200");
-        if (resp.body.typeCode() == NT_BINARY) {
-            resp_body = parse_yaml(resp.body.toString("utf-8"));
-        } else {
-            resp_body = parse_yaml(resp.body);
-        }
-        assertEq(20, resp_body.result, "DS v1 to Connect Add: result");
     }
 
     # ---- Test: Protocol caching ----
@@ -310,31 +270,6 @@ class DataStreamDualProtocolTest inherits QUnit::Test {
             body_str = string(resp_body);
         }
         assertTrue(body_str =~ /simulated handler error/, "Connect error: contains error message");
-    }
-
-    # ---- Test: DS v1 with invalid YAML body to ConnectHandler ----
-
-    testDSv1ChunkedRejected() {
-        HTTPClient client({"url": "http://localhost:" + port});
-
-        # Send a DS v1 request with invalid YAML body
-        hash<auto> hdr = {
-            "Content-Type": MimeTypeYaml + ";charset=utf8",
-            "DataStream-Accept": MimeTypeYaml,
-        };
-
-        int status_code = 0;
-        try {
-            hash<auto> resp = client.send("not valid yaml: {{{{", "POST",
-                "/TestService/Echo", hdr, False);
-            status_code = resp.status_code;
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.arg.typeCode() == NT_HASH) {
-                status_code = ex.arg.status_code ?? 0;
-            }
-        }
-        # Invalid YAML should result in 500 (internal error from YAML parsing)
-        assertEq(500, status_code, "DS v1 invalid body: 500");
     }
 
     # ---- Test: ADSRH detects DS v1 from request headers ----

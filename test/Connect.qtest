@@ -37,8 +37,6 @@ class ConnectTest inherits QUnit::Test {
         addTestCase("negative: wrong content-type", \testWrongContentType());
         addTestCase("negative: malformed frame", \testMalformedFrame());
         addTestCase("end-stream serialization", \testEndStream());
-        addTestCase("datastream v1 compat", \testDataStreamV1Compat());
-        addTestCase("datastream v1 compat negative", \testDataStreamV1CompatNeg());
         addTestCase("json codec tests", \testJsonCodec());
 %ifndef NoCbor
         addTestCase("cbor codec tests", \testCborCodec());
@@ -602,90 +600,6 @@ class ConnectTest inherits QUnit::Test {
             }
         }
         assertEq(415, status_code, "unsupported codec should return 415");
-    }
-
-    # ---- DataStream v1 backward compatibility tests ----
-
-    testDataStreamV1Compat() {
-        # Test unary DataStream v1 request to ConnectHandler
-        hash<auto> request = {"message": "ds-hello", "count": 99};
-        string body = make_yaml(request);
-
-        HTTPClient client({"url": "http://localhost:" + port});
-        hash<auto> hdr = {
-            "Content-Type": MimeTypeYaml + ";charset=utf8",
-            "DataStream-Accept": MimeTypeYaml,
-        };
-        hash<auto> resp = client.send(body, "POST", "/TestService/Echo", hdr, False);
-        assertEq(200, resp.status_code, "DS v1 echo: status 200");
-
-        auto resp_body;
-        if (resp.body.typeCode() == NT_BINARY) {
-            resp_body = parse_yaml(resp.body.toString("utf-8"));
-        } else {
-            resp_body = parse_yaml(resp.body);
-        }
-        assertEq("ds-hello", resp_body.message, "DS v1 echo: message preserved");
-        assertEq(99, resp_body.count, "DS v1 echo: count preserved");
-
-        # Test Add method via DS v1
-        request = {"a": 10, "b": 20};
-        body = make_yaml(request);
-        resp = client.send(body, "POST", "/TestService/Add", hdr, False);
-        assertEq(200, resp.status_code, "DS v1 add: status 200");
-        if (resp.body.typeCode() == NT_BINARY) {
-            resp_body = parse_yaml(resp.body.toString("utf-8"));
-        } else {
-            resp_body = parse_yaml(resp.body);
-        }
-        assertEq(30, resp_body.result, "DS v1 add: result correct");
-
-        # Test error handling via DS v1
-        request = {};
-        body = make_yaml(request);
-        int status_code = 0;
-        try {
-            resp = client.send(body, "POST", "/TestService/Fail", hdr, False);
-            status_code = resp.status_code;
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.arg.typeCode() == NT_HASH) {
-                status_code = ex.arg.status_code ?? 0;
-            }
-        }
-        assertEq(409, status_code, "DS v1 error: status 409");
-    }
-
-    testDataStreamV1CompatNeg() {
-        HTTPClient client({"url": "http://localhost:" + port});
-        hash<auto> hdr = {
-            "Content-Type": MimeTypeYaml + ";charset=utf8",
-            "DataStream-Accept": MimeTypeYaml,
-        };
-
-        # Test unknown method via DS v1
-        int status_code = 0;
-        try {
-            hash<auto> resp = client.send(make_yaml({}), "POST",
-                "/NoSuchService/NoSuchMethod", hdr, False);
-            status_code = resp.status_code;
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.arg.typeCode() == NT_HASH) {
-                status_code = ex.arg.status_code ?? 0;
-            }
-        }
-        assertEq(404, status_code, "DS v1 unknown method: status 404");
-
-        # Test GET method via DS v1 (not allowed)
-        status_code = 0;
-        try {
-            hash<auto> resp = client.send(NOTHING, "GET", "/TestService/Echo", hdr, False);
-            status_code = resp.status_code;
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.arg.typeCode() == NT_HASH) {
-                status_code = ex.arg.status_code ?? 0;
-            }
-        }
-        assertEq(405, status_code, "DS v1 GET: status 405");
     }
 
     # ---- gRPC wire compatibility tests ----

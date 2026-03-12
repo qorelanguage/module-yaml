@@ -168,6 +168,8 @@ l50Xb2GWQesIt9k5jF5IOw==
         assertEq(True, scheme.options.hasKey("codec"));
         assertEq(True, scheme.options.hasKey("encoding"));
         assertEq(True, scheme.options.hasKey("timeout_ms"));
+        assertEq(True, scheme.options.hasKey("accept_all_certs"));
+        assertEq(True, scheme.options.accept_all_certs.default_value);
     }
 
     testProviderHierarchy() {
@@ -178,9 +180,12 @@ l50Xb2GWQesIt9k5jF5IOw==
         assertEq("ConnectDataProvider", info.type);
         assertEq(True, info.supports_children);
 
-        # Child provider names are empty (dynamic)
+        # Child provider names populated via discovery
         *list<string> names = provider.getChildProviderNames();
-        assertEq(0, names.size());
+        assertEq(True, names.size() > 0, "discovered services");
+        assertEq(True, (select names, $1 == "Greeter").val(), "Greeter discovered");
+        assertEq(True, (select names, $1 == "Calculator").val(), "Calculator discovered");
+        assertEq(True, (select names, $1 == "Echo").val(), "Echo discovered");
 
         # Get a service provider
         AbstractDataProvider svc = provider.getChildProvider("Greeter");
@@ -188,9 +193,10 @@ l50Xb2GWQesIt9k5jF5IOw==
         assertEq("Greeter", svc.getName());
         assertRegex("Greeter", svc.getDesc());
 
-        # Service child names are also empty (dynamic)
+        # Service child names populated via discovery
         names = svc.getChildProviderNames();
-        assertEq(0, names.size());
+        assertEq(True, names.size() > 0, "discovered methods");
+        assertEq(True, (select names, $1 == "SayHello").val(), "SayHello discovered");
 
         # Get a method provider
         AbstractDataProvider method = svc.getChildProvider("SayHello");

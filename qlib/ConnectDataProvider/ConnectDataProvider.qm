@@ -62,6 +62,8 @@ module ConnectDataProvider {
 
     @section connectdataproviderusage Usage
 
+    @subsection connectdataprovider_unary Unary RPC via Factory
+
     @code{.py}
 %modern
 %requires ConnectDataProvider
@@ -75,6 +77,83 @@ auto method = provider.getChildProvider("Greeter").getChildProvider("SayHello");
 # Make a unary RPC call
 auto result = method.doRequest({"name": "World"});
 printf("Response: %y\n", result);
+    @endcode
+
+    @subsection connectdataprovider_discovery Service Discovery
+
+    When connected to a server that supports reflection, services and methods
+    are automatically discovered:
+
+    @code{.py}
+auto provider = DataProvider::create("connect", {"url": "https://example.com:8080"});
+
+# List all available services
+*list<string> services = provider.getChildProviderNames();
+printf("Available services: %y\n", services);
+
+# List methods in a service
+auto svc = provider.getChildProvider("Greeter");
+*list<string> methods = svc.getChildProviderNames();
+printf("Methods: %y\n", methods);
+
+# Inspect discovered request/response types
+auto method = svc.getChildProvider("SayHello");
+*AbstractDataProviderType req_type = method.getRequestType();
+*AbstractDataProviderType resp_type = method.getResponseType();
+    @endcode
+
+    Discovery can be disabled with the \c use_discovery option:
+
+    @code{.py}
+auto provider = DataProvider::create("connect", {
+    "url": "https://example.com:8080",
+    "use_discovery": False,
+});
+# No discovered children, but dynamic access still works
+auto result = provider.getChildProvider("Greeter").getChildProvider("SayHello")
+    .doRequest({"name": "World"});
+    @endcode
+
+    @subsection connectdataprovider_streaming Streaming via DataProvider
+
+    Server-streaming and bidirectional methods return lists from \c doRequest():
+
+    @code{.py}
+# Server-streaming: returns all responses as a list
+auto method = provider.getChildProvider("Numbers").getChildProvider("Generate");
+list<auto> results = method.doRequest({"count": 5});
+map printf("Item: %y\n", $1), results;
+    @endcode
+
+    For event-based streaming, use the \c "events" child provider with the
+    observer pattern:
+
+    @code{.py}
+# Get the events provider for a server-streaming method
+auto events = provider.getChildProvider("Numbers").getChildProvider("Generate")
+    .getChildProvider("events");
+
+# Set the initial request
+events.setObserverRequest({"count": 5});
+
+# Register an observer
+events.registerObserver(new class {
+    update(string event_id, auto data) {
+        if (event_id == "connect-stream-message") {
+            printf("Message: %y\n", data);
+        } else if (event_id == "connect-stream-complete") {
+            printf("Stream complete\n");
+        } else if (event_id == "connect-stream-error") {
+            printf("Error: %s: %s\n", data.err, data.desc);
+        }
+    }
+}());
+
+# Start the stream
+events.observersReady();
+
+# Wait for the stream to finish (or use stopEvents() to cancel early)
+events.waitForInactive(30s);
     @endcode
 
     @subsection connectdataproviderconnection Using Connections
@@ -98,13 +177,21 @@ auto result = provider.getChildProvider("Greeter/SayHello").doRequest({"name": "
       factory for creating Connect data providers
     - @ref ConnectDataProvider::ConnectConnection "ConnectConnection":
       connection provider for \c connect:// and \c connects:// URL schemes
+    - @ref ConnectDataProvider::ConnectStreamEventDataProvider "ConnectStreamEventDataProvider":
+      observable event data provider for streaming RPC methods
 
     @section connectdataproviderrelnotes Release Notes
 
     @subsection connectdataprovider_v1_0 ConnectDataProvider Module Version 1.0
 
     - initial release
-    - DataProvider integration for Connect RPC unary calls
+    - automatic service discovery via Connect reflection protocol
+      (@ref Connect::ConnectReflectionClient "ConnectReflectionClient")
+    - DataProvider integration for all four Connect RPC patterns (unary,
+      server-streaming, client-streaming, bidirectional)
+    - request/response type information from reflection for type-aware navigation
+    - observable event providers for server-streaming and bidirectional methods
+    - \c use_discovery option to control automatic reflection (default: enabled)
     - ConnectionProvider with \c connect:// (plaintext) and \c connects:// (TLS) schemes
     - factory registration as \c "connect"
 */

@@ -42,14 +42,10 @@ public namespace Connect {
     required.
 
     This codec is only available when the \c json module is installed.
-
-    @since Connect 1.0
 */
 public class JsonConnectCodec inherits AbstractConnectCodec {
     #! Returns the codec name
     /** @return \c "json"
-
-        @since Connect 1.0
     */
     string name() {
         return "json";
@@ -58,8 +54,6 @@ public class JsonConnectCodec inherits AbstractConnectCodec {
     #! Serializes a value to JSON binary
     /** @param value the value to serialize
         @return the JSON-encoded binary data (UTF-8)
-
-        @since Connect 1.0
     */
     binary serialize(auto value) {
         return binary(make_json(value));
@@ -68,8 +62,6 @@ public class JsonConnectCodec inherits AbstractConnectCodec {
     #! Deserializes JSON binary data to a Qore value
     /** @param data the JSON-encoded binary data
         @return the deserialized value
-
-        @since Connect 1.0
     */
     auto deserialize(binary data) {
         return parse_json(data.toString("utf-8"));
