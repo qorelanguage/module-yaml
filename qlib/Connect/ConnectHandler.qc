@@ -37,9 +37,9 @@ public hashdecl ConnectServerMethodInfo {
     #! RPC type (one of CONNECT_RPC_* constants)
     int rpc_type;
     #! Optional request type descriptor for reflection
-        *AbstractDataProviderType request_type;
+    *AbstractDataProviderType request_type;
     #! Optional response type descriptor for reflection
-        *AbstractDataProviderType response_type;
+    *AbstractDataProviderType response_type;
 }
 
 #! Connect RPC server handler for HttpServer

@@ -410,12 +410,12 @@ if (exists reply) {
     }
 
     #! Shut down the client and release resources
-        shutdown() {
+    shutdown() {
         m_controller.stop();
     }
 
     #! Destructor — ensures resources are released
-        destructor() {
+    destructor() {
         m_controller.stop();
     }
 
