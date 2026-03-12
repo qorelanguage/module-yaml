@@ -33,14 +33,10 @@ public namespace Connect {
 
     YAML preserves full Qore type fidelity including date, number (arbitrary
     precision), duration, binary, and null types.
-
-    @since Connect 1.0
 */
 public class YamlConnectCodec inherits AbstractConnectCodec {
     #! Returns the codec name
     /** @return \c "yaml"
-
-        @since Connect 1.0
     */
     string name() {
         return "yaml";
@@ -49,8 +45,6 @@ public class YamlConnectCodec inherits AbstractConnectCodec {
     #! Serializes a value to YAML binary
     /** @param value the value to serialize
         @return the YAML-encoded binary data
-
-        @since Connect 1.0
     */
     binary serialize(auto value) {
         return binary(make_yaml(value));
@@ -59,8 +53,6 @@ public class YamlConnectCodec inherits AbstractConnectCodec {
     #! Deserializes YAML binary data to a Qore value
     /** @param data the YAML-encoded binary data
         @return the deserialized value
-
-        @since Connect 1.0
     */
     auto deserialize(binary data) {
         return parse_yaml(data.toString("utf-8"));

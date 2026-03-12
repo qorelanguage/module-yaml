@@ -603,13 +603,17 @@ hash<auto> h = rest.sendDataStream(callback, "POST", "/path");
         # chunked response flag (determines if rmd is a list or not)
         bool chunked;
         # define data callback to build response msg data
+        # For Connect protocol over HTTP/2, transfer-encoding: chunked is not used,
+        # so we auto-detect multi-item responses: if a second item arrives, switch to
+        # list mode to accumulate all items
         code recv_data_callback = sub (auto d) {
             if (exists d) {
                 if (chunked) {
-                    if (!rmd) {
-                        rmd = ();
-                    }
                     rmd += d;
+                } else if (exists rmd) {
+                    # Second data item received — switch to list accumulation mode
+                    chunked = True;
+                    rmd = (rmd, d);
                 } else {
                     rmd = d;
                 }

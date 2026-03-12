@@ -25,8 +25,6 @@
 public namespace Connect {
 
 #! Connect call result hashdecl
-/** @since Connect 1.0
-*/
 public hashdecl ConnectCallResult {
     #! Response body (for unary and client-streaming final responses)
     *auto body;
@@ -64,8 +62,6 @@ stream.write({"chunk": "data2"});
 stream.writesDone();
 hash<ConnectCallResult> result = stream.finish();
     @endcode
-
-    @since Connect 1.0
 */
 public class ConnectClientStream {
     private {
@@ -103,8 +99,6 @@ public class ConnectClientStream {
         (client→server); when set, all written messages are compressed
         @param recv_encoding optional compression encoding for incoming messages
         (server→client); when set, compressed frames from the server are decompressed
-
-        @since Connect 1.0
     */
     constructor(HttpClientIo::HttpClientStreamHandle stream,
             AbstractConnectCodec codec, bool writes_done = False,
@@ -123,8 +117,6 @@ public class ConnectClientStream {
         @return a deserialized message, or NOTHING if the stream has ended
 
         @throw CONNECT-STREAM-ERROR if a stream error occurs
-
-        @since Connect 1.0
     */
     *auto read(*timeout timeout_ms) {
         if (m_reads_done) {
@@ -187,8 +179,6 @@ public class ConnectClientStream {
     /** @param message the message to send
 
         @throw CONNECT-STREAM-ERROR if the stream is not writable
-
-        @since Connect 1.0
     */
     write(auto message) {
         if (m_writes_done) {
@@ -209,8 +199,6 @@ public class ConnectClientStream {
         can send its response for client-streaming calls.
 
         Safe to call multiple times; subsequent calls are no-ops.
-
-        @since Connect 1.0
     */
     writesDone() {
         if (!m_writes_done) {
@@ -227,8 +215,6 @@ public class ConnectClientStream {
         EndStreamResponse.
 
         @return a ConnectCallResult with response body, metadata, and error info
-
-        @since Connect 1.0
     */
     hash<ConnectCallResult> finish() {
         writesDone();
@@ -260,8 +246,6 @@ public class ConnectClientStream {
 
     #! Returns True if the stream has received all server messages
     /** @return True if reads are done
-
-        @since Connect 1.0
     */
     bool readsDone() {
         return m_reads_done;
@@ -269,8 +253,6 @@ public class ConnectClientStream {
 
     #! Cancel the stream
     /** Sends RST_STREAM to abort. Any unread messages are discarded.
-
-        @since Connect 1.0
     */
     cancel() {
         m_reads_done = True;

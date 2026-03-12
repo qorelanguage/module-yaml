@@ -25,13 +25,9 @@
 public namespace Connect {
 
 #! Supported compression encoding: gzip
-/** @since Connect 1.1
-*/
 public const CONNECT_ENCODING_GZIP = "gzip";
 
 #! Supported compression encoding: deflate (zlib format per RFC 2616)
-/** @since Connect 1.1
-*/
 public const CONNECT_ENCODING_DEFLATE = "deflate";
 
 #! Per-message compression utilities for Connect streaming
@@ -46,8 +42,6 @@ public const CONNECT_ENCODING_DEFLATE = "deflate";
     Supported encodings:
     - \c gzip — RFC 1952 (gzip format)
     - \c deflate — RFC 1950 (zlib format, per HTTP specification)
-
-    @since Connect 1.1
 */
 public class ConnectCompression {
     #! Compress a binary payload
@@ -56,8 +50,6 @@ public class ConnectCompression {
         @return the compressed binary data
 
         @throw CONNECT-COMPRESSION-ERROR if the encoding is not supported
-
-        @since Connect 1.1
     */
     static binary compress(binary data, string encoding) {
         switch (encoding) {
@@ -78,8 +70,6 @@ public class ConnectCompression {
 
         @throw CONNECT-COMPRESSION-ERROR if the encoding is not supported or
         decompression fails
-
-        @since Connect 1.1
     */
     static binary decompress(binary data, string encoding) {
         switch (encoding) {
@@ -95,8 +85,6 @@ public class ConnectCompression {
 
     #! Returns the list of supported compression encodings
     /** @return (\c "gzip", \c "deflate")
-
-        @since Connect 1.1
     */
     static list<string> supportedEncodings() {
         return (CONNECT_ENCODING_GZIP, CONNECT_ENCODING_DEFLATE);
@@ -105,8 +93,6 @@ public class ConnectCompression {
     #! Check if a compression encoding is supported
     /** @param encoding the encoding name to check
         @return True if the encoding is supported
-
-        @since Connect 1.1
     */
     static bool isSupported(string encoding) {
         return encoding == CONNECT_ENCODING_GZIP || encoding == CONNECT_ENCODING_DEFLATE;
@@ -116,8 +102,6 @@ public class ConnectCompression {
     /** Suitable for use as the value of the @ref ConnectAcceptEncodingHeader header.
 
         @return \c "gzip,deflate"
-
-        @since Connect 1.1
     */
     static string acceptEncodingValue() {
         return "gzip,deflate";
@@ -129,8 +113,6 @@ public class ConnectCompression {
         @param accept_encoding the accept-encoding header value (comma-separated,
         may include quality parameters like \c "gzip;q=1.0")
         @return the first supported encoding, or NOTHING if none are supported
-
-        @since Connect 1.1
     */
     static *string negotiateEncoding(*string accept_encoding) {
         if (!accept_encoding.val()) {

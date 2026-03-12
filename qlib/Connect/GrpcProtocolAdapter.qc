@@ -33,15 +33,11 @@ public namespace Connect;
     These methods are pure string/regex operations with zero dependency on the
     \c grpc binary module.  They are extracted here so that tests and application
     code can use them even when protobuf support is not compiled in.
-
-    @since Connect 1.0
 */
 public class Connect::GrpcDetection {
     #! Detect if request uses gRPC wire protocol
     /** @param hdr the HTTP request headers
         @return True if the Content-Type indicates gRPC (but not gRPC-Web)
-
-        @since Connect 1.0
     */
     static bool isGrpcRequest(hash<auto> hdr) {
         string ct = hdr."content-type" ?? "";
@@ -51,8 +47,6 @@ public class Connect::GrpcDetection {
     #! Detect if request uses gRPC-Web wire protocol
     /** @param hdr the HTTP request headers
         @return True if the Content-Type indicates gRPC-Web
-
-        @since Connect 1.0
     */
     static bool isGrpcWebRequest(hash<auto> hdr) {
         string ct = hdr."content-type" ?? "";
@@ -62,8 +56,6 @@ public class Connect::GrpcDetection {
     #! Parse a gRPC timeout header value
     /** @param value the timeout string (e.g., \c "5000m", \c "5S", \c "100u")
         @return the timeout in milliseconds, or NOTHING if the format is invalid
-
-        @since Connect 1.0
     */
     static *int parseGrpcTimeout(string value) {
         if (value.empty()) {
@@ -101,8 +93,6 @@ public namespace Connect {
     - <b>No HTTP error status codes</b> — always HTTP 200, errors in trailers
     - <b>grpc-timeout</b> header format: \c "5S", \c "100m", \c "200u" (not milliseconds)
     - <b>gRPC-Web</b>: trailers are base64-encoded and appended to response body
-
-    @since Connect 1.0
 */
 public class GrpcProtocolAdapter {
     #! Handle a gRPC request and produce a gRPC-format response
@@ -117,8 +107,6 @@ public class GrpcProtocolAdapter {
         @param codec the codec to use for serialization
 
         @return an HttpResponseInfo hash
-
-        @since Connect 1.0
     */
     static hash<HttpResponseInfo> handleGrpcRequest(Socket s, hash<auto> cx,
             hash<auto> hdr, *data body, hash<ConnectServerMethodInfo> method_info,
@@ -222,8 +210,6 @@ public class GrpcProtocolAdapter {
         @param codec the codec to use for serialization
 
         @return an HttpResponseInfo hash
-
-        @since Connect 1.0
     */
     static hash<HttpResponseInfo> handleGrpcWebRequest(Socket s, hash<auto> cx,
             hash<auto> hdr, *data body, hash<ConnectServerMethodInfo> method_info,

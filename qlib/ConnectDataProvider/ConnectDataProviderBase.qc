@@ -25,8 +25,6 @@
 public namespace ConnectDataProvider {
 
 #! Options for creating a ConnectDataProvider
-/** @since ConnectDataProvider 1.0
-*/
 public hashdecl ConnectDataProviderOptions {
     #! Connect server URL (e.g., \c "https://example.com:8080")
     string url;
@@ -40,11 +38,18 @@ public hashdecl ConnectDataProviderOptions {
     *bool accept_all_certs;
     #! HTTP protocol: \c "auto", \c "h2", or \c "h3"
     *string protocol;
+    #! Enable service discovery via reflection (default: True)
+    *bool use_discovery;
 }
 
 #! Connect RPC root data provider
-/** Provides DataProvider integration for Connect RPC services.  Child providers
-    are created dynamically for any service name.
+/** Provides DataProvider integration for Connect RPC services.
+
+    When \c use_discovery is enabled (the default), the provider attempts to
+    discover available services via the server's built-in reflection service
+    (\c qore.connect.reflection).  If reflection is available, child provider
+    names are populated automatically; otherwise the provider silently falls
+    back to accepting any service name dynamically.
 
     @par Example
     @code{.py}
@@ -52,8 +57,6 @@ auto provider = new ConnectDataProvider({"url": "https://example.com:8080"});
 auto result = provider.getChildProvider("Greeter").getChildProvider("SayHello")
     .doRequest({"name": "World"});
     @endcode
-
-    @since ConnectDataProvider 1.0
 */
 public class ConnectDataProvider inherits DataProvider::AbstractDataProvider {
     public {
@@ -65,7 +68,7 @@ public class ConnectDataProvider inherits DataProvider::AbstractDataProvider {
             "supports_children": True,
             "children_can_support_apis": True,
             "children_can_support_records": False,
-            "children_can_support_observers": False,
+            "children_can_support_observers": True,
             "constructor_options": ConstructorOptions,
         };
 
@@ -135,12 +138,23 @@ public class ConnectDataProvider inherits DataProvider::AbstractDataProvider {
                         "desc": "HTTP/3 over QUIC (requires QUIC support in the Qore runtime)"},
                 ),
             },
+            "use_discovery": <DataProviderOptionInfo>{
+                "display_name": "Use Discovery",
+                "short_desc": "Enable service discovery via reflection",
+                "type": AbstractDataProviderTypeMap."bool",
+                "desc": "Enable automatic service discovery via the Connect reflection service "
+                    "(default: True)",
+                "default_value": True,
+            },
         };
     }
 
     private {
         #! Provider options
         hash<ConnectDataProviderOptions> m_opts;
+
+        #! Discovered service map (service name -> service descriptor hash)
+        *hash<string, hash<auto>> m_service_map;
     }
 
     #! Creates the provider from typed options
@@ -150,6 +164,7 @@ public class ConnectDataProvider inherits DataProvider::AbstractDataProvider {
     */
     constructor(hash<ConnectDataProviderOptions> options) {
         m_opts = options;
+        tryDiscover();
     }
 
     #! Creates the provider from untyped options (e.g., from factory)
@@ -158,6 +173,7 @@ public class ConnectDataProvider inherits DataProvider::AbstractDataProvider {
             throw "CONNECT-PROVIDER-ERROR", "'url' option is required";
         }
         m_opts = cast<hash<ConnectDataProviderOptions>>(options);
+        tryDiscover();
     }
 
     #! Returns the provider name
@@ -176,22 +192,65 @@ public class ConnectDataProvider inherits DataProvider::AbstractDataProvider {
     }
 
     #! Returns a child provider for the given service name
-    /** Any service name is accepted; no pre-registration required.
+    /** If discovery succeeded and the service is known, passes the service
+        descriptor to the child provider for type-aware navigation.
     */
     private *DataProvider::AbstractDataProvider getChildProviderImpl(string name) {
+        if (m_service_map{name}) {
+            return new ConnectServiceDataProvider(name, m_opts, m_service_map{name});
+        }
         return new ConnectServiceDataProvider(name, m_opts);
     }
 
     #! Returns known child provider names
-    /** Returns an empty list since Connect services are dynamic.
+    /** Returns discovered service names if reflection succeeded, otherwise empty.
     */
     private *list<string> getChildProviderNamesImpl() {
+        if (m_service_map) {
+            return keys m_service_map;
+        }
         return ();
     }
 
     #! Returns provider info
     private hash<DataProviderInfo> getStaticInfoImpl() {
         return ProviderInfo;
+    }
+
+    #! Attempts service discovery via reflection
+    /** Silently falls back if reflection is not available.
+    */
+    private tryDiscover() {
+        if (!(m_opts.use_discovery ?? True)) {
+            return;
+        }
+        try {
+            Connect::ConnectClient client = createClient();
+            on_exit {
+                client.shutdown();
+            }
+            Connect::ConnectReflectionClient refl(client);
+            hash<string, hash<auto>> all = refl.discoverAll();
+            m_service_map = all;
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "THREAD-CANCELLED" || ex.err == "PROGRAM-INTERRUPTED") {
+                rethrow;
+            }
+            # Silently fall back — server may not support reflection
+            m_service_map = NOTHING;
+        }
+    }
+
+    #! Creates a Connect client from options
+    /** @return a new ConnectClient instance
+    */
+    private Connect::ConnectClient createClient() {
+        Connect::AbstractConnectCodec codec = ConnectMethodDataProvider::createCodecStatic(m_opts);
+        return new Connect::ConnectClient(m_opts.url, codec,
+            <Connect::ConnectClientOptions>{
+                "accept_all_certs": m_opts.accept_all_certs ?? True,
+                "protocol": m_opts.protocol,
+            });
     }
 }
 

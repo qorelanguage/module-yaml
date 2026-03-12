@@ -24,9 +24,17 @@
 
 public namespace Connect {
 
+#! Connect datagram frame info hashdecl
+public hashdecl ConnectDatagramFrameInfo {
+    #! Frame flags (combination of CONNECT_FLAG_* constants)
+    int flags;
+    #! Sequence number (0-255, wrapping application-level ordering hint)
+    int seq;
+    #! Frame payload data
+    binary data;
+}
+
 #! Connect frame info hashdecl
-/** @since Connect 1.0
-*/
 public hashdecl ConnectFrameInfo {
     #! Frame flags (combination of CONNECT_FLAG_* constants)
     int flags;
@@ -35,8 +43,6 @@ public hashdecl ConnectFrameInfo {
 }
 
 #! Connect end-of-stream info hashdecl
-/** @since Connect 1.0
-*/
 public hashdecl ConnectEndStreamInfo {
     #! Optional trailing metadata
     *hash<auto> metadata;
@@ -45,8 +51,6 @@ public hashdecl ConnectEndStreamInfo {
 }
 
 #! Connect call options hashdecl
-/** @since Connect 1.0
-*/
 public hashdecl ConnectCallOptions {
     #! Request timeout in milliseconds
     *int timeout_ms;
@@ -57,75 +61,65 @@ public hashdecl ConnectCallOptions {
 }
 
 #! RPC type constants
-/** @since Connect 1.0
-*/
 public const CONNECT_RPC_UNARY = 0;
 
 #! Server-streaming RPC type
-/** @since Connect 1.0
-*/
 public const CONNECT_RPC_SERVER_STREAM = 1;
 
 #! Client-streaming RPC type
-/** @since Connect 1.0
-*/
 public const CONNECT_RPC_CLIENT_STREAM = 2;
 
 #! Bidirectional streaming RPC type
-/** @since Connect 1.0
-*/
 public const CONNECT_RPC_BIDI = 3;
 
+#! Datagram fire-and-forget RPC type (client→server, no response)
+public const CONNECT_RPC_DATAGRAM_FIRE_AND_FORGET = 4;
+
+#! Datagram bidirectional RPC type (unreliable both directions)
+public const CONNECT_RPC_DATAGRAM_BIDI = 5;
+
 #! Content-Type prefix for unary requests: application/{codec}
-/** @since Connect 1.0
-*/
 public const ConnectContentTypePrefix = "application/";
 
 #! Content-Type prefix for streaming requests: application/connect+{codec}
-/** @since Connect 1.0
-*/
 public const ConnectStreamContentTypePrefix = "application/connect+";
 
+#! Content-Type prefix for datagram requests: application/connect+datagram+{codec}
+public const ConnectDatagramContentTypePrefix = "application/connect+datagram+";
+
 #! Connect protocol version header name
-/** @since Connect 1.0
-*/
 public const ConnectProtocolVersionHeader = "connect-protocol-version";
 
 #! Connect protocol version value
-/** @since Connect 1.0
-*/
 public const ConnectProtocolVersion = "1";
 
 #! Connect timeout header name
-/** @since Connect 1.0
-*/
 public const ConnectTimeoutHeader = "connect-timeout-ms";
 
 #! Connect content encoding header for streaming
-/** @since Connect 1.0
-*/
 public const ConnectContentEncodingHeader = "connect-content-encoding";
 
 #! Connect accept encoding header for streaming
-/** @since Connect 1.0
-*/
 public const ConnectAcceptEncodingHeader = "connect-accept-encoding";
 
 #! Envelope flag: payload is compressed (bit 0)
-/** @since Connect 1.0
-*/
 public const CONNECT_FLAG_COMPRESSED = 0x01;
 
 #! Envelope flag: end-of-stream marker (bit 1)
-/** @since Connect 1.0
-*/
 public const CONNECT_FLAG_END_STREAM = 0x02;
+
+#! Datagram envelope flag: request application-level ACK (bit 2)
+public const CONNECT_FLAG_DATAGRAM_ACK_REQ = 0x04;
+
+#! Datagram envelope flag: payload is an error (bit 3)
+public const CONNECT_FLAG_DATAGRAM_ERROR = 0x08;
+
+#! Capsule-Protocol header name (RFC 9297)
+public const ConnectCapsuleProtocolHeader = "capsule-protocol";
 
 #! Default maximum message size: 4 MB (matches gRPC default)
 /** Used to prevent unbounded memory allocation from malicious or malformed
     frames that declare very large payload sizes.
-
-    @since Connect 1.0
 */
 public const CONNECT_DEFAULT_MAX_MESSAGE_SIZE = 4 * 1024 * 1024;
 
@@ -137,16 +131,12 @@ public const CONNECT_DEFAULT_MAX_MESSAGE_SIZE = 4 * 1024 * 1024;
     - 1 byte: flags (bit 0 = compressed, bit 1 = end-of-stream)
     - 4 bytes: big-endian payload length
     - N bytes: payload data
-
-    @since Connect 1.0
 */
 public class ConnectHelper {
     #! Frame a binary message with the Connect 5-byte envelope header
     /** @param payload the message payload
         @param flags envelope flags (combination of \c CONNECT_FLAG_* constants)
         @return the framed message (5-byte header + payload)
-
-        @since Connect 1.0
     */
     static binary frameMessage(binary payload, int flags = 0) {
         int len = payload.size();
@@ -168,8 +158,6 @@ public class ConnectHelper {
         @throw CONNECT-FRAMING-ERROR if the data is too short or declares more bytes
         than available
         @throw CONNECT-MESSAGE-SIZE-ERROR if the declared payload exceeds max_message_size
-
-        @since Connect 1.0
     */
     static hash<ConnectFrameInfo> unframeMessage(binary data, *int max_message_size) {
         if (data.size() < 5) {
@@ -202,8 +190,6 @@ public class ConnectHelper {
 
         @throw CONNECT-FRAMING-ERROR if any frame is malformed
         @throw CONNECT-MESSAGE-SIZE-ERROR if any frame payload exceeds max_message_size
-
-        @since Connect 1.0
     */
     static list<hash<ConnectFrameInfo>> unframeMessages(binary data, *int max_message_size) {
         list<hash<ConnectFrameInfo>> messages = ();
@@ -240,8 +226,6 @@ public class ConnectHelper {
     /** @param buf the buffer to check
         @return the total frame size (5 + payload), or -1 if the buffer does not
         contain a complete frame
-
-        @since Connect 1.0
     */
     static int nextFrameSize(binary buf) {
         if (buf.size() < 5) {
@@ -264,8 +248,6 @@ public class ConnectHelper {
         @param error optional error info
 
         @return the framed EndStreamResponse (5-byte header + JSON payload)
-
-        @since Connect 1.0
     */
     static binary frameEndStream(*hash<auto> metadata, *hash<ConnectErrorInfo> error) {
         hash<auto> obj();
@@ -290,8 +272,6 @@ public class ConnectHelper {
     #! Parse an EndStreamResponse message from a frame payload
     /** @param data the frame payload (JSON-encoded EndStreamResponse)
         @return the parsed end-of-stream info
-
-        @since Connect 1.0
     */
     static hash<ConnectEndStreamInfo> parseEndStream(binary data) {
         string json = data.toString("utf-8");
@@ -314,13 +294,70 @@ public class ConnectHelper {
         return result;
     }
 
+    #! Frame a datagram message with the 2-byte envelope (flags + seq)
+    /** Datagram envelope format (minimal for low-latency):
+        - Byte 0: flags (\c CONNECT_FLAG_COMPRESSED, \c CONNECT_FLAG_DATAGRAM_ACK_REQ,
+          \c CONNECT_FLAG_DATAGRAM_ERROR)
+        - Byte 1: sequence number (0-255, wrapping)
+        - Bytes 2+: codec-encoded payload
+
+        No length field — QUIC datagrams are self-delimiting.
+
+        @param payload the message payload
+        @param flags envelope flags (combination of \c CONNECT_FLAG_* constants)
+        @param seq application-level sequence number (0-255)
+        @return the framed datagram (2-byte header + payload)
+    */
+    static binary frameDatagramMessage(binary payload, int flags = 0, int seq = 0) {
+        string header_str = chr(flags & 0xFF);
+        header_str += chr(seq & 0xFF);
+        return binary(header_str) + payload;
+    }
+
+    #! Parse a datagram-framed message
+    /** @param data the framed datagram data (must be >= 2 bytes)
+        @return the datagram frame info with flags, sequence number, and payload
+
+        @throw CONNECT-FRAMING-ERROR if the data is too short
+    */
+    static hash<ConnectDatagramFrameInfo> unframeDatagramMessage(binary data) {
+        if (data.size() < 2) {
+            throw "CONNECT-FRAMING-ERROR",
+                sprintf("Connect datagram frame too short: %d bytes (minimum 2)", data.size());
+        }
+        return <ConnectDatagramFrameInfo>{
+            "flags": data[0],
+            "seq": data[1],
+            "data": data.size() > 2 ? data.substr(2) : binary(),
+        };
+    }
+
+    #! Build HTTP headers for a datagram channel setup request
+    /** @param codec_name the codec name (e.g., \c "yaml")
+        @param opts optional call options
+        @return the HTTP headers hash
+    */
+    static hash<string, string> buildDatagramRequestHeaders(string codec_name,
+            *hash<ConnectCallOptions> opts) {
+        hash<string, string> headers = {
+            "content-type": ConnectDatagramContentTypePrefix + codec_name,
+            ConnectProtocolVersionHeader: ConnectProtocolVersion,
+            ConnectCapsuleProtocolHeader: "?1",
+        };
+        if (opts.timeout_ms) {
+            headers{ConnectTimeoutHeader} = string(opts.timeout_ms);
+        }
+        if (opts.metadata) {
+            map headers{$1.key} = $1.value, opts.metadata.pairIterator();
+        }
+        return headers;
+    }
+
     #! Build HTTP headers for a unary Connect request
     /** @param codec_name the codec name (e.g., \c "yaml")
         @param opts optional call options
 
         @return the HTTP headers hash
-
-        @since Connect 1.0
     */
     static hash<string, string> buildUnaryRequestHeaders(string codec_name,
             *hash<ConnectCallOptions> opts) {
@@ -345,8 +382,6 @@ public class ConnectHelper {
         @param opts optional call options
 
         @return the HTTP headers hash
-
-        @since Connect 1.0
     */
     static hash<string, string> buildStreamRequestHeaders(string codec_name,
             *hash<ConnectCallOptions> opts) {
@@ -372,8 +407,6 @@ public class ConnectHelper {
     /** @param content_type the Content-Type header value
         @return a hash with \c codec_name and \c streaming keys, or NOTHING
         if the content type is not a valid Connect content type
-
-        @since Connect 1.0
     */
     static *hash<auto> parseContentType(string content_type) {
         # Strip parameters (;charset=... etc)
@@ -383,7 +416,18 @@ public class ConnectHelper {
         }
         content_type = content_type.lwr();
 
-        # Check streaming prefix first (longer match)
+        # Check datagram prefix first (longest match)
+        if (content_type =~ /^application\/connect\+datagram\+/) {
+            string codec_name = content_type.substr(ConnectDatagramContentTypePrefix.size());
+            if (codec_name.val()) {
+                return {
+                    "codec_name": codec_name,
+                    "streaming": False,
+                    "datagram": True,
+                };
+            }
+        }
+        # Check streaming prefix (longer match than unary)
         if (content_type =~ /^application\/connect\+/) {
             string codec_name = content_type.substr(ConnectStreamContentTypePrefix.size());
             if (codec_name.val()) {

@@ -25,8 +25,6 @@
 public namespace Connect {
 
 #! Connect client options hashdecl
-/** @since Connect 1.0
-*/
 public hashdecl ConnectClientOptions {
     #! TLS options (hash passed to connection manager)
     *hash<auto> ssl;
@@ -68,8 +66,6 @@ while (*auto msg = stream.read()) {
     printf("Event: %y\n", msg);
 }
     @endcode
-
-    @since Connect 1.0
 */
 public class ConnectClient {
     private {
@@ -89,8 +85,6 @@ public class ConnectClient {
     /** @param url base URL (e.g., \c "https://example.com:8080")
         @param codec serialization codec (default: @ref YamlConnectCodec)
         @param opts connection options
-
-        @since Connect 1.0
     */
     constructor(string url, *AbstractConnectCodec codec, *hash<ConnectClientOptions> opts) {
         m_url = url;
@@ -126,8 +120,6 @@ public class ConnectClient {
         @return the deserialized response
 
         @throw CONNECT-ERROR if the server returns an error
-
-        @since Connect 1.0
     */
     auto call(string service, string method, auto request, *hash<ConnectCallOptions> opts) {
         # Serialize request
@@ -208,8 +200,6 @@ public class ConnectClient {
         @param opts optional call options
 
         @return a @ref ConnectClientStream for reading responses
-
-        @since Connect 1.0
     */
     ConnectClientStream serverStream(string service, string method, auto request,
             *hash<ConnectCallOptions> opts) {
@@ -246,8 +236,6 @@ public class ConnectClient {
         @param opts optional call options
 
         @return a @ref ConnectClientStream for writing requests and reading the response
-
-        @since Connect 1.0
     */
     ConnectClientStream clientStream(string service, string method,
             *hash<ConnectCallOptions> opts) {
@@ -271,24 +259,162 @@ public class ConnectClient {
         @param opts optional call options
 
         @return a @ref ConnectClientStream for reading and writing
-
-        @since Connect 1.0
     */
     ConnectClientStream bidiStream(string service, string method,
             *hash<ConnectCallOptions> opts) {
         return clientStream(service, method, opts);
     }
 
-    #! Shut down the client and release resources
-    /** @since Connect 1.0
+    #! Fire-and-forget: send an unreliable datagram with no response
+    /** Sends a single datagram message to the server. The server handler
+        receives the message but sends no response. Delivery is not guaranteed.
+
+        @par Example:
+        @code{.py}
+ConnectClient client("https://host:8443", NOTHING,
+    <ConnectClientOptions>{"protocol": "h3"});
+# Send a telemetry report — fire-and-forget, no response expected
+client.sendDatagram("Telemetry", "Report", {"cpu": 42.5, "mem": 1024});
+        @endcode
+
+        @param service the service name
+        @param method the method name
+        @param message the message data
+        @param opts optional call options (metadata)
+
+        @throw CONNECT-DATAGRAM-NOT-SUPPORTED if the connection does not support
+        QUIC datagrams (HTTP/2 or HTTP/1.1)
+        @throw CONNECT-DATAGRAM-SIZE-ERROR if the message exceeds max datagram size
+        @throw CONNECT-TIMEOUT if the server does not acknowledge within the timeout
+        (default 30s; override with \c opts.timeout_ms)
+        @throw CONNECT-DATAGRAM-ERROR if the server returned an error
     */
+    nothing sendDatagram(string service, string method, auto message,
+            *hash<ConnectCallOptions> opts) {
+        # Build headers for datagram channel setup
+        hash<string, string> headers = ConnectHelper::buildDatagramRequestHeaders(
+            m_codec.name(), opts);
+
+        # Acquire a stream and establish the datagram anchor
+        string path = "/" + service + "/" + method;
+        HttpClientIo::HttpClientStreamHandle stream = m_mgr.acquireStream(m_url);
+        ensureStreamReady(stream);
+
+        # Verify datagram support
+        if (!stream.isDatagramSupported()) {
+            throw "CONNECT-DATAGRAM-NOT-SUPPORTED",
+                "QUIC datagrams require HTTP/3; current connection does not support datagrams";
+        }
+
+        # Serialize and frame the datagram
+        binary encoded = m_codec.serialize(message);
+        int flags = 0;
+        if (opts.encoding) {
+            encoded = ConnectCompression::compress(encoded, opts.encoding);
+            flags = CONNECT_FLAG_COMPRESSED;
+        }
+        binary framed = ConnectHelper::frameDatagramMessage(encoded, flags, 0);
+
+        # Check size
+        int max_size = stream.getMaxDatagramSize();
+        if (max_size > 0 && framed.size() > max_size) {
+            throw "CONNECT-DATAGRAM-SIZE-ERROR",
+                sprintf("datagram size %d exceeds maximum %d bytes",
+                    framed.size(), max_size);
+        }
+
+        # Submit async POST and datagram atomically; both are queued before
+        # the I/O controller is woken, ensuring the HEADERS and DATAGRAM are
+        # written in the same QUIC packet batch (avoids a race where the
+        # server processes the HEADERS before the datagram is sent).
+        Counter done(1);
+        *hash<auto> async_err;
+        stream.submitAsyncWithDatagram("POST", path, headers, binary(),
+            sub (hash<auto> resp, *hash<auto> err) {
+                if (err) {
+                    async_err = err;
+                }
+                done.dec();
+            }, framed);
+
+        # Wait for the server to close the anchor stream (fire-and-forget)
+        timeout wait_ms = opts.timeout_ms ?? 30s;
+        if (done.waitForZero(wait_ms)) {
+            stream.cancel();
+            throw "CONNECT-TIMEOUT",
+                sprintf("datagram fire-and-forget timed out after %d ms", wait_ms);
+        }
+        if (async_err) {
+            throw "CONNECT-DATAGRAM-ERROR",
+                sprintf("%s: %s", async_err.err ?? "unknown", async_err.desc ?? "unknown error"),
+                async_err;
+        }
+    }
+
+    #! Open a bidirectional datagram channel
+    /** Establishes a datagram channel for unreliable bidirectional message
+        exchange. The returned stream allows sending and receiving datagrams
+        until close() is called.
+
+        @par Example:
+        @code{.py}
+ConnectClient client("https://host:8443", NOTHING,
+    <ConnectClientOptions>{"protocol": "h3"});
+ConnectDatagramStream dg = client.datagramBidi("Sensor", "Exchange");
+on_exit dg.close();
+
+# Send a reading and wait for the server's response
+dg.send({"reading": 99.1});
+*auto reply = dg.read(10s);
+if (exists reply) {
+    printf("server replied: %y\n", reply);
+}
+        @endcode
+
+        @param service the service name
+        @param method the method name
+        @param opts optional call options (metadata)
+
+        @return a @ref ConnectDatagramStream for sending and receiving datagrams
+
+        @throw CONNECT-DATAGRAM-NOT-SUPPORTED if the connection does not support
+        QUIC datagrams
+    */
+    ConnectDatagramStream datagramBidi(string service, string method,
+            *hash<ConnectCallOptions> opts) {
+        # Build headers for datagram channel setup
+        hash<string, string> headers = ConnectHelper::buildDatagramRequestHeaders(
+            m_codec.name(), opts);
+
+        # Acquire a stream and establish the datagram anchor
+        string path = "/" + service + "/" + method;
+        HttpClientIo::HttpClientStreamHandle stream = m_mgr.acquireStream(m_url);
+        ensureStreamReady(stream);
+
+        # Verify datagram support
+        if (!stream.isDatagramSupported()) {
+            throw "CONNECT-DATAGRAM-NOT-SUPPORTED",
+                "QUIC datagrams require HTTP/3; current connection does not support datagrams";
+        }
+
+        # Submit async POST to establish the anchor stream (RFC 9297).
+        # The request body is empty — all payload flows as QUIC datagrams.
+        # The callback fires when the server closes the anchor stream.
+        stream.submitAsync("POST", path, headers, binary(),
+            sub (hash<auto> resp, *hash<auto> err) {
+                # Server closed the datagram channel
+            });
+
+        return new ConnectDatagramStream(stream, m_codec, m_max_message_size,
+            opts.encoding);
+    }
+
+    #! Shut down the client and release resources
     shutdown() {
         m_controller.stop();
     }
 
     #! Destructor — ensures resources are released
-    /** @since Connect 1.0
-    */
     destructor() {
         m_controller.stop();
     }

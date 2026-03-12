@@ -28,7 +28,18 @@ public namespace ConnectDataProvider {
 /** Represents a single Connect service.  Child providers are method names
     within this service.
 
-    @since ConnectDataProvider 1.0
+    @par Example
+    @code{.py}
+auto provider = DataProvider::create("connect", {"url": "https://example.com:8080"});
+auto svc = provider.getChildProvider("Greeter");
+
+# List available methods
+*list<string> methods = svc.getChildProviderNames();
+printf("Methods: %y\n", methods);
+
+# Access a method and make a call
+auto result = svc.getChildProvider("SayHello").doRequest({"name": "World"});
+    @endcode
 */
 public class ConnectServiceDataProvider inherits DataProvider::AbstractDataProvider {
     public {
@@ -40,7 +51,7 @@ public class ConnectServiceDataProvider inherits DataProvider::AbstractDataProvi
             "supports_children": True,
             "children_can_support_apis": True,
             "children_can_support_records": False,
-            "children_can_support_observers": False,
+            "children_can_support_observers": True,
         };
     }
 
@@ -49,6 +60,8 @@ public class ConnectServiceDataProvider inherits DataProvider::AbstractDataProvi
         string m_service;
         #! Provider options
         hash<ConnectDataProviderOptions> m_opts;
+        #! Method map from discovery (method name -> method descriptor)
+        *hash<string, hash<auto>> m_method_map;
     }
 
     #! Creates the service provider
@@ -58,6 +71,21 @@ public class ConnectServiceDataProvider inherits DataProvider::AbstractDataProvi
     constructor(string service, hash<ConnectDataProviderOptions> opts) {
         m_service = service;
         m_opts = opts;
+    }
+
+    #! Creates the service provider with discovery data
+    /** @param service the service name
+        @param opts provider options
+        @param service_desc service descriptor from reflection (contains \c methods list)
+    */
+    constructor(string service, hash<ConnectDataProviderOptions> opts,
+            hash<auto> service_desc) {
+        m_service = service;
+        m_opts = opts;
+        if (service_desc.methods) {
+            m_method_map = {};
+            map (m_method_map{$1.method} = $1), service_desc.methods;
+        }
     }
 
     #! Returns the service name
@@ -72,13 +100,19 @@ public class ConnectServiceDataProvider inherits DataProvider::AbstractDataProvi
 
     #! Returns a child provider for the given method name
     private *DataProvider::AbstractDataProvider getChildProviderImpl(string name) {
+        if (m_method_map{name}) {
+            return new ConnectMethodDataProvider(m_service, name, m_opts, m_method_map{name});
+        }
         return new ConnectMethodDataProvider(m_service, name, m_opts);
     }
 
     #! Returns known child provider names
-    /** Returns an empty list since Connect methods are dynamic.
+    /** Returns discovered method names if available, otherwise empty.
     */
     private *list<string> getChildProviderNamesImpl() {
+        if (m_method_map) {
+            return keys m_method_map;
+        }
         return ();
     }
 

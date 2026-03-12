@@ -45,14 +45,10 @@ public namespace Connect {
 
     This codec is only available when the \c json module version 1.12+ is
     installed (which provides the \c make_cbor() and \c parse_cbor() functions).
-
-    @since Connect 1.1
 */
 public class CborConnectCodec inherits AbstractConnectCodec {
     #! Returns the codec name
     /** @return \c "cbor"
-
-        @since Connect 1.1
     */
     string name() {
         return "cbor";
@@ -61,8 +57,6 @@ public class CborConnectCodec inherits AbstractConnectCodec {
     #! Serializes a value to CBOR binary
     /** @param value the value to serialize
         @return the CBOR-encoded binary data
-
-        @since Connect 1.1
     */
     binary serialize(auto value) {
         return make_cbor(value);
@@ -71,8 +65,6 @@ public class CborConnectCodec inherits AbstractConnectCodec {
     #! Deserializes CBOR binary data to a Qore value
     /** @param data the CBOR-encoded binary data
         @return the deserialized value
-
-        @since Connect 1.1
     */
     auto deserialize(binary data) {
         return parse_cbor(data);

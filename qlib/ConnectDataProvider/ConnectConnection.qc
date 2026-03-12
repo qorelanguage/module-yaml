@@ -37,8 +37,6 @@ ConnectConnection conn("myconn", "connects://example.com:8080",
     {"codec": "yaml"});
 auto provider = conn.getDataProvider();
     @endcode
-
-    @since ConnectDataProvider 1.0
 */
 public class ConnectConnection inherits ConnectionProvider::AbstractConnectionWithInfo {
     public {
@@ -109,6 +107,21 @@ public class ConnectConnection inherits ConnectionProvider::AbstractConnectionWi
                         "desc": "HTTP/3 over QUIC (requires QUIC support in the Qore runtime)"},
                 ),
             },
+            "accept_all_certs": <ConnectionOptionInfo>{
+                "display_name": "Accept All Certs",
+                "short_desc": "Accept all TLS certificates",
+                "type": "bool",
+                "desc": "Accept all server TLS certificates without validation (for testing only; "
+                    "default: True)",
+                "default_value": True,
+            },
+            "use_discovery": <ConnectionOptionInfo>{
+                "display_name": "Use Discovery",
+                "short_desc": "Enable service discovery",
+                "type": "bool",
+                "desc": "Enable automatic service discovery via Connect reflection (default: True)",
+                "default_value": True,
+            },
         };
     }
 
@@ -133,8 +146,9 @@ public class ConnectConnection inherits ConnectionProvider::AbstractConnectionWi
             "codec": opts.codec ?? "yaml",
             "encoding": opts.encoding,
             "timeout_ms": opts.timeout_ms,
-            "accept_all_certs": True,
+            "accept_all_certs": opts.accept_all_certs ?? True,
             "protocol": opts.protocol,
+            "use_discovery": opts.use_discovery,
         });
     }
 
@@ -151,7 +165,7 @@ public class ConnectConnection inherits ConnectionProvider::AbstractConnectionWi
     private Connect::ConnectClient getImpl(bool connect = True, *hash<auto> rtopts) {
         return new Connect::ConnectClient(getHttpUrl(), NOTHING,
             <Connect::ConnectClientOptions>{
-                "accept_all_certs": True,
+                "accept_all_certs": opts.accept_all_certs ?? True,
                 "protocol": opts.protocol,
             });
     }

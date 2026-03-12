@@ -29,30 +29,22 @@ public namespace Connect {
     The codec name is used in HTTP Content-Type headers:
     - Unary: \c application/{name} (e.g., \c application/yaml)
     - Streaming: \c application/connect+{name} (e.g., \c application/connect+yaml)
-
-    @since Connect 1.0
 */
 public class AbstractConnectCodec {
     #! Returns the codec name used in Content-Type headers
     /** @return the codec name (e.g., \c "yaml", \c "proto", \c "json")
-
-        @since Connect 1.0
     */
     abstract string name();
 
     #! Serializes a Qore value to binary
     /** @param value the value to serialize
         @return the serialized binary data
-
-        @since Connect 1.0
     */
     abstract binary serialize(auto value);
 
     #! Deserializes binary data to a Qore value
     /** @param data the binary data to deserialize
         @return the deserialized value
-
-        @since Connect 1.0
     */
     abstract auto deserialize(binary data);
 }
