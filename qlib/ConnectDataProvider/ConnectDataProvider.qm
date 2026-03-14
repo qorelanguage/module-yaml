@@ -24,7 +24,7 @@
 
 %modern
 
-%requires qore >= 2.0
+%requires qore >= 2.3
 %requires(reexport) DataProvider
 %requires(reexport) ConnectionProvider
 %requires Connect

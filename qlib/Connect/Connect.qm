@@ -24,11 +24,13 @@
 
 %modern
 
-%requires qore >= 2.0
+%requires qore >= 2.3
 %requires yaml >= 0.7
 %requires Mime >= 1.0
 %requires HttpServerUtil
 %requires(reexport) DataProvider
+%requires HttpClientIo
+%requires AsyncSocketIo
 
 %try-module json
 %define NoJson
@@ -36,14 +38,6 @@
 
 %try-module json >= 1.12
 %define NoCbor
-%endtry
-
-%try-module HttpClientIo
-%define NoHttpClientIo
-%endtry
-
-%try-module AsyncSocketIo
-%define NoAsyncSocketIo
 %endtry
 
 %try-module grpc

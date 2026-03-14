@@ -36,8 +36,6 @@ public hashdecl ConnectCallResult {
 
 } # namespace Connect
 
-%ifndef NoHttpClientIo
-
 public namespace Connect {
 
 #! Client-side Connect stream handle for streaming RPC calls
@@ -316,5 +314,3 @@ public class ConnectClientStream {
 }
 
 } # namespace Connect
-
-%endif

@@ -38,9 +38,6 @@ public hashdecl ConnectClientOptions {
 
 } # namespace Connect
 
-%ifndef NoHttpClientIo
-%ifndef NoAsyncSocketIo
-
 public namespace Connect {
 
 #! Connect RPC client
@@ -438,6 +435,3 @@ if (exists reply) {
 }
 
 } # namespace Connect
-
-%endif
-%endif

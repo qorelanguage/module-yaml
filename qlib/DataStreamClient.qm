@@ -23,7 +23,7 @@
 */
 
 # minimum Qore version
-%requires qore >= 2.0
+%requires qore >= 2.3
 
 %requires DataStreamUtil
 %requires RestClient >= 1.4

@@ -22,9 +22,6 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%ifndef NoHttpClientIo
-%ifndef NoAsyncSocketIo
-
 public namespace Connect {
 
 #! Client-side helper for Connect service reflection
@@ -109,6 +106,3 @@ public class ConnectReflectionClient {
 }
 
 } # namespace Connect
-
-%endif
-%endif

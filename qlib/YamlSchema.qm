@@ -21,7 +21,7 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%requires qore >= 2.0
+%requires qore >= 2.3
 %requires yaml
 %requires Util
 

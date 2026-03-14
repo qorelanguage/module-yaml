@@ -22,8 +22,6 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%ifndef NoHttpClientIo
-
 public namespace Connect {
 
 #! Client-side datagram stream for unreliable message exchange over QUIC datagrams
@@ -219,5 +217,3 @@ public class ConnectDatagramStream {
 }
 
 } # namespace Connect
-
-%endif
