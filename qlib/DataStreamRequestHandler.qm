@@ -198,7 +198,12 @@ public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRest
         @since DataStreamRequestHandler 1.0, updated in 1.2 with Connect detection
     */
     constructor(hash<auto> cx, *hash<auto> ah) : AbstractRestStreamRequestHandler(cx, ah) {
-        connect_mode = connect_detect_protocol(cx.hdr);
+        # DataStream v1 relies on HTTP/1.x chunked transfer encoding; HTTP/2 and HTTP/3 use
+        # binary framing and don't support the chunked-transfer trailer convention that DS v1
+        # depends on for error signaling.  Auto-upgrade to Connect on HTTP/2+.
+        connect_mode = connect_detect_protocol(cx.hdr)
+            || cx.hdr.":method"
+            || cx.hdr.":scheme";
         @debug(printf("AbstractDataStreamRequestHandler::constructor() encoding=%y connect_mode=%y\n",
             cx.encoding, connect_mode));
         if (connect_mode) {
