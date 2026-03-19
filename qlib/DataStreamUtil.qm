@@ -1093,8 +1093,11 @@ string dae = ds_get_ds_accept_enc_header(hdr."Accept-Encoding");
                 # Accumulate data
                 if (h."data".typeCode() == NT_BINARY) {
                     buf += h."data";
-                } else {
+                } else if (h."data".typeCode() == NT_STRING) {
                     buf += binary(h."data");
+                } else {
+                    # hash = HTTP/2 trailers or other non-data delivery; ignore
+                    return;
                 }
                 # Validate buffer size to prevent unbounded accumulation
                 if (max_message_size > 0 && buf.size() > 5 + max_message_size) {
