@@ -72,8 +72,6 @@ public class ConnectClient {
         AbstractConnectCodec m_codec;
         #! HTTP/2 connection manager
         HttpClientIo::HttpClientConnectionManager m_mgr;
-        #! Async I/O controller
-        AsyncSocketIo::AsyncSocketIoController m_controller(False);
         #! Maximum message size in bytes (0 = no limit)
         int m_max_message_size;
     }
@@ -104,8 +102,6 @@ public class ConnectClient {
         }
 
         m_mgr = new HttpClientIo::HttpClientConnectionManager(mgr_opts);
-        m_mgr.setController(m_controller);
-        m_controller.start();
     }
 
     #! Unary RPC: single request, single response
@@ -408,12 +404,12 @@ if (exists reply) {
 
     #! Shut down the client and release resources
     shutdown() {
-        m_controller.stop();
+        m_mgr.closeAll();
     }
 
     #! Destructor — ensures resources are released
     destructor() {
-        m_controller.stop();
+        m_mgr.closeAll();
     }
 
     #! Ensure the HTTP connection is ready for streaming
