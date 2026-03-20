@@ -496,6 +496,8 @@ rest.recvDataStream(recvcallback, endcallback, "GET", "/orders/1", body);
             if (use_connect && protocol_mode == DataStreamProtocol::Auto && isConnectRejection(ex)) {
                 # Cache DS v1 so future requests don't attempt Connect
                 cached_protocol = DataStreamProtocol::DataStream;
+                # DataStream v1 requires HTTP/1.1 chunked TE; force HTTP/1.1 for retry
+                setHTTPVersion("1.1");
                 # Retry with DataStream v1 using saved originals
                 body = save_body;
                 hdr = save_hdr;
@@ -671,6 +673,9 @@ hash<auto> h = rest.sendDataStream(callback, "POST", "/path");
             if (use_connect && protocol_mode == DataStreamProtocol::Auto && isConnectRejection(ex)) {
                 # Cache DS v1 so future requests don't attempt Connect
                 cached_protocol = DataStreamProtocol::DataStream;
+                # DataStream v1 requires HTTP/1.1 chunked TE; force HTTP/1.1 for retry
+                # since the connection may already be HTTP/2 (which has no chunked TE)
+                setHTTPVersion("1.1");
                 # Retry with DataStream v1 using saved originals
                 hdr = headers + save_hdr;
                 path = save_path;
@@ -849,6 +854,8 @@ rest.sendRecvDataStream(send_callback, reccallback, "POST", "/path");
             if (use_connect && protocol_mode == DataStreamProtocol::Auto && isConnectRejection(ex)) {
                 # Cache DS v1 so future requests don't attempt Connect
                 cached_protocol = DataStreamProtocol::DataStream;
+                # DataStream v1 requires HTTP/1.1 chunked TE; force HTTP/1.1 for retry
+                setHTTPVersion("1.1");
                 # Retry with DataStream v1 using saved originals
                 hdr = headers + save_hdr;
                 path = save_path;
@@ -1049,10 +1056,15 @@ rest.setContentEncoding("gzip");
         if (cached_protocol) {
             return cached_protocol;
         }
-        # In auto mode, only use Connect if the connection is HTTP/2 or HTTP/3;
-        # Connect framing over HTTP/1.1 chunked encoding has compatibility issues
-        # with servers that don't fully support it
+        # In auto mode, use Connect if the connection is already HTTP/2 or HTTP/3
         if (isHttp2()) {
+            return DataStreamProtocol::Connect;
+        }
+        # If not yet connected but using HTTPS with "auto" HTTP version, prefer Connect
+        # because ALPN will negotiate h2; if the server rejects Connect, the fallback
+        # to DataStream v1 handles it. DataStream v1 does not work over HTTP/2 because
+        # HTTP/2 has no chunked transfer encoding.
+        if (effective_http_version == "auto" && getURL() =~ /^https/i) {
             return DataStreamProtocol::Connect;
         }
         return DataStreamProtocol::DataStream;
