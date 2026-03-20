@@ -1081,16 +1081,11 @@ rest.setContentEncoding("gzip");
         if (ex.err == "CONNECT-MESSAGE-SIZE-ERROR") {
             return True;
         }
-        # Server returned non-Connect content type in error response
-        if (ex.err == "CONNECT-HTTP-ERROR") {
-            return True;
-        }
-        # Server returned 500 with Connect content type — likely doesn't support Connect protocol
-        # and failed while trying to parse Connect-framed request data
-        if (ex.err == "DESERIALIZATION-ERROR" && ex.arg.typeCode() == NT_HASH
-                && ex.arg.status_code == 500) {
-            return True;
-        }
+        # NOTE: CONNECT-HTTP-ERROR is NOT a protocol rejection — it means the server returned a
+        # non-Connect error response (e.g. 409 with text/yaml for an invalid datasource).  The
+        # server supports Connect; the request simply failed.  Downgrading the protocol would
+        # cause subsequent requests over the same HTTP/2 connection to send raw YAML where the
+        # server expects Connect frames.
         return False;
     }
 

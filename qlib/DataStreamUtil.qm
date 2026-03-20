@@ -657,7 +657,9 @@ httpclient.sendWithRecvCallback(ds_get_recv(recv_callback), body, method, path, 
                     send_aborted = True;
                 }
 
-                return;
+                # Do NOT return here — for non-chunked HTTP/2 responses, the body data may
+                # be delivered in the same callback invocation as the headers. Fall through
+                # to check for data.
             }
             if (exists h."data") {
                 if (!h.deserialized) {
@@ -1086,7 +1088,9 @@ string dae = ds_get_ds_accept_enc_header(hdr."Accept-Encoding");
                 # Parse content encoding for compressed frames
                 *string ce = h.hdr{ConnectContentEncodingHdr} ?? h.hdr."content-encoding";
                 dce = ds_get_content_decode(ce);
-                return;
+                # Do NOT return here — for non-chunked HTTP/2 responses, the body data may
+                # be delivered in the same callback invocation as the headers. Fall through
+                # to check for data.
             }
             # Data delivery
             if (exists h."data") {

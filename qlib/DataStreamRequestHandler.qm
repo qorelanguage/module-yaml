@@ -198,12 +198,11 @@ public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRest
         @since DataStreamRequestHandler 1.0, updated in 1.2 with Connect detection
     */
     constructor(hash<auto> cx, *hash<auto> ah) : AbstractRestStreamRequestHandler(cx, ah) {
-        # DataStream v1 relies on HTTP/1.x chunked transfer encoding; HTTP/2 and HTTP/3 use
-        # binary framing and don't support the chunked-transfer trailer convention that DS v1
-        # depends on for error signaling.  Auto-upgrade to Connect on HTTP/2+.
-        connect_mode = connect_detect_protocol(cx.hdr)
-            || cx.hdr.":method"
-            || cx.hdr.":scheme";
+        # Detect Connect protocol from Content-Type or Connect-specific headers.
+        # Do NOT auto-upgrade based on HTTP/2 pseudo-headers alone — a client that downgraded
+        # from Connect to DataStream v1 (e.g. after a CONNECT-HTTP-ERROR) may send DataStream v1
+        # over HTTP/2, and the server must honor the actual Content-Type.
+        connect_mode = connect_detect_protocol(cx.hdr);
         @debug(printf("AbstractDataStreamRequestHandler::constructor() encoding=%y connect_mode=%y\n",
             cx.encoding, connect_mode));
         if (connect_mode) {
@@ -341,11 +340,47 @@ public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRest
     }
 
     #! calls the receive callback as returned by the @ref datastreamutilintro "DataStreamUtil" module
-    /** The receive callback calls @ref recvDataImpl() to deliver deserialized data
+    /** The receive callback calls @ref recvDataImpl() to deliver deserialized data.
+
+        When the data is already deserialized (e.g. non-chunked body passed through the REST
+        framework), it is delivered directly to recvDataImpl() bypassing the protocol parser
+        (connect_get_recv / ds_get_recv) which only handles binary/string wire format data.
+
+        @since updated in DataStreamRequestHandler 1.3 to handle pre-deserialized bodies
     */
     nothing recvImpl(hash v) {
         @debug(printf("AbstractDataStreamRequestHandler::recvImpl() data_size=%d\n", v.data.size()));
-        recv_callback(v);
+        if (v.deserialized && exists v.data) {
+            # Pre-deserialized body from the REST framework (non-chunked request).
+            # The data may be truly deserialized (hash/list from REST validator), raw YAML
+            # string, or Connect-framed binary from cx."stream-body". Deserialize as needed.
+            auto data = v.data;
+            if (connect_mode && data.typeCode() == NT_BINARY && data.size() >= 5) {
+                # Connect-framed binary: parse ALL frames and deliver each record
+                binary buf = data;
+                while (buf.size() >= 5) {
+                    int frame_size = DataStreamUtil::connect_next_frame_size(buf);
+                    if (frame_size < 0) {
+                        break;
+                    }
+                    hash<auto> frame = DataStreamUtil::connect_unframe_message(buf);
+                    if (frame.flags & DataStreamUtil::CONNECT_FLAG_END_STREAM) {
+                        break;
+                    }
+                    auto parsed = parse_yaml(binary_to_string(frame.data, "utf-8"));
+                    recvDataImpl(parsed);
+                    buf = buf.size() > frame_size ? buf.substr(frame_size) : binary();
+                }
+            } else if (data.typeCode() == NT_BINARY || data.typeCode() == NT_STRING) {
+                string yaml_str = data.typeCode() == NT_BINARY
+                    ? binary_to_string(data, "utf-8") : data;
+                recvDataImpl(parse_yaml(yaml_str));
+            } else {
+                recvDataImpl(data);
+            }
+        } else {
+            recv_callback(v);
+        }
     }
 
     #! calls the send callback as returned by the @ref datastreamutilintro "DataStreamUtil" module
