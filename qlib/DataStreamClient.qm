@@ -462,6 +462,11 @@ rest.recvDataStream(recvcallback, endcallback, "GET", "/orders/1", body);
             method, path, protocol_mode));
         bool use_connect = (getEffectiveProtocol() == DataStreamProtocol::Connect);
 
+        # Save originals for retry with DataStream v1 if Connect is rejected
+        auto save_body = body;
+        *hash<auto> save_hdr = hdr;
+        string save_path = path;
+
         if (use_connect) {
             # Serialize body and set base headers via RestClient, then add Connect headers
             RestClient::prepareMsg(method, path, \body, \hdr);
@@ -491,6 +496,15 @@ rest.recvDataStream(recvcallback, endcallback, "GET", "/orders/1", body);
             if (use_connect && protocol_mode == DataStreamProtocol::Auto && isConnectRejection(ex)) {
                 # Cache DS v1 so future requests don't attempt Connect
                 cached_protocol = DataStreamProtocol::DataStream;
+                # Retry with DataStream v1 using saved originals
+                body = save_body;
+                hdr = save_hdr;
+                path = save_path;
+                prepareMsg(method, path, \body, \hdr);
+                preparePath(\path);
+                recv_cb = ds_get_recv(recv_callback, eod_callback);
+                sendWithRecvCallback(recv_cb, body, method, path, hdr, timeout_ms, False, \info);
+                return;
             }
             rethrow;
         }
@@ -581,6 +595,11 @@ hash<auto> h = rest.sendDataStream(callback, "POST", "/path");
         @debug(printf("DataStreamClient::sendDataStream() method=%y path=%y protocol=%y\n",
             method, path, protocol_mode));
         bool use_connect = (getEffectiveProtocol() == DataStreamProtocol::Connect);
+
+        # Save originals for retry with DataStream v1 if Connect is rejected
+        *hash<auto> save_hdr = hdr;
+        string save_path = path;
+
         hdr = headers + hdr;
 
         if (use_connect) {
@@ -652,8 +671,32 @@ hash<auto> h = rest.sendDataStream(callback, "POST", "/path");
             if (use_connect && protocol_mode == DataStreamProtocol::Auto && isConnectRejection(ex)) {
                 # Cache DS v1 so future requests don't attempt Connect
                 cached_protocol = DataStreamProtocol::DataStream;
+                # Retry with DataStream v1 using saved originals
+                hdr = headers + save_hdr;
+                path = save_path;
+                ds_set_chunked_headers(\hdr, seh.ce, True);
+                preparePath(\path);
+                rmd = NOTHING;
+                chunked = False;
+                rhdr = {};
+                send_aborted = False;
+                dsrecv_callback = ds_get_recv(recv_data_callback, eod_callback);
+                recv_callback = sub (hash<auto> h) {
+                    if (h.hdr) {
+                        rhdr = h.hdr;
+                        if (h.hdr."transfer-encoding" == "chunked") {
+                            chunked = True;
+                        } else if (h.send_aborted) {
+                            send_aborted = True;
+                        }
+                    }
+                    dsrecv_callback(h);
+                };
+                send_cb = ds_get_send(scb, seh.func);
+                sendWithCallbacks(send_cb, recv_callback, method, path, hdr, timeout_ms, False, \info);
+            } else {
+                rethrow;
             }
-            rethrow;
         }
 
         # cache protocol on success in Auto mode
@@ -776,6 +819,11 @@ rest.sendRecvDataStream(send_callback, reccallback, "POST", "/path");
         @debug(printf("DataStreamClient::sendRecvDataStream() method=%y path=%y protocol=%y\n",
             method, path, protocol_mode));
         bool use_connect = (getEffectiveProtocol() == DataStreamProtocol::Connect);
+
+        # Save originals for retry with DataStream v1 if Connect is rejected
+        *hash<auto> save_hdr = hdr;
+        string save_path = path;
+
         hdr = headers + hdr;
 
         if (use_connect) {
@@ -801,6 +849,15 @@ rest.sendRecvDataStream(send_callback, reccallback, "POST", "/path");
             if (use_connect && protocol_mode == DataStreamProtocol::Auto && isConnectRejection(ex)) {
                 # Cache DS v1 so future requests don't attempt Connect
                 cached_protocol = DataStreamProtocol::DataStream;
+                # Retry with DataStream v1 using saved originals
+                hdr = headers + save_hdr;
+                path = save_path;
+                ds_set_chunked_headers(\hdr, seh.ce, True);
+                preparePath(\path);
+                send_cb = ds_get_send(scb, seh.func);
+                recv_cb = ds_get_recv(recv_callback, eod_callback);
+                sendWithCallbacks(send_cb, recv_cb, method, path, hdr, timeout_ms, False, \info);
+                return;
             }
             rethrow;
         }
@@ -991,9 +1048,13 @@ rest.setContentEncoding("gzip");
         if (cached_protocol) {
             return cached_protocol;
         }
-        # Default to Connect — Connect framing is self-describing (5-byte length prefix)
-        # and works correctly over both HTTP/1.1 and HTTP/2
-        return DataStreamProtocol::Connect;
+        # In auto mode, only use Connect if the connection is HTTP/2 or HTTP/3;
+        # Connect framing over HTTP/1.1 chunked encoding has compatibility issues
+        # with servers that don't fully support it
+        if (isHttp2()) {
+            return DataStreamProtocol::Connect;
+        }
+        return DataStreamProtocol::DataStream;
     }
 
     #! Check if an exception indicates the server rejected or doesn't support Connect
@@ -1004,15 +1065,19 @@ rest.setContentEncoding("gzip");
         @since DataStreamClient 1.5
     */
     private static bool isConnectRejection(hash<ExceptionInfo> ex) {
-        # HTTP 415/406 — server explicitly rejected Connect content type
+        # HTTP 415/406/501 — server explicitly rejected Connect content type or doesn't support it
         if (ex.arg.typeCode() == NT_HASH) {
             *int status = ex.arg.status_code;
-            if (status == 415 || status == 406) {
+            if (status == 415 || status == 406 || status == 501) {
                 return True;
             }
         }
         # Connect frame parse errors — server responded with non-Connect body
         if (ex.err == "CONNECT-FRAMING-ERROR") {
+            return True;
+        }
+        # Server returned non-Connect content type in error response
+        if (ex.err == "CONNECT-HTTP-ERROR") {
             return True;
         }
         return False;
