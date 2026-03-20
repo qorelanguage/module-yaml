@@ -300,7 +300,8 @@ public namespace YamlRpcHandler {
                 }
 
                 try {
-                    yamlrpc = parse_yaml(body);
+                    yamlrpc = parse_yaml(body.typeCode() == NT_BINARY
+                        ? body.toString("utf-8") : body);
                 } catch (hash<ExceptionInfo> ex) {
                     string estr = sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc);
                     return {

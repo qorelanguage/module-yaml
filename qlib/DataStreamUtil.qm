@@ -709,7 +709,12 @@ httpclient.sendWithRecvCallback(ds_get_recv(recv_callback), body, method, path, 
                         body_callback(h."data", ddc."code");
                     }
                     if (datastream || (!chunked && !extern_decode)) {
-                        h."data" = ddc.in(h."data");
+                        # convert binary to string for deserialization (HTTP/2+ returns binary bodies)
+                        auto data = h."data";
+                        if (data.typeCode() == NT_BINARY) {
+                            data = data.toString("utf-8");
+                        }
+                        h."data" = ddc.in(data);
                     }
                 }
 

@@ -307,6 +307,10 @@ public class YamlRpcClient inherits Qore::HTTPClient {
         info.response_headers = send(msg, "POST", path, headers, False, \info);
 
         info.response = remove info.response_headers.body;
+        # convert binary to string for HTTP/2+ responses
+        if (info.response.typeCode() == NT_BINARY) {
+            info.response = info.response.toString("utf-8");
+        }
         trim info.response;
 
         # parse the response and return a qore data structure

@@ -943,8 +943,9 @@ hash<auto> h = rest.sendRawStream(sender, "POST", uri_path, 20s);
         if (!hdr.Accept)
             hdr.Accept = MimeTypeYaml;
         hash<auto> h = sendWithSendCallback(scb, method, path, hdr, timeout_ms, False, \info);
-        if ((h."content-type" == MimeTypeYaml || h."content-type" == MimeTypeYamlApp) && h.body)
-            h.body = parse_yaml(h.body);
+        if ((h."content-type" == MimeTypeYaml || h."content-type" == MimeTypeYamlApp) && h.body) {
+            h.body = parse_yaml(h.body.typeCode() == NT_BINARY ? h.body.toString("utf-8") : h.body);
+        }
         return h;
     }
 
