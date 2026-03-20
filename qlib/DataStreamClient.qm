@@ -1130,8 +1130,18 @@ rest.setContentEncoding("gzip");
             rrs += b;
             rs = code;
         };
-        # get DataStream receive callback using our local data callback closure
-        code dsrecv_callback = ds_get_recv(recv_data_callback, eod_callback, body_callback, True);
+        # Create both DataStream v1 and Connect receive callbacks; the adaptive wrapper below
+        # delegates to the correct one based on the server's actual response Content-Type.
+        # This is needed because the server auto-upgrades to Connect on HTTP/2 (DataStream v1's
+        # chunked-transfer trailers are not supported in HTTP/2 binary framing), so even when
+        # the client sends DataStream v1 headers, the server may return Connect-framed responses.
+        code ds_callback = ds_get_recv(recv_data_callback, eod_callback, body_callback, True);
+        code connect_callback = connect_get_recv(recv_data_callback, eod_callback, body_callback,
+            True, m_max_message_size);
+        # flag to track whether protocol has been selected from response headers
+        bool protocol_selected = False;
+        # flag to track whether to use Connect for response parsing
+        bool use_connect_recv = False;
         # save response header
         hash<auto> rhdr;
         # send aborted flag
@@ -1145,9 +1155,21 @@ rest.setContentEncoding("gzip");
                 } else if (h.send_aborted) {
                     send_aborted = True;
                 }
+                # Detect Connect protocol from response Content-Type on first header callback
+                if (!protocol_selected) {
+                    protocol_selected = True;
+                    *string ct = h.hdr."content-type";
+                    if (ct && ct =~ /^application\/connect\+/) {
+                        use_connect_recv = True;
+                    }
+                }
             }
-            # call DataStream callback
-            dsrecv_callback(h);
+            # Delegate to the appropriate protocol callback
+            if (use_connect_recv) {
+                connect_callback(h);
+            } else {
+                ds_callback(h);
+            }
         };
 
         # issue #3237: make sure to send the response-code key in all cases
@@ -1194,7 +1216,8 @@ rest.setContentEncoding("gzip");
         }
 
         hash<auto> rv = rhdr + {"body": rmd};
-        bool datastream = chunked && rhdr.hasKey(DataStreamContentType.lwr());
+        # Skip processRestResponse() if data was already deserialized by DataStream or Connect
+        bool datastream = use_connect_recv || (chunked && rhdr.hasKey(DataStreamContentType.lwr()));
         if (!datastream) {
             rv = processRestResponse(rv, m, path, \info);
         }
