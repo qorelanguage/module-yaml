@@ -30,14 +30,15 @@ public namespace Connect;
 public namespace Connect {
 
 #! Protobuf codec implementation for the Connect protocol
-/** Wraps \c ProtobufSchema from the \c grpc binary module for protobuf
+/** Wraps \c ProtobufSchema from the \c protobuf built-in module for protobuf
     serialization/deserialization.
 
     Content-Types:
     - Unary: \c application/proto
     - Streaming: \c application/connect+proto
 
-    This codec is only available when the \c grpc binary module is installed.
+    This codec is only available when the \c grpc binary module is installed
+    (provides gRPC protocol support on top of the \c protobuf module).
 */
 public class ProtobufConnectCodec inherits AbstractConnectCodec {
     private {

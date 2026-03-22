@@ -40,6 +40,8 @@
 %define NoCbor
 %endtry
 
+%requires protobuf
+
 %try-module grpc
 %define NoGrpc
 %endtry
