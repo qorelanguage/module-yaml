@@ -169,7 +169,6 @@ l50Xb2GWQesIt9k5jF5IOw==
         m_http = new HttpServer(<HttpServerOptionInfo>{
             "logger": m_logger,
             "debug": True,
-            "async_mode": True,
             "quic_headers_only": True,
         });
 
