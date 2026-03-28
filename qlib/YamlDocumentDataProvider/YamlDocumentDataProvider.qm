@@ -26,13 +26,117 @@
 %modern
 
 module YamlDocumentDataProvider {
-    version = "1.0";
+    version = "1.1";
     desc = "User module providing YAML document stream data providers";
     author = "Qore Technologies, s.r.o.";
     url = "https://qore.org";
     license = "MIT";
     init = sub () {
+        # register the data provider factories
         DataProvider::registerFactory(new YamlDocumentDataProviderFactory());
+        DataProvider::registerFactory(new YamlDocumentWriteDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": YamlDocumentDataProvider::AppName,
+            "display_name": "YAML Document Files",
+            "short_desc": "Read and write YAML document streams",
+            "desc": "Read and write YAML document streams",
+            "logo": YamlDocumentWhiteLogo,
+            "logo_file_name": "generic-yaml-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::DataTransformation,),
+        });
+
+        # register all supported actions
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": YamlDocumentDataProvider::AppName,
+            "path": "/",
+            "action": "read",
+            "subtype": "yamldocread",
+            "display_name": "Read YAML Document File",
+            "short_desc": "Read YAML document data from a specific file location",
+            "desc": "Read YAML document data from a specific file location",
+            "action_code": DPAT_FIND,
+            "cls": "YamlDocumentDataProvider::YamlDocumentReadDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                YamlDocumentReadDataProvider::ConstructorOptions{"path",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                YamlDocumentReadDataProvider::ConstructorOptions - ("path", "data", "stream"), {
+                    "loc": "constructor",
+                }
+            ),
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": YamlDocumentDataProvider::AppName,
+            "path": "/",
+            "action": "read-data",
+            "subtype": "yamldocread",
+            "display_name": "Read YAML Inline Data",
+            "short_desc": "Read YAML inline data",
+            "desc": "Read YAML inline data",
+            "action_code": DPAT_FIND,
+            "cls": "YamlDocumentDataProvider::YamlDocumentReadDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                YamlDocumentReadDataProvider::ConstructorOptions{"data",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                YamlDocumentReadDataProvider::ConstructorOptions - ("path", "data", "stream"), {
+                    "loc": "constructor",
+                }
+            ),
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": YamlDocumentDataProvider::AppName,
+            "path": "/",
+            "action": "write",
+            "subtype": "yamldocwrite",
+            "display_name": "Write YAML Document File",
+            "short_desc": "Write YAML document data to a specific file location",
+            "desc": "Write YAML document data to a specific file location",
+            "action_code": DPAT_CREATE,
+            "cls": "YamlDocumentDataProvider::YamlDocumentWriteDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                YamlDocumentWriteDataProvider::ConstructorOptions{"path",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                YamlDocumentWriteDataProvider::ConstructorOptions - ("path", "stream"), {
+                    "loc": "constructor",
+                }
+            ),
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": YamlDocumentDataProvider::AppName,
+            "path": "/",
+            "action": "write-data",
+            "subtype": "yamldocwrite",
+            "display_name": "Write YAML Inline Data",
+            "short_desc": "Write YAML data to a stream",
+            "desc": "Write YAML data to a stream",
+            "action_code": DPAT_CREATE,
+            "cls": "YamlDocumentDataProvider::YamlDocumentWriteDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                YamlDocumentWriteDataProvider::ConstructorOptions{"stream",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                YamlDocumentWriteDataProvider::ConstructorOptions - ("path", "stream"), {
+                    "loc": "constructor",
+                }
+            ),
+        });
     };
 }
 
@@ -63,11 +167,24 @@ while (iter.next()) {
 @section yamldocclasses Classes
 
 - @ref YamlDocumentDataProvider::YamlDocumentReadDataProvider "YamlDocumentReadDataProvider"
+- @ref YamlDocumentDataProvider::YamlDocumentWriteDataProvider "YamlDocumentWriteDataProvider"
 - @ref YamlDocumentDataProvider::YamlDocumentDataProviderFactory "YamlDocumentDataProviderFactory"
+- @ref YamlDocumentDataProvider::YamlDocumentWriteDataProviderFactory "YamlDocumentWriteDataProviderFactory"
 
 */
 
 public namespace YamlDocumentDataProvider {
+    #! Application name for DataProviderActionCatalog registration
+    public const AppName = "YamlDocument";
+
     #! Default encoding
     public const DefaultEncoding = "UTF-8";
+}
+
+namespace Priv {
+const YamlDocumentWhiteLogo = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>
+<svg width=\"200\" height=\"200\" viewBox=\"0 0 200 200\" xmlns=\"http://www.w3.org/2000/svg\">
+    <rect width=\"200\" height=\"200\" rx=\"20\" fill=\"#cb171e\"/>
+    <text x=\"100\" y=\"125\" font-family=\"Arial, sans-serif\" font-size=\"60\" font-weight=\"bold\" fill=\"white\" text-anchor=\"middle\">YAML</text>
+</svg>";
 }

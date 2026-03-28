@@ -40,6 +40,19 @@ class YamlDocumentDataProviderTest inherits QUnit::Test {
         # Factory tests
         addTestCase("factory create", \testFactoryCreate());
         addTestCase("factory info", \testFactoryInfo());
+
+        # Write provider tests
+        addTestCase("write to buffer", \testWriteToBuffer());
+        addTestCase("write to file", \testWriteToFile());
+        addTestCase("write to stream", \testWriteToStream());
+        addTestCase("write flow style", \testWriteFlowStyle());
+        addTestCase("write provider info", \testWriteProviderInfo());
+        addTestCase("write multiple documents", \testWriteMultipleDocuments());
+        addTestCase("write then read roundtrip", \testWriteThenReadRoundtrip());
+        addTestCase("write empty options", \testWriteEmptyOptions());
+        addTestCase("write unicode content", \testWriteUnicodeContent());
+        addTestCase("write factory create", \testWriteFactoryCreate());
+        addTestCase("write factory info", \testWriteFactoryInfo());
         set_return_value(main());
     }
 
@@ -326,6 +339,201 @@ scalar value";
 
         hash<DataProviderFactoryInfo> info = factory.getInfo();
         assertEq("yamldoc", info.name);
+        assertTrue(exists info.desc);
+    }
+
+    # Write provider tests
+
+    testWriteToBuffer() {
+        YamlDocumentWriteDataProvider provider({});
+
+        provider.createRecord({"name": "Alice", "age": 30});
+        provider.createRecord({"name": "Bob", "age": 25});
+
+        binary data = provider.getData();
+        string yaml_str = binary_to_string(data);
+
+        # verify document separators are present
+        assertTrue(yaml_str.find("---") >= 0);
+        assertTrue(yaml_str.find("Alice") >= 0);
+        assertTrue(yaml_str.find("Bob") >= 0);
+
+        # verify roundtrip: read back the written YAML
+        YamlDocumentReadDataProvider reader({"data": yaml_str});
+        list<auto> records = ();
+        auto iter = reader.searchRecords();
+        while (iter.next()) {
+            push records, iter.getValue();
+        }
+        assertEq(2, records.size());
+        assertEq("Alice", records[0].name);
+        assertEq(30, records[0].age);
+        assertEq("Bob", records[1].name);
+        assertEq(25, records[1].age);
+    }
+
+    testWriteToFile() {
+        string path = tmp_location() + "/test_yaml_write.yaml";
+        on_exit unlink(path);
+
+        YamlDocumentWriteDataProvider provider({"path": path});
+        provider.createRecord({"item": 1, "value": "first"});
+        provider.createRecord({"item": 2, "value": "second"});
+        provider.commit();
+
+        # verify file exists and can be read back
+        YamlDocumentReadDataProvider reader({"path": path});
+        list<auto> records = ();
+        auto iter = reader.searchRecords();
+        while (iter.next()) {
+            push records, iter.getValue();
+        }
+        assertEq(2, records.size());
+        assertEq(1, records[0].item);
+        assertEq("first", records[0].value);
+        assertEq(2, records[1].item);
+        assertEq("second", records[1].value);
+    }
+
+    testWriteToStream() {
+        StringOutputStream sos();
+
+        YamlDocumentWriteDataProvider provider({"stream": sos});
+        provider.createRecord({"key": "value1"});
+        provider.createRecord({"key": "value2"});
+        provider.commit();
+
+        string yaml_str = sos.getData();
+        assertTrue(yaml_str.find("value1") >= 0);
+        assertTrue(yaml_str.find("value2") >= 0);
+
+        # verify roundtrip
+        YamlDocumentReadDataProvider reader({"data": yaml_str});
+        list<auto> records = ();
+        auto iter = reader.searchRecords();
+        while (iter.next()) {
+            push records, iter.getValue();
+        }
+        assertEq(2, records.size());
+        assertEq("value1", records[0].key);
+        assertEq("value2", records[1].key);
+    }
+
+    testWriteFlowStyle() {
+        YamlDocumentWriteDataProvider provider({"flow_style": True});
+        provider.createRecord({"name": "Alice"});
+
+        binary data = provider.getData();
+        string yaml_str = binary_to_string(data);
+        assertTrue(yaml_str.find("---") >= 0);
+        assertTrue(yaml_str.find("Alice") >= 0);
+    }
+
+    testWriteProviderInfo() {
+        YamlDocumentWriteDataProvider provider({});
+
+        hash<DataProviderInfo> info = provider.getInfo();
+        assertEq("yamlwrite", info.name);
+        assertFalse(info.supports_read);
+        assertTrue(info.supports_create);
+        assertFalse(info.supports_update);
+        assertFalse(info.supports_delete);
+        assertTrue(info.has_record);
+    }
+
+    testWriteMultipleDocuments() {
+        YamlDocumentWriteDataProvider provider({});
+
+        for (int i = 0; i < 50; i++) {
+            provider.createRecord({"index": i, "data": sprintf("item_%d", i)});
+        }
+
+        binary data = provider.getData();
+        string yaml_str = binary_to_string(data);
+
+        # verify roundtrip
+        YamlDocumentReadDataProvider reader({"data": yaml_str});
+        int count = 0;
+        auto iter = reader.searchRecords();
+        while (iter.next()) {
+            assertEq(count, iter.getValue()."index");
+            count++;
+        }
+        assertEq(50, count);
+    }
+
+    testWriteThenReadRoundtrip() {
+        # Write complex documents and read them back
+        hash<auto> doc1 = {
+            "users": (
+                {"name": "Alice", "age": 30},
+                {"name": "Bob", "age": 25},
+            ),
+            "config": {"timeout": 30, "retries": 3},
+        };
+        hash<auto> doc2 = {
+            "name": "Project X",
+            "version": "1.0",
+            "tags": ("alpha", "beta"),
+        };
+
+        YamlDocumentWriteDataProvider writer({});
+        writer.createRecord(doc1);
+        writer.createRecord(doc2);
+
+        string yaml_str = binary_to_string(writer.getData());
+
+        YamlDocumentReadDataProvider reader({"data": yaml_str});
+        list<auto> records = ();
+        auto iter = reader.searchRecords();
+        while (iter.next()) {
+            push records, iter.getValue();
+        }
+        assertEq(2, records.size());
+        assertEq(2, records[0].users.size());
+        assertEq("Alice", records[0].users[0].name);
+        assertEq(30, records[0].config.timeout);
+        assertEq("Project X", records[1].name);
+        assertEq(2, records[1].tags.size());
+    }
+
+    testWriteEmptyOptions() {
+        # Should work with no path/stream (buffer-only mode)
+        YamlDocumentWriteDataProvider provider({});
+        provider.createRecord({"test": True});
+        binary data = provider.getData();
+        assertTrue(data.size() > 0);
+    }
+
+    testWriteUnicodeContent() {
+        YamlDocumentWriteDataProvider provider({});
+        provider.createRecord({"greeting": "\u4F60\u597D", "emoji": "\u00E9\u00E8"});
+
+        string yaml_str = binary_to_string(provider.getData());
+
+        YamlDocumentReadDataProvider reader({"data": yaml_str});
+        auto iter = reader.searchRecords();
+        assertTrue(iter.next());
+        assertEq("\u4F60\u597D", iter.getValue().greeting);
+    }
+
+    testWriteFactoryCreate() {
+        YamlDocumentWriteDataProviderFactory factory();
+
+        auto provider = factory.create({});
+        assertTrue(provider instanceof YamlDocumentWriteDataProvider);
+
+        provider.createRecord({"key": "value"});
+        # verify the provider was created successfully and can write
+        binary data = (cast<YamlDocumentWriteDataProvider>(provider)).getData();
+        assertTrue(data.size() > 0);
+    }
+
+    testWriteFactoryInfo() {
+        YamlDocumentWriteDataProviderFactory factory();
+
+        hash<DataProviderFactoryInfo> info = factory.getInfo();
+        assertEq("yamlwrite", info.name);
         assertTrue(exists info.desc);
     }
 }
