@@ -123,6 +123,7 @@ public class YamlDocumentReadDataProvider inherits DataProvider::AbstractDataPro
                 "desc": "When `True` (default), documents that parse to `NOTHING` are skipped. "
                         "Set to `False` to include empty documents in iteration.",
                 "default_value": True,
+                "example_value": True,
             },
             "max_documents": <DataProviderOptionInfo>{
                 "display_name": "Max Documents",
@@ -139,17 +140,24 @@ public class YamlDocumentReadDataProvider inherits DataProvider::AbstractDataPro
                 "type": AbstractDataProviderTypeMap."string",
                 "desc": "Character encoding for reading the YAML data. Default: `UTF-8`.",
                 "default_value": DefaultEncoding,
+                "example_value": "UTF-8",
                 "allowed_values": (
                     <AllowedValueInfo>{
                         "value": "UTF-8",
+                        "display_name": "UTF-8",
+                        "short_desc": "UTF-8 encoding (recommended)",
                         "desc": "UTF-8 encoding (recommended)",
                     },
                     <AllowedValueInfo>{
                         "value": "UTF-16",
+                        "display_name": "UTF-16",
+                        "short_desc": "UTF-16 encoding",
                         "desc": "UTF-16 encoding",
                     },
                     <AllowedValueInfo>{
                         "value": "ISO-8859-1",
+                        "display_name": "ISO-8859-1",
+                        "short_desc": "Latin-1 encoding",
                         "desc": "Latin-1 encoding",
                     },
                 ),

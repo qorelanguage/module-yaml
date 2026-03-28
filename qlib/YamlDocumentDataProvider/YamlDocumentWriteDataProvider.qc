@@ -112,14 +112,20 @@ public class YamlDocumentWriteDataProvider inherits DataProvider::AbstractDataPr
                 "allowed_values": (
                     <AllowedValueInfo>{
                         "value": "UTF-8",
+                        "display_name": "UTF-8",
+                        "short_desc": "UTF-8 encoding (recommended)",
                         "desc": "UTF-8 encoding (recommended)",
                     },
                     <AllowedValueInfo>{
                         "value": "UTF-16",
+                        "display_name": "UTF-16",
+                        "short_desc": "UTF-16 encoding",
                         "desc": "UTF-16 encoding",
                     },
                     <AllowedValueInfo>{
                         "value": "ISO-8859-1",
+                        "display_name": "ISO-8859-1",
+                        "short_desc": "Latin-1 encoding",
                         "desc": "Latin-1 encoding",
                     },
                 ),
@@ -131,13 +137,18 @@ public class YamlDocumentWriteDataProvider inherits DataProvider::AbstractDataPr
                 "desc": "When `True`, outputs YAML in flow (compact inline) style. "
                         "When `False` (default), outputs in block (indented) style.",
                 "default_value": False,
+                "example_value": False,
                 "allowed_values": (
                     <AllowedValueInfo>{
                         "value": True,
+                        "display_name": "Flow Style",
+                        "short_desc": "Compact inline format",
                         "desc": "Flow style: compact inline format (e.g. {key: value})",
                     },
                     <AllowedValueInfo>{
                         "value": False,
+                        "display_name": "Block Style",
+                        "short_desc": "Indented format (default)",
                         "desc": "Block style: indented format (default)",
                     },
                 ),
@@ -155,14 +166,24 @@ public class YamlDocumentWriteDataProvider inherits DataProvider::AbstractDataPr
 
     #! Creates the provider from typed options
     /** @param options provider options
+
+        @throw YAML-WRITE-OPTION-ERROR if both `path` and `stream` are provided
     */
     constructor(hash<YamlDocumentWriteDataProviderOptions> options) {
+        if (exists options.path && exists options.stream) {
+            throw "YAML-WRITE-OPTION-ERROR", "options `path` and `stream` are mutually exclusive; "
+                "provide one or the other, not both";
+        }
         opts = options;
     }
 
     #! Creates the provider from untyped options
     constructor(*hash<auto> options) {
         opts = cast<hash<YamlDocumentWriteDataProviderOptions>>(options ?? {});
+        if (exists opts.path && exists opts.stream) {
+            throw "YAML-WRITE-OPTION-ERROR", "options `path` and `stream` are mutually exclusive; "
+                "provide one or the other, not both";
+        }
     }
 
     #! Returns the provider name
@@ -203,9 +224,12 @@ public class YamlDocumentWriteDataProvider inherits DataProvider::AbstractDataPr
     commit() {
         binary data = getData();
         if (opts.path) {
-            File f();
-            f.open2(opts.path, O_CREAT | O_WRONLY | O_TRUNC, 0644);
-            f.write(data);
+            OutputStreamWrapper os = FileLocationHandler::getOutputStreamForLocation(opts.path);
+            on_exit {
+                os.close();
+                os.waitForIo();
+            }
+            os.write(data);
         } else if (opts.stream) {
             opts.stream.write(data);
         }
