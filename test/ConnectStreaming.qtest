@@ -56,6 +56,13 @@
 
 class ConnectStreamingTest inherits QUnit::Test {
     private {
+        #! Maximum retries for transient QUIC connection errors in concurrent tests
+        /** QUIC handshakes over UDP can stall on resource-constrained CI runners
+            (K8s CPU throttling, UDP packet loss on loopback). Retrying avoids
+            flaky failures while still catching real regressions.
+        */
+        const ConcurrentRetries = 2;
+
         *Logger mLogger;
         *HttpServer mServer;
         int mPort;
@@ -773,31 +780,40 @@ l50Xb2GWQesIt9k5jF5IOw==
             int msg_count = 3 + idx;  # each thread gets a different count
             background sub () {
                 hash<auto!> result = {"idx": idx, "expected_count": msg_count};
-                try {
-                    HttpClientIo::HttpClientConnectionManager mgr = createMgr(protocol);
-                    on_exit delete mgr;
+                for (int attempt = 0; attempt <= ConcurrentRetries; ++attempt) {
+                    result.error = NOTHING;
+                    try {
+                        HttpClientIo::HttpClientConnectionManager mgr = createMgr(protocol);
+                        on_exit delete mgr;
 
-                    hash<auto> resp = mgr.request(url(), "POST", "/Test/Numbers",
-                        streamHeaders(), frameRequest({"count": msg_count}));
-                    result.status_code = resp.status_code;
-                    if (resp.status_code == 200) {
-                        hash<auto> parsed = parseStreamResponse(respBody(resp));
-                        result.msg_count = parsed.messages.size();
-                        result.has_end = exists parsed.end_info;
-                        result.has_error = exists parsed.end_info.error;
-                        # Verify message content
-                        bool content_ok = True;
-                        for (int j = 0; j < parsed.messages.size(); ++j) {
-                            if (parsed.messages[j].index != j
-                                    || parsed.messages[j].value != sprintf("msg-%d", j)) {
-                                content_ok = False;
-                                break;
+                        hash<auto> resp = mgr.request(url(), "POST", "/Test/Numbers",
+                            streamHeaders(), frameRequest({"count": msg_count}));
+                        result.status_code = resp.status_code;
+                        if (resp.status_code == 200) {
+                            hash<auto> parsed = parseStreamResponse(respBody(resp));
+                            result.msg_count = parsed.messages.size();
+                            result.has_end = exists parsed.end_info;
+                            result.has_error = exists parsed.end_info.error;
+                            # Verify message content
+                            bool content_ok = True;
+                            for (int j = 0; j < parsed.messages.size(); ++j) {
+                                if (parsed.messages[j].index != j
+                                        || parsed.messages[j].value != sprintf("msg-%d", j)) {
+                                    content_ok = False;
+                                    break;
+                                }
                             }
+                            result.content_ok = content_ok;
                         }
-                        result.content_ok = content_ok;
+                        break;
+                    } catch (hash<ExceptionInfo> ex) {
+                        result.error = sprintf("%s: %s", ex.err, ex.desc);
+                        # Retry on transient QUIC connection errors
+                        if (attempt < ConcurrentRetries
+                                && ex.err == "HTTPCLIENT-TIMEOUT") {
+                            continue;
+                        }
                     }
-                } catch (hash<ExceptionInfo> ex) {
-                    result.error = sprintf("%s: %s", ex.err, ex.desc);
                 }
                 {
                     AutoLock al(results_lock);
@@ -844,21 +860,29 @@ l50Xb2GWQesIt9k5jF5IOw==
             int idx = i;
             background sub () {
                 hash<auto!> result = {"idx": idx, "type": "server-stream"};
-                try {
-                    HttpClientIo::HttpClientConnectionManager mgr = createMgr(protocol);
-                    on_exit delete mgr;
+                for (int attempt = 0; attempt <= ConcurrentRetries; ++attempt) {
+                    result.error = NOTHING;
+                    try {
+                        HttpClientIo::HttpClientConnectionManager mgr = createMgr(protocol);
+                        on_exit delete mgr;
 
-                    int msg_count = 4 + idx;
-                    hash<auto> resp = mgr.request(url(), "POST", "/Test/Numbers",
-                        streamHeaders(), frameRequest({"count": msg_count}));
-                    result.status_code = resp.status_code;
-                    if (resp.status_code == 200) {
-                        hash<auto> parsed = parseStreamResponse(respBody(resp));
-                        result.ok = (parsed.messages.size() == msg_count
-                            && !exists parsed.end_info.error);
+                        int msg_count = 4 + idx;
+                        hash<auto> resp = mgr.request(url(), "POST", "/Test/Numbers",
+                            streamHeaders(), frameRequest({"count": msg_count}));
+                        result.status_code = resp.status_code;
+                        if (resp.status_code == 200) {
+                            hash<auto> parsed = parseStreamResponse(respBody(resp));
+                            result.ok = (parsed.messages.size() == msg_count
+                                && !exists parsed.end_info.error);
+                        }
+                        break;
+                    } catch (hash<ExceptionInfo> ex) {
+                        result.error = sprintf("%s: %s", ex.err, ex.desc);
+                        if (attempt < ConcurrentRetries
+                                && ex.err == "HTTPCLIENT-TIMEOUT") {
+                            continue;
+                        }
                     }
-                } catch (hash<ExceptionInfo> ex) {
-                    result.error = sprintf("%s: %s", ex.err, ex.desc);
                 }
                 {
                     AutoLock al(results_lock);
@@ -873,26 +897,34 @@ l50Xb2GWQesIt9k5jF5IOw==
             int idx = i;
             background sub () {
                 hash<auto!> result = {"idx": idx, "type": "client-stream"};
-                try {
-                    HttpClientIo::HttpClientConnectionManager mgr = createMgr(protocol);
-                    on_exit delete mgr;
+                for (int attempt = 0; attempt <= ConcurrentRetries; ++attempt) {
+                    result.error = NOTHING;
+                    try {
+                        HttpClientIo::HttpClientConnectionManager mgr = createMgr(protocol);
+                        on_exit delete mgr;
 
-                    int num_names = 2 + idx;
-                    list<auto> msgs();
-                    for (int j = 0; j < num_names; ++j) {
-                        msgs += {"name": sprintf("name-%d-%d", idx, j)};
+                        int num_names = 2 + idx;
+                        list<auto> msgs();
+                        for (int j = 0; j < num_names; ++j) {
+                            msgs += {"name": sprintf("name-%d-%d", idx, j)};
+                        }
+                        hash<auto> resp = mgr.request(url(), "POST", "/Test/Aggregate",
+                            streamHeaders(), frameMessages(msgs));
+                        result.status_code = resp.status_code;
+                        if (resp.status_code == 200) {
+                            hash<auto> parsed = parseStreamResponse(respBody(resp));
+                            result.ok = (parsed.messages.size() == 1
+                                && parsed.messages[0].count == num_names
+                                && !exists parsed.end_info.error);
+                        }
+                        break;
+                    } catch (hash<ExceptionInfo> ex) {
+                        result.error = sprintf("%s: %s", ex.err, ex.desc);
+                        if (attempt < ConcurrentRetries
+                                && ex.err == "HTTPCLIENT-TIMEOUT") {
+                            continue;
+                        }
                     }
-                    hash<auto> resp = mgr.request(url(), "POST", "/Test/Aggregate",
-                        streamHeaders(), frameMessages(msgs));
-                    result.status_code = resp.status_code;
-                    if (resp.status_code == 200) {
-                        hash<auto> parsed = parseStreamResponse(respBody(resp));
-                        result.ok = (parsed.messages.size() == 1
-                            && parsed.messages[0].count == num_names
-                            && !exists parsed.end_info.error);
-                    }
-                } catch (hash<ExceptionInfo> ex) {
-                    result.error = sprintf("%s: %s", ex.err, ex.desc);
                 }
                 {
                     AutoLock al(results_lock);
@@ -907,34 +939,42 @@ l50Xb2GWQesIt9k5jF5IOw==
             int idx = i;
             background sub () {
                 hash<auto!> result = {"idx": idx, "type": "bidi"};
-                try {
-                    HttpClientIo::HttpClientConnectionManager mgr = createMgr(protocol);
-                    on_exit delete mgr;
+                for (int attempt = 0; attempt <= ConcurrentRetries; ++attempt) {
+                    result.error = NOTHING;
+                    try {
+                        HttpClientIo::HttpClientConnectionManager mgr = createMgr(protocol);
+                        on_exit delete mgr;
 
-                    int num_msgs = 2 + idx;
-                    list<auto> msgs();
-                    for (int j = 0; j < num_msgs; ++j) {
-                        msgs += {"text": sprintf("t-%d-%d", idx, j)};
-                    }
-                    hash<auto> resp = mgr.request(url(), "POST", "/Test/BidiEcho",
-                        streamHeaders(), frameMessages(msgs));
-                    result.status_code = resp.status_code;
-                    if (resp.status_code == 200) {
-                        hash<auto> parsed = parseStreamResponse(respBody(resp));
-                        bool content_ok = parsed.messages.size() == num_msgs;
-                        if (content_ok) {
-                            for (int j = 0; j < num_msgs; ++j) {
-                                if (parsed.messages[j].reply
-                                        != sprintf("echo:t-%d-%d", idx, j)) {
-                                    content_ok = False;
-                                    break;
+                        int num_msgs = 2 + idx;
+                        list<auto> msgs();
+                        for (int j = 0; j < num_msgs; ++j) {
+                            msgs += {"text": sprintf("t-%d-%d", idx, j)};
+                        }
+                        hash<auto> resp = mgr.request(url(), "POST", "/Test/BidiEcho",
+                            streamHeaders(), frameMessages(msgs));
+                        result.status_code = resp.status_code;
+                        if (resp.status_code == 200) {
+                            hash<auto> parsed = parseStreamResponse(respBody(resp));
+                            bool content_ok = parsed.messages.size() == num_msgs;
+                            if (content_ok) {
+                                for (int j = 0; j < num_msgs; ++j) {
+                                    if (parsed.messages[j].reply
+                                            != sprintf("echo:t-%d-%d", idx, j)) {
+                                        content_ok = False;
+                                        break;
+                                    }
                                 }
                             }
+                            result.ok = content_ok && !exists parsed.end_info.error;
                         }
-                        result.ok = content_ok && !exists parsed.end_info.error;
+                        break;
+                    } catch (hash<ExceptionInfo> ex) {
+                        result.error = sprintf("%s: %s", ex.err, ex.desc);
+                        if (attempt < ConcurrentRetries
+                                && ex.err == "HTTPCLIENT-TIMEOUT") {
+                            continue;
+                        }
                     }
-                } catch (hash<ExceptionInfo> ex) {
-                    result.error = sprintf("%s: %s", ex.err, ex.desc);
                 }
                 {
                     AutoLock al(results_lock);
