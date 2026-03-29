@@ -320,27 +320,20 @@ client.sendDatagram("Telemetry", "Report", {"cpu": 42.5, "mem": 1024});
         # the I/O controller is woken, ensuring the HEADERS and DATAGRAM are
         # written in the same QUIC packet batch (avoids a race where the
         # server processes the HEADERS before the datagram is sent).
-        Counter done(1);
-        *hash<auto> async_err;
-        stream.submitAsyncWithDatagram("POST", path, headers, binary(),
-            sub (hash<auto> resp, *hash<auto> err) {
-                if (err) {
-                    async_err = err;
-                }
-                done.dec();
-            }, framed);
+        hash<auto> result = stream.submitAsyncWithDatagram("POST", path, headers,
+            binary(), framed);
 
         # Wait for the server to close the anchor stream (fire-and-forget)
         timeout wait_ms = opts.timeout_ms ?? 30s;
-        if (done.waitForZero(wait_ms)) {
-            stream.cancel();
-            throw "CONNECT-TIMEOUT",
-                sprintf("datagram fire-and-forget timed out after %d ms", wait_ms);
-        }
-        if (async_err) {
-            throw "CONNECT-DATAGRAM-ERROR",
-                sprintf("%s: %s", async_err.err ?? "unknown", async_err.desc ?? "unknown error"),
-                async_err;
+        try {
+            result.future.get(wait_ms);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "FUTURE-TIMEOUT") {
+                stream.cancel();
+                throw "CONNECT-TIMEOUT",
+                    sprintf("datagram fire-and-forget timed out after %d ms", wait_ms);
+            }
+            rethrow;
         }
     }
 
@@ -392,11 +385,8 @@ if (exists reply) {
 
         # Submit async POST to establish the anchor stream (RFC 9297).
         # The request body is empty — all payload flows as QUIC datagrams.
-        # The callback fires when the server closes the anchor stream.
-        stream.submitAsync("POST", path, headers, binary(),
-            sub (hash<auto> resp, *hash<auto> err) {
-                # Server closed the datagram channel
-            });
+        # The Future resolves when the server closes the anchor stream.
+        stream.submitAsync("POST", path, headers, binary());
 
         return new ConnectDatagramStream(stream, m_codec, m_max_message_size,
             opts.encoding);
