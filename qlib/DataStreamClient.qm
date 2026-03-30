@@ -25,7 +25,7 @@
 # minimum Qore version
 %requires qore >= 2.3
 
-%requires DataStreamUtil
+%requires(reexport) DataStreamUtil >= 1.4
 %requires RestClient >= 1.4
 %requires yaml
 %requires Mime >= 1.7
