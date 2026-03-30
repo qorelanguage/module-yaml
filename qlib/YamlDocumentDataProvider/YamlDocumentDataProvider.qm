@@ -42,7 +42,14 @@ module YamlDocumentDataProvider {
             "name": YamlDocumentDataProvider::AppName,
             "display_name": "YAML Document Files",
             "short_desc": "Read and write YAML document streams",
-            "desc": "Read and write YAML document streams",
+            "desc": "Provides read and write access to **YAML document streams** — files or "
+                "inline data containing one or more YAML documents separated by `---` markers.\n\n"
+                "Use this app when you need to:\n"
+                "- Parse multi-document YAML configuration files or data exports\n"
+                "- Transform YAML data between systems as part of an integration pipeline\n"
+                "- Generate YAML output for configuration management or data exchange\n\n"
+                "Supports configurable character encoding, empty-document filtering, and "
+                "both block (indented) and flow (compact inline) YAML output styles.",
             "logo": YamlDocumentLogo,
             "logo_file_name": "yaml-document-logo.svg",
             "logo_mime_type": MimeTypeSvg,
@@ -67,6 +74,7 @@ module YamlDocumentDataProvider {
                 "- `max_documents`: maximum number of documents to read (`0` = unlimited)\n",
             "action_code": DPAT_FIND,
             "cls": "YamlDocumentDataProvider::YamlDocumentReadDataProvider",
+            "output_type": AbstractDataProviderTypeMap."auto",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 YamlDocumentReadDataProvider::ConstructorOptions{"path",}, {
                     "preselected": True,
@@ -96,6 +104,7 @@ module YamlDocumentDataProvider {
                 "- `max_documents`: maximum number of documents to read (`0` = unlimited)\n",
             "action_code": DPAT_FIND,
             "cls": "YamlDocumentDataProvider::YamlDocumentReadDataProvider",
+            "output_type": AbstractDataProviderTypeMap."auto",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 YamlDocumentReadDataProvider::ConstructorOptions{"data",}, {
                     "preselected": True,
@@ -124,6 +133,7 @@ module YamlDocumentDataProvider {
                 "- `encoding`: character encoding (default: `UTF-8`)\n",
             "action_code": DPAT_CREATE,
             "cls": "YamlDocumentDataProvider::YamlDocumentWriteDataProvider",
+            "output_type": AbstractDataProviderTypeMap."auto",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 YamlDocumentWriteDataProvider::ConstructorOptions{"path",}, {
                     "preselected": True,
@@ -153,6 +163,7 @@ module YamlDocumentDataProvider {
                 "- `encoding`: character encoding (default: `UTF-8`)\n",
             "action_code": DPAT_CREATE,
             "cls": "YamlDocumentDataProvider::YamlDocumentWriteDataProvider",
+            "output_type": AbstractDataProviderTypeMap."auto",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 YamlDocumentWriteDataProvider::ConstructorOptions{"stream",}, {
                     "preselected": True,

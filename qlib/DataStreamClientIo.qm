@@ -1,0 +1,1207 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# @file DataStreamClientIo.qm Qore user module implementing DataStream client support over multiplexed HTTP/1.1, HTTP/2, and HTTP/3
+
+/*  DataStreamClientIo.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum Qore version
+%requires qore >= 2.3
+
+%requires DataStreamUtil >= 1.4
+%requires RestClientIo >= 1.0
+%requires RestClient >= 1.4
+%requires ConnectionProvider
+%requires yaml
+%requires json
+%requires Mime >= 1.7
+
+%modern
+
+module DataStreamClientIo {
+    version = "1.0";
+    desc = "user module implementing client support for the DataStream protocol over multiplexed "
+        "HTTP/1.1, HTTP/2, and HTTP/3 via RestClientIo";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("dsio", DataStreamConnectionIo::ConnectionScheme);
+        ConnectionSchemeCache::registerScheme("dsios", DataStreamConnectionIo::ConnectionScheme);
+    };
+}
+
+/** @mainpage DataStreamClientIo Module
+
+    @tableofcontents
+
+    @section datastreamclientiointro Introduction to the DataStreamClientIo Module
+
+    The %DataStreamClientIo module provides client support for the @ref datastreamprotocol "DataStream protocol"
+    over multiplexed HTTP/1.1, HTTP/2, and HTTP/3 connections via the
+    @ref RestClientIo::RestClientIo "RestClientIo" base class.
+
+    Unlike @ref DataStreamClient::DataStreamClient "DataStreamClient" which uses synchronous HTTP/1.1 connections,
+    %DataStreamClientIo uses @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager" for
+    multiplexed connections — multiple concurrent requests share connections without serialization.
+
+    To use this module, use \c "%requires DataStreamClientIo" in your code.
+
+    @par Example
+    @code{.py}
+%requires DataStreamClientIo
+
+DataStreamClientIo ds({"url": "https://localhost:8001/rest"});
+ds.recvDataStream(
+    sub (auto data) { printf("data: %y\n", data); },
+    sub (*string err) { if (err) printf("error: %s\n", err); },
+    "GET", "/stream");
+    @endcode
+
+    @section datastreamclientiorelnotes Release Notes
+
+    @subsection datastreamclientiov1_0 DataStreamClientIo v1.0
+    - initial release of the module
+*/
+
+#! the DataStreamClient namespace contains all the public objects in the DataStreamClientIo module
+public namespace DataStreamClient {
+
+#! strips DataStream-specific options before passing to RestClientIo
+hash<auto> sub dsio_strip_opts(*hash<auto> opts) {
+    return ds_process_opts(opts) - ("protocol", "max_message_size");
+}
+
+#! Extends @ref RestClientIo::RestClientIo "RestClientIo" with support for the @ref datastreamprotocol "DataStream protocol"
+/** Provides the same DataStream streaming methods as @ref DataStreamClient::DataStreamClient "DataStreamClient"
+    but built on the multiplexed async I/O infrastructure of @ref RestClientIo::RestClientIo "RestClientIo".
+
+    @since DataStreamClientIo 1.0
+*/
+public class DataStreamClientIo inherits RestClientIo::RestClientIo {
+    public {
+        #! DataStreamClientIo Version
+        const Version = "1.0";
+
+        #! DataStreamClientIo Version String
+        const VersionString = sprintf("Qore-DataStreamClientIo/%s", DataStreamClientIo::Version);
+
+        #! default HTTP headers
+        const DefaultHeaders = {
+            "User-Agent": DataStreamClientIo::VersionString,
+            DataStreamAccept: MimeTypeYaml,
+        };
+    }
+
+    private {
+        #! Protocol preference
+        DataStreamProtocol protocol_mode = DataStreamProtocol::Auto;
+
+        #! Cached detected protocol from auto-negotiation
+        *DataStreamProtocol cached_protocol;
+
+        #! Maximum message size for Connect mode in bytes (0 = no limit)
+        int m_max_message_size = CONNECT_DEFAULT_MAX_MESSAGE_SIZE;
+    }
+
+    #! creates the DataStreamClientIo object
+    /** @param opts valid options are all options supported by
+        @ref RestClientIo::RestClientIo::constructor() "RestClientIo::constructor()" plus:
+        - \c protocol: the protocol mode (\c "auto", \c "connect", or \c "datastream"); default: \c "auto"
+        - \c max_message_size: the maximum message size for Connect mode in bytes (0 = no limit)
+        @param shared_mgr an optional shared HttpClientConnectionManager
+
+        @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
+
+        @note the \c data argument is set to \c "yaml" automatically
+    */
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(dsio_strip_opts(opts) + {"data": "yaml"}, shared_mgr) {
+        hash<auto> local_opts = ds_process_opts(opts);
+
+        # build default DataStream-Accept-Encoding header from Accept-Encoding header if present
+        hash<auto> dh = DefaultHeaders;
+        hash<auto> cur_headers = getDefaultHeaders();
+        if (cur_headers."accept-encoding") {
+            *string dae = ds_get_ds_accept_enc_header(cur_headers."accept-encoding");
+            if (dae) {
+                dh{DataStreamAcceptEncoding} = dae;
+            }
+        } else {
+            dh{DataStreamAcceptEncoding} = "gzip,bzip2,deflate";
+        }
+        addDefaultHeaders(dh);
+        if (local_opts.headers) {
+            addDefaultHeaders(local_opts.headers);
+        }
+
+        # Set protocol preference from options
+        if (opts.protocol) {
+            setProtocol(cast<enum<DataStreamProtocol>>(opts.protocol));
+        }
+        # Set max message size for Connect mode
+        if (exists opts.max_message_size) {
+            m_max_message_size = opts.max_message_size;
+        }
+    }
+
+    #! Set the protocol preference
+    /** @param proto the protocol mode; see @ref DataStreamProtocol for valid values
+
+        @since DataStreamClientIo 1.0
+    */
+    setProtocol(DataStreamProtocol proto) {
+        AutoWriteLock al(config_lock);
+        protocol_mode = proto;
+    }
+
+    #! Get the protocol preference
+    /** @return the current protocol mode; see @ref DataStreamProtocol
+
+        @since DataStreamClientIo 1.0
+    */
+    DataStreamProtocol getProtocol() {
+        AutoReadLock al(config_lock);
+        return protocol_mode;
+    }
+
+    #! Get the detected/cached protocol from auto-negotiation
+    /** @return the detected protocol, or NOTHING if not yet detected
+
+        @since DataStreamClientIo 1.0
+    */
+    *DataStreamProtocol getDetectedProtocol() {
+        AutoReadLock al(config_lock);
+        return cached_protocol;
+    }
+
+    #! Reset the protocol cache to force re-negotiation
+    /** @since DataStreamClientIo 1.0
+    */
+    resetProtocolCache() {
+        AutoWriteLock al(config_lock);
+        cached_protocol = NOTHING;
+    }
+
+    #! Set the maximum message size for Connect mode
+    /** @param size maximum message size in bytes; 0 means no limit
+
+        @since DataStreamClientIo 1.0
+    */
+    setMaxMessageSize(int size) {
+        AutoWriteLock al(config_lock);
+        m_max_message_size = size;
+    }
+
+    #! Get the maximum message size for Connect mode
+    /** @return the maximum message size in bytes; 0 means no limit
+
+        @since DataStreamClientIo 1.0
+    */
+    int getMaxMessageSize() {
+        AutoReadLock al(config_lock);
+        return m_max_message_size;
+    }
+
+    #! adds default headers to each request
+    /** @param h a hash of headers to add to the default headers to send on each request
+    */
+    addDefaultHeaders(hash<auto> h) {
+        RestClientIo::addDefaultHeaders(h);
+        if (h."Accept-Encoding" || h."accept-encoding") {
+            *string ae = h."Accept-Encoding" ?? h."accept-encoding";
+            *string dae = ds_get_ds_accept_enc_header(ae);
+            if (dae) {
+                RestClientIo::addDefaultHeaders({DataStreamAcceptEncoding: dae});
+            }
+        }
+    }
+
+    #! sets the request and desired response encoding for the object
+    /** @param enc the data content encoding (compression) option; see @ref EncodingSupport for valid
+        options; if \c "auto" is passed then \c "gzip" encoding is used
+
+        @throw RESTCLIENT-ERROR invalid or unsupported data content encoding option
+    */
+    setContentEncoding(string enc = "auto") {
+        RestClientIo::setContentEncoding(enc);
+        *string se = getSendEncoding();
+        RestClientIo::addDefaultHeaders({DataStreamAcceptEncoding: se ?? "identity"});
+    }
+
+    #! Override to add DataStream/Connect protocol headers and handle DS-specific responses
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body,
+            *hash<auto> hdr) {
+        bool use_connect = (getEffectiveProtocol() == DataStreamProtocol::Connect);
+
+        # Save originals for potential retry
+        auto save_body = body;
+        *hash<auto> save_hdr = hdr;
+        string save_path = path;
+
+        hash<auto> prepared = prepareRequest(method, \path, body, \hdr);
+
+        # Add protocol-specific headers
+        if (use_connect) {
+            connect_set_non_chunked_headers(\hdr, getSendEncoding(), True);
+        } else {
+            ds_set_non_chunked_headers(\hdr, getSendEncoding(), True);
+        }
+
+        hash<auto> raw = getConnectionManager().request(getUrl(), method, path, hdr,
+            prepared.serialized_body);
+
+        # Check for Connect rejection in auto mode
+        if (use_connect && protocol_mode == DataStreamProtocol::Auto
+                && isConnectRejection(raw)) {
+            setCachedProtocol(DataStreamProtocol::DataStream);
+            # Retry with DS v1
+            path = save_path;
+            hdr = save_hdr;
+            prepared = prepareRequest(method, \path, save_body, \hdr);
+            ds_set_non_chunked_headers(\hdr, getSendEncoding(), True);
+            raw = getConnectionManager().request(getUrl(), method, path, hdr,
+                prepared.serialized_body);
+        } else if (use_connect && protocol_mode == DataStreamProtocol::Auto) {
+            setCachedProtocol(DataStreamProtocol::Connect);
+        }
+
+        # Handle DS v1 responses: map DataStream-Content-Type to content-type for deserialization
+        if (raw.headers) {
+            *string dsct = raw.headers{DataStreamContentType.lwr()};
+            if (dsct) {
+                raw.headers."content-type" = dsct;
+            }
+        }
+
+        # 401 retry for OAuth2
+        if (raw.status_code == 401 && canRetryAuth()) {
+            try {
+                getNewTokenIntern();
+            } catch () {
+                return buildResponse(raw, prepared.error_passthru,
+                    prepared.allow_any_response, method, path, hdr,
+                    prepared.serialized_body);
+            }
+            path = save_path;
+            hdr = save_hdr;
+            prepared = prepareRequest(method, \path, save_body, \hdr);
+            if (use_connect) {
+                connect_set_non_chunked_headers(\hdr, getSendEncoding(), True);
+            } else {
+                ds_set_non_chunked_headers(\hdr, getSendEncoding(), True);
+            }
+            raw = getConnectionManager().request(getUrl(), method, path, hdr,
+                prepared.serialized_body);
+        }
+
+        return buildResponse(raw, prepared.error_passthru,
+            prepared.allow_any_response, method, path, hdr,
+            prepared.serialized_body);
+    }
+
+    #! receives streaming data from the server
+    /** @param recv_callback callback for each deserialized data item
+        @param eod_callback called when all data received; accepts optional error string
+        @param method HTTP method
+        @param path URI path
+        @param body optional request body
+        @param timeout_ms socket I/O timeout (0 = default)
+        @param info optional output reference for request info
+        @param hdr optional extra headers
+    */
+    recvDataStream(code<nothing(auto)> recv_callback, code<nothing(*string)> eod_callback,
+            string method, string path, auto body, timeout timeout_ms = 0,
+            *reference<hash<auto>> info, *hash<auto> hdr) {
+        bool use_connect = (getEffectiveProtocol() == DataStreamProtocol::Connect);
+
+        # Save originals for retry
+        auto save_body = body;
+        *hash<auto> save_hdr = hdr;
+        string save_path = path;
+
+        try {
+            doRecvDataStream(use_connect, recv_callback, eod_callback, method, path, body,
+                timeout_ms, \info, hdr);
+        } catch (hash<ExceptionInfo> ex) {
+            if (use_connect && protocol_mode == DataStreamProtocol::Auto
+                    && isConnectRejectionEx(ex)) {
+                setCachedProtocol(DataStreamProtocol::DataStream);
+                doRecvDataStream(False, recv_callback, eod_callback, method, save_path,
+                    save_body, timeout_ms, \info, save_hdr);
+                return;
+            }
+            rethrow;
+        }
+
+        if (use_connect && protocol_mode == DataStreamProtocol::Auto) {
+            setCachedProtocol(DataStreamProtocol::Connect);
+        }
+    }
+
+    #! receives streaming data using a DataStreamRecvMessage object
+    /** @param dsm the DataStreamRecvMessage object providing callbacks
+        @param method HTTP method
+        @param path URI path
+        @param body optional request body
+        @param timeout_ms socket I/O timeout (0 = default)
+        @param info optional output reference for request info
+        @param hdr optional extra headers
+    */
+    recvDataStream(DataStreamRecvMessage dsm, string method, string path, auto body,
+            timeout timeout_ms = 0, *reference<hash<auto>> info, *hash<auto> hdr) {
+        recvDataStream(\dsm.recvData(), \dsm.recvDataDone(), method, path, body, timeout_ms,
+            \info, hdr);
+    }
+
+    #! sends streaming data to the server and returns the response
+    /** @param scb callback providing data to send; returns NOTHING when done
+        @param method HTTP method
+        @param path URI path
+        @param timeout_ms socket I/O timeout (0 = default)
+        @param info optional output reference for request info
+        @param hdr optional extra headers
+
+        @return response headers + deserialized body
+    */
+    hash<auto> sendDataStream(code<auto()> scb, string method, string path,
+            timeout timeout_ms = 0, *reference<hash<auto>> info, *hash<auto> hdr) {
+        bool use_connect = (getEffectiveProtocol() == DataStreamProtocol::Connect);
+
+        # Save originals for retry
+        *hash<auto> save_hdr = hdr;
+        string save_path = path;
+
+        try {
+            return doSendDataStream(use_connect, scb, method, path, timeout_ms, \info, hdr);
+        } catch (hash<ExceptionInfo> ex) {
+            if (use_connect && protocol_mode == DataStreamProtocol::Auto
+                    && isConnectRejectionEx(ex)) {
+                setCachedProtocol(DataStreamProtocol::DataStream);
+                return doSendDataStream(False, scb, method, save_path, timeout_ms, \info,
+                    save_hdr);
+            }
+            rethrow;
+        }
+    }
+
+    #! sends streaming data using a DataStreamSendMessage object
+    /** @param dsm the DataStreamSendMessage object providing the send callback
+        @param method HTTP method
+        @param path URI path
+        @param timeout_ms socket I/O timeout (0 = default)
+        @param info optional output reference for request info
+        @param hdr optional extra headers
+
+        @return response headers + deserialized body
+    */
+    hash<auto> sendDataStream(DataStreamSendMessage dsm, string method, string path,
+            timeout timeout_ms = 0, *reference<hash<auto>> info, *hash<auto> hdr) {
+        return sendDataStream(\dsm.sendData(), method, path, timeout_ms, \info, hdr);
+    }
+
+    #! sends and receives streaming data
+    /** @param scb callback providing data to send; returns NOTHING when done
+        @param recv_callback callback for each deserialized data item received
+        @param eod_callback called when all data received
+        @param method HTTP method
+        @param path URI path
+        @param timeout_ms socket I/O timeout (0 = default)
+        @param info optional output reference for request info
+        @param hdr optional extra headers
+    */
+    sendRecvDataStream(code<auto()> scb, code<nothing(auto)> recv_callback,
+            code<nothing(*string)> eod_callback, string method, string path,
+            timeout timeout_ms = 0, *reference<hash<auto>> info, *hash<auto> hdr) {
+        bool use_connect = (getEffectiveProtocol() == DataStreamProtocol::Connect);
+
+        # Save originals for retry
+        *hash<auto> save_hdr = hdr;
+        string save_path = path;
+
+        try {
+            doSendRecvDataStream(use_connect, scb, recv_callback, eod_callback, method, path,
+                timeout_ms, \info, hdr);
+        } catch (hash<ExceptionInfo> ex) {
+            if (use_connect && protocol_mode == DataStreamProtocol::Auto
+                    && isConnectRejectionEx(ex)) {
+                setCachedProtocol(DataStreamProtocol::DataStream);
+                doSendRecvDataStream(False, scb, recv_callback, eod_callback, method,
+                    save_path, timeout_ms, \info, save_hdr);
+                return;
+            }
+            rethrow;
+        }
+
+        if (use_connect && protocol_mode == DataStreamProtocol::Auto) {
+            setCachedProtocol(DataStreamProtocol::Connect);
+        }
+    }
+
+    #! sends and receives streaming data using a DataStreamMessage object
+    /** @param dsm the DataStreamMessage object providing send/receive callbacks
+        @param method HTTP method
+        @param path URI path
+        @param timeout_ms socket I/O timeout (0 = default)
+        @param info optional output reference for request info
+        @param hdr optional extra headers
+    */
+    sendRecvDataStream(DataStreamMessage dsm, string method, string path,
+            timeout timeout_ms = 0, *reference<hash<auto>> info, *hash<auto> hdr) {
+        sendRecvDataStream(\dsm.sendData(), \dsm.recvData(), \dsm.recvDataDone(), method, path,
+            timeout_ms, \info, hdr);
+    }
+
+    #! sends raw chunked data and receives a YAML-formatted response
+    /** @param scb callback providing raw string/binary data to send
+        @param method HTTP method
+        @param path URI path
+        @param timeout_ms socket I/O timeout (0 = default)
+        @param info optional output reference for request info
+        @param hdr optional extra headers
+
+        @return response headers + deserialized YAML body
+    */
+    hash<auto> sendRawStream(code<auto()> scb, string method, *string path, timeout timeout_ms = 0,
+            *reference<hash<auto>> info, *hash<auto> hdr) {
+        if (!hdr.Accept && !hdr.accept) {
+            hdr.Accept = MimeTypeYaml;
+        }
+        # Prepare headers
+        hash<auto> merged_hdr = getDefaultHeaders() + hdr;
+
+        HttpClientIo::HttpClientStreamHandle stream = getConnectionManager().acquireStream(
+            getUrl());
+        stream.startStreaming(method, path ?? "/", merged_hdr, True);
+
+        # Send raw data
+        while (True) {
+            auto data = scb();
+            if (!exists data) {
+                stream.writesDone();
+                break;
+            }
+            if (data.typeCode() == NT_HASH) {
+                # Trailer hash; send as final data
+                stream.writesDone();
+                break;
+            }
+            stream.sendData(data, False);
+        }
+
+        # Read response
+        hash<auto> rhdr;
+        auto rmd;
+        timeout effective_timeout = timeout_ms > 0 ? timeout_ms : 30s;
+        while (True) {
+            auto rd = stream.readData(effective_timeout);
+            if (!exists rd) {
+                break;
+            }
+            if (rd.typeCode() == NT_HASH) {
+                if (rd.end_stream) {
+                    break;
+                }
+                if (rd.headers) {
+                    rhdr = rd.headers;
+                    if (rd.status_code) {
+                        rhdr.status_code = rd.status_code;
+                    }
+                }
+                if (rd.error) {
+                    throw "HTTPCLIENT-STREAM-ERROR", sprintf("stream error: %y", rd.error);
+                }
+                continue;
+            }
+            if (rd.typeCode() == NT_BINARY) {
+                rmd = exists rmd ? rmd + rd : rd;
+            } else {
+                rmd = exists rmd ? rmd + rd : rd;
+            }
+        }
+
+        # Deserialize YAML response
+        if (rmd) {
+            *string ct = rhdr."content-type";
+            if (!ct || ct =~ /yaml/i) {
+                string body_str = rmd.typeCode() == NT_BINARY
+                    ? rmd.toString("utf-8") : rmd;
+                rmd = parse_yaml(body_str);
+            }
+        }
+
+        return rhdr + {"body": rmd};
+    }
+
+    #! receives raw chunked data from the server
+    /** @param recv_callback callback for received data; called with hash for headers/trailers,
+        hash with "data" key for body chunks
+        @param method HTTP method
+        @param path URI path
+        @param body optional request body (serialized as YAML)
+        @param timeout_ms socket I/O timeout (0 = default)
+        @param info optional output reference for request info
+        @param hdr optional extra headers
+
+        @return response headers
+    */
+    hash<auto> getRawStream(code<nothing(hash<auto>)> recv_callback, string method, *string path, auto body,
+            timeout timeout_ms = 0, *reference<hash<auto>> info, *hash<auto> hdr) {
+        # Serialize body as YAML if provided
+        *data serialized_body;
+        if (exists body) {
+            serialized_body = binary(make_yaml(body));
+            hdr."Content-Type" = MimeTypeYaml;
+        }
+
+        # Prepare headers
+        hash<auto> merged_hdr = getDefaultHeaders() + hdr;
+
+        HttpClientIo::HttpClientStreamHandle stream = getConnectionManager().acquireStream(
+            getUrl());
+        stream.startStreaming(method, path ?? "/", merged_hdr, False, serialized_body);
+
+        hash<auto> rvhdr;
+        timeout effective_timeout = timeout_ms > 0 ? timeout_ms : 30s;
+        while (True) {
+            auto rd = stream.readData(effective_timeout);
+            if (!exists rd) {
+                continue;
+            }
+            if (rd.typeCode() == NT_HASH) {
+                if (rd.end_stream) {
+                    # Deliver trailer
+                    recv_callback({"hdr": stream.getTrailers()});
+                    break;
+                }
+                if (rd.headers) {
+                    rvhdr = rd.headers;
+                    if (rd.status_code) {
+                        rvhdr.status_code = rd.status_code;
+                    }
+                    recv_callback({"hdr": rvhdr, "obj": self});
+                }
+                if (rd.error) {
+                    throw "HTTPCLIENT-STREAM-ERROR", sprintf("stream error: %y", rd.error);
+                }
+                continue;
+            }
+            recv_callback({"data": rd, "chunked": True});
+        }
+
+        return rvhdr;
+    }
+
+    #! Thread-safe update of cached protocol
+    private setCachedProtocol(*DataStreamProtocol proto) {
+        AutoWriteLock al(config_lock);
+        cached_protocol = proto;
+    }
+
+    #! Thread-safe read of max message size
+    private int getMaxMessageSizeIntern() {
+        AutoReadLock al(config_lock);
+        return m_max_message_size;
+    }
+
+    #! Set Connect streaming headers for HTTP/2 (no Transfer-Encoding: chunked)
+    private setConnectStreamingHeaders(reference<hash<auto>> hdr) {
+        hdr."content-type" = ConnectStreamMimeTypeYaml;
+        hdr{ConnectProtocolVersionHdr} = ConnectProtocolVersionVal;
+        *string se = getSendEncoding();
+        if (se) {
+            hdr{ConnectContentEncodingHdr} = se;
+        }
+    }
+
+    #! Get the effective protocol for this call
+    private DataStreamProtocol getEffectiveProtocol() {
+        AutoReadLock al(config_lock);
+        if (protocol_mode == DataStreamProtocol::Connect) {
+            return DataStreamProtocol::Connect;
+        }
+        if (protocol_mode == DataStreamProtocol::DataStream) {
+            return DataStreamProtocol::DataStream;
+        }
+        # "auto" mode
+        if (cached_protocol) {
+            return cached_protocol;
+        }
+        # RestClientIo defaults to HTTP/2+ via HttpClientConnectionManager,
+        # so Connect is the natural default
+        return DataStreamProtocol::Connect;
+    }
+
+    #! Check if an HTTP response indicates the server rejected Connect
+    private static bool isConnectRejection(hash<auto> raw) {
+        *int status = raw.status_code;
+        if (status == 415 || status == 406 || status == 501) {
+            return True;
+        }
+        return False;
+    }
+
+    #! Check if an exception indicates Connect rejection
+    private static bool isConnectRejectionEx(hash<ExceptionInfo> ex) {
+        # HTTP 415/406/501 in exception arg
+        if (ex.arg.typeCode() == NT_HASH) {
+            *int status = ex.arg.status_code;
+            if (status == 415 || status == 406 || status == 501) {
+                return True;
+            }
+        }
+        # Connect frame parse errors
+        if (ex.err == "CONNECT-FRAMING-ERROR" || ex.err == "CONNECT-MESSAGE-SIZE-ERROR") {
+            return True;
+        }
+        return False;
+    }
+
+    #! Internal: receive streaming data
+    private doRecvDataStream(bool use_connect, code<nothing(auto)> recv_callback,
+            code<nothing(*string)> eod_callback, string method, string path, auto body,
+            timeout timeout_ms, *reference<hash<auto>> info, *hash<auto> hdr) {
+        # Serialize body
+        *data serialized_body;
+        if (exists body) {
+            serialized_body = binary(make_yaml(body));
+        }
+
+        # Prepare headers
+        hash<auto> merged_hdr = getDefaultHeaders() + hdr;
+
+        HttpClientIo::HttpClientStreamHandle stream = getConnectionManager().acquireStream(
+            getUrl());
+        timeout effective_timeout = timeout_ms > 0 ? timeout_ms : 30s;
+
+        if (use_connect) {
+            # Connect: send request as Connect-framed streaming body
+            setConnectStreamingHeaders(\merged_hdr);
+            stream.startStreaming(method, path, merged_hdr, True);
+
+            # Frame and send the request body
+            if (serialized_body) {
+                binary payload = serialized_body.typeCode() == NT_BINARY
+                    ? serialized_body : binary(serialized_body);
+                *code enc_func = ds_get_content_encode(getSendEncoding());
+                int flags = 0;
+                if (enc_func) {
+                    payload = enc_func(payload);
+                    flags = CONNECT_FLAG_COMPRESSED;
+                }
+                stream.sendData(connect_frame_message(payload, flags), False);
+            }
+            # Send EndStreamResponse and close send side
+            stream.sendData(connect_frame_message(binary("{}"), CONNECT_FLAG_END_STREAM), False);
+            stream.writesDone();
+
+            readConnectStream(stream, recv_callback, eod_callback, effective_timeout);
+        } else {
+            # DS v1: send body as-is, receive chunked response
+            ds_set_non_chunked_headers(\merged_hdr, getSendEncoding(), True);
+            stream.startStreaming(method, path, merged_hdr, False, serialized_body);
+            readDSv1Stream(stream, recv_callback, eod_callback, effective_timeout);
+        }
+    }
+
+    #! Internal: send streaming data and return response
+    private hash<auto> doSendDataStream(bool use_connect, code<auto()> scb, string method,
+            string path, timeout timeout_ms, *reference<hash<auto>> info, *hash<auto> hdr) {
+        # Prepare headers
+        hash<auto> merged_hdr = getDefaultHeaders() + hdr;
+        if (use_connect) {
+            setConnectStreamingHeaders(\merged_hdr);
+        } else {
+            ds_set_chunked_headers(\merged_hdr, getSendEncoding(), True);
+        }
+
+        HttpClientIo::HttpClientStreamHandle stream = getConnectionManager().acquireStream(
+            getUrl());
+        stream.startStreaming(method, path, merged_hdr, True);
+
+        # Send phase
+        *code enc_func = ds_get_content_encode(getSendEncoding());
+        if (use_connect) {
+            sendConnectStream(stream, scb, enc_func);
+        } else {
+            sendDSv1Stream(stream, scb, enc_func);
+        }
+
+        # Read response
+        timeout effective_timeout = timeout_ms > 0 ? timeout_ms : 30s;
+        hash<auto> rhdr;
+        auto rmd;
+        bool chunked;
+
+        if (use_connect) {
+            # Read Connect-framed response
+            code recv_data_callback = sub (auto d) {
+                if (exists d) {
+                    if (chunked) {
+                        rmd += d;
+                    } else if (exists rmd) {
+                        chunked = True;
+                        rmd = (rmd, d);
+                    } else {
+                        rmd = d;
+                    }
+                }
+            };
+            code eod_callback = sub (*string err) {
+                if (err) {
+                    throw "DATASTREAM-SEND-ERROR", err;
+                }
+            };
+            # Read response headers first, capturing any initial body data
+            *binary initial_data;
+            rhdr = readStreamHeaders(stream, effective_timeout, \initial_data);
+            readConnectStream(stream, recv_data_callback, eod_callback, effective_timeout,
+                initial_data);
+        } else {
+            # Read DS v1 response
+            code recv_data_callback = sub (auto d) {
+                if (exists d) {
+                    if (chunked) {
+                        rmd += d;
+                    } else if (exists rmd) {
+                        chunked = True;
+                        rmd = (rmd, d);
+                    } else {
+                        rmd = d;
+                    }
+                }
+            };
+            code eod_callback = sub (*string err) {
+                if (err) {
+                    throw "DATASTREAM-SEND-ERROR", err;
+                }
+            };
+            *binary ds1_initial;
+            rhdr = readStreamHeaders(stream, effective_timeout, \ds1_initial);
+            readDSv1Stream(stream, recv_data_callback, eod_callback, effective_timeout);
+        }
+
+        # cache protocol on success in Auto mode
+        if (use_connect && protocol_mode == DataStreamProtocol::Auto) {
+            setCachedProtocol(DataStreamProtocol::Connect);
+        }
+
+        # rethrow exceptions returned from the sender
+        if (rhdr.status_code >= 300 && rmd.err && rmd.desc) {
+            throw rmd.err, rmd.desc, rmd.arg;
+        }
+
+        return rhdr + {"body": rmd};
+    }
+
+    #! Internal: send and receive streaming data
+    private doSendRecvDataStream(bool use_connect, code<auto()> scb,
+            code<nothing(auto)> recv_callback, code<nothing(*string)> eod_callback,
+            string method, string path, timeout timeout_ms, *reference<hash<auto>> info,
+            *hash<auto> hdr) {
+        # Prepare headers
+        hash<auto> merged_hdr = getDefaultHeaders() + hdr;
+        if (use_connect) {
+            setConnectStreamingHeaders(\merged_hdr);
+        } else {
+            ds_set_chunked_headers(\merged_hdr, getSendEncoding(), True);
+        }
+
+        HttpClientIo::HttpClientStreamHandle stream = getConnectionManager().acquireStream(
+            getUrl());
+        stream.startStreaming(method, path, merged_hdr, True);
+
+        # Send phase
+        *code enc_func = ds_get_content_encode(getSendEncoding());
+        if (use_connect) {
+            sendConnectStream(stream, scb, enc_func);
+        } else {
+            sendDSv1Stream(stream, scb, enc_func);
+        }
+
+        # Receive phase
+        timeout effective_timeout = timeout_ms > 0 ? timeout_ms : 30s;
+        if (use_connect) {
+            readConnectStream(stream, recv_callback, eod_callback, effective_timeout);
+        } else {
+            readDSv1Stream(stream, recv_callback, eod_callback, effective_timeout);
+        }
+    }
+
+    #! Internal: read Connect-framed streaming data from a stream handle
+    private readConnectStream(HttpClientIo::HttpClientStreamHandle stream,
+            code<nothing(auto)> recv_callback, code<nothing(*string)> eod_callback,
+            timeout timeout_ms, *binary initial_data) {
+        binary buf = initial_data ?? binary();
+        *code dce = ds_get_content_decode(getSendEncoding());
+        int max_msg_size = getMaxMessageSizeIntern();
+
+        while (True) {
+            # Try to parse complete frames from buffer
+            while (True) {
+                int frame_size = connect_next_frame_size(buf);
+                if (frame_size < 0) {
+                    # Validate declared frame size
+                    if (max_msg_size > 0 && buf.size() >= 5) {
+                        int declared_len = (buf[1] << 24) | (buf[2] << 16)
+                            | (buf[3] << 8) | buf[4];
+                        if (declared_len > max_msg_size) {
+                            throw "CONNECT-MESSAGE-SIZE-ERROR",
+                                sprintf("Connect frame declares %d bytes, exceeds maximum %d",
+                                    declared_len, max_msg_size);
+                        }
+                    }
+                    break;
+                }
+                hash<auto> frame = connect_unframe_message(buf, max_msg_size);
+                # Advance buffer
+                if (buf.size() > frame_size) {
+                    buf = buf.substr(frame_size);
+                } else {
+                    buf = binary();
+                }
+
+                # Check for EndStreamResponse
+                if (frame.flags & CONNECT_FLAG_END_STREAM) {
+                    *string err_msg;
+                    try {
+                        string json_str = frame.data.toString("utf-8");
+                        if (json_str.val()) {
+                            hash<auto> obj = parse_json(json_str);
+                            if (obj.error.message.val()) {
+                                err_msg = sprintf("%s: %s", obj.error.code ?? "unknown",
+                                    obj.error.message);
+                            } else if (obj.error.code.val()) {
+                                err_msg = obj.error.code;
+                            }
+                        }
+                    } catch () {
+                        # Ignore JSON parse errors
+                    }
+                    eod_callback(err_msg);
+                    return;
+                }
+
+                # Regular data frame
+                binary payload = frame.data;
+                if ((frame.flags & CONNECT_FLAG_COMPRESSED) && dce) {
+                    payload = binary(dce(payload, "utf8"));
+                }
+                auto parsed = parse_yaml(payload.toString("utf-8"));
+                recv_callback(parsed);
+            }
+
+            # Read more data
+            auto rd = stream.readData(timeout_ms);
+            if (!exists rd) {
+                # Timeout — keep trying
+                continue;
+            }
+            if (rd.typeCode() == NT_HASH) {
+                if (rd.end_stream) {
+                    # Server closed stream; try final buffer parse
+                    if (buf.size() >= 5) {
+                        int frame_size = connect_next_frame_size(buf);
+                        if (frame_size > 0) {
+                            hash<auto> frame = connect_unframe_message(buf,
+                                max_msg_size);
+                            if (frame.flags & CONNECT_FLAG_END_STREAM) {
+                                eod_callback();
+                                return;
+                            }
+                            binary payload = frame.data;
+                            if ((frame.flags & CONNECT_FLAG_COMPRESSED) && dce) {
+                                payload = binary(dce(payload, "utf8"));
+                            }
+                            auto parsed = parse_yaml(payload.toString("utf-8"));
+                            recv_callback(parsed);
+                        }
+                    }
+                    eod_callback();
+                    return;
+                }
+                if (rd.headers) {
+                    # Response headers — skip (already handled or not needed for Connect)
+                    continue;
+                }
+                if (rd.error) {
+                    throw "CONNECT-STREAM-ERROR", sprintf("stream error: %y", rd.error);
+                }
+                continue;
+            }
+            # Accumulate data
+            if (rd.typeCode() == NT_BINARY) {
+                buf += rd;
+            } else {
+                buf += binary(rd);
+            }
+            # Validate buffer size
+            if (max_msg_size > 0 && buf.size() > 5 + max_msg_size) {
+                throw "CONNECT-MESSAGE-SIZE-ERROR",
+                    sprintf("read buffer size %d exceeds maximum message size %d bytes",
+                        buf.size(), max_msg_size);
+            }
+        }
+    }
+
+    #! Internal: read DS v1 streaming data from a stream handle
+    private readDSv1Stream(HttpClientIo::HttpClientStreamHandle stream,
+            code<nothing(auto)> recv_callback, code<nothing(*string)> eod_callback,
+            timeout timeout_ms) {
+        # Content decoding function (determined from response headers)
+        *code dce;
+        bool headers_received = False;
+
+        while (True) {
+            auto rd = stream.readData(timeout_ms);
+            if (!exists rd) {
+                # Timeout — keep trying
+                continue;
+            }
+            if (rd.typeCode() == NT_HASH) {
+                if (rd.end_stream) {
+                    # Check trailers for DataStream-Error
+                    *hash<string, string> trailers = stream.getTrailers();
+                    *string ds_error = trailers ? trailers{DataStreamError.lwr()} : NOTHING;
+                    eod_callback(ds_error);
+                    return;
+                }
+                if (rd.headers) {
+                    # Extract content encoding from response headers
+                    *string ce = rd.headers{DataStreamContentEncoding.lwr()}
+                        ?? rd.headers."content-encoding";
+                    dce = ds_get_content_decode(ce);
+                    headers_received = True;
+                    continue;
+                }
+                if (rd.error) {
+                    throw "DATASTREAM-STREAM-ERROR", sprintf("stream error: %y", rd.error);
+                }
+                continue;
+            }
+            # Body data — each chunk is a YAML document
+            auto chunk = rd;
+            if (chunk.typeCode() == NT_BINARY) {
+                if (dce) {
+                    chunk = dce(chunk, "utf8");
+                } else {
+                    chunk = chunk.toString("utf-8");
+                }
+            }
+            if (chunk.typeCode() == NT_STRING) {
+                chunk = parse_yaml(chunk);
+            }
+            recv_callback(chunk);
+        }
+    }
+
+    #! Internal: send Connect-framed data via stream handle
+    private sendConnectStream(HttpClientIo::HttpClientStreamHandle stream,
+            code<auto()> scb, *code enc_func) {
+        while (True) {
+            auto data;
+            try {
+                data = scb();
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "THREAD-CANCELLED" || ex.err == "PROGRAM-INTERRUPTED") {
+                    rethrow;
+                }
+                # Send EndStreamResponse with error
+                string err_msg = sprintf("%s: %s", ex.err, ex.desc);
+                err_msg =~ s/[\r\n]/ /g;
+                string json = make_json({"error": {"code": "internal", "message": err_msg}});
+                stream.sendData(connect_frame_message(binary(json),
+                    CONNECT_FLAG_END_STREAM), False);
+                stream.writesDone();
+                return;
+            }
+
+            if (!exists data) {
+                # End of stream: emit EndStreamResponse frame
+                stream.sendData(connect_frame_message(binary("{}"),
+                    CONNECT_FLAG_END_STREAM), False);
+                stream.writesDone();
+                return;
+            }
+
+            # Serialize to YAML
+            binary payload = binary(make_yaml(data));
+            # Optionally compress
+            int flags = 0;
+            if (enc_func) {
+                payload = enc_func(payload);
+                flags = CONNECT_FLAG_COMPRESSED;
+            }
+            stream.sendData(connect_frame_message(payload, flags), False);
+        }
+    }
+
+    #! Internal: send DS v1 data via stream handle
+    private sendDSv1Stream(HttpClientIo::HttpClientStreamHandle stream,
+            code<auto()> scb, *code enc_func) {
+        while (True) {
+            auto data;
+            try {
+                data = scb();
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "THREAD-CANCELLED" || ex.err == "PROGRAM-INTERRUPTED") {
+                    rethrow;
+                }
+                # Send error in trailer-like fashion and close
+                stream.writesDone();
+                return;
+            }
+
+            if (!exists data) {
+                stream.writesDone();
+                return;
+            }
+
+            # Serialize to YAML
+            auto yaml_data = make_yaml(data);
+            if (enc_func) {
+                yaml_data = enc_func(yaml_data);
+            }
+            stream.sendData(yaml_data, False);
+        }
+    }
+
+    #! Internal: read response headers from a stream, returning any initial body data
+    /** @param stream the stream handle
+        @param timeout_ms read timeout
+        @param initial_data output reference for any body data received with/instead of headers
+        @return response headers hash, or empty hash if headers not received separately
+    */
+    private hash<auto> readStreamHeaders(HttpClientIo::HttpClientStreamHandle stream,
+            timeout timeout_ms, *reference<*binary> initial_data) {
+        auto rd = stream.readData(timeout_ms);
+        if (!exists rd) {
+            return {};
+        }
+        if (rd.typeCode() == NT_HASH) {
+            if (rd.headers) {
+                hash<auto> rhdr = rd.headers;
+                if (rd.status_code) {
+                    rhdr.status_code = rd.status_code;
+                }
+                return rhdr;
+            }
+            # end_stream or error without headers
+            return {};
+        }
+        # Body data arrived first (no separate headers) — save for caller
+        initial_data = rd.typeCode() == NT_BINARY ? rd : binary(rd);
+        return {};
+    }
+}
+
+#! Class for DataStream REST connections using multiplexed I/O; returns @ref DataStreamClientIo objects
+/** @since DataStreamClientIo 1.0
+*/
+public class DataStreamConnectionIo inherits ConnectionProvider::AbstractConnectionWithInfo {
+    public {
+        #! Connection entry info
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "DataStream REST Connection (Multiplexed I/O)",
+            "short_desc": "A connection to a DataStream API server using multiplexed I/O",
+            "desc": "A connection to a DataStream API server using RestClientIo for multiplexed "
+                "HTTP/1.1, HTTP/2, and HTTP/3 connections",
+            "cls": Class::forName("DataStreamClient::DataStreamConnectionIo"),
+            "auto_url": True,
+            "schemes": {
+                "dsios": True,
+                "dsio": True,
+            },
+            "base_scheme_map": {
+                "https": "dsios",
+                "http": "dsio",
+            },
+            "options": RestClient::RestConnection::ConnectionScheme.options
+                - ("data", "allow_any_response") + {
+                "protocol": <ConnectionOptionInfo>{
+                    "display_name": "Protocol",
+                    "short_desc": "DataStream protocol mode",
+                    "desc": "The protocol mode: 'auto' (default), 'connect', or 'datastream'",
+                    "type": "string",
+                    "default_value": "auto",
+                },
+                "max_message_size": <ConnectionOptionInfo>{
+                    "display_name": "Max Message Size",
+                    "short_desc": "Maximum Connect frame payload size",
+                    "desc": "Maximum message size in bytes for Connect mode (0 = no limit)",
+                    "type": "int",
+                    "default_value": CONNECT_DEFAULT_MAX_MESSAGE_SIZE,
+                },
+            },
+        };
+    }
+
+    #! creates the DataStreamConnectionIo object
+    /** @param name the name of the connection
+        @param description connection description
+        @param url connection URL
+        @param attributes various attributes
+        @param options connection options
+    */
+    constructor(string name, string description, string url, hash<auto> attributes = {},
+            hash<auto> options = {})
+            : AbstractConnectionWithInfo(name, description, url, attributes, options) {
+    }
+
+    #! creates the DataStreamConnectionIo object
+    /** @param config connection configuration hash
+        @param attr optional connection attributes
+    */
+    constructor(hash<auto> config, *hash<auto> attr) : AbstractConnectionWithInfo(config, attr) {
+    }
+
+    #! returns \c "dsios"
+    string getType() {
+        return "dsios";
+    }
+
+    #! returns a @ref DataStreamClientIo object
+    /** @param connect if True, the connection is returned already connected
+        @param rtopts runtime options (not used)
+
+        @return a @ref DataStreamClientIo object
+    */
+    private DataStreamClientIo getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new DataStreamClientIo({"url": getHttpUrl()} + opts);
+    }
+
+    #! Returns the ConnectionSchemeInfo hash for this object
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+
+    #! Returns the HTTP URL by mapping dsio/dsios schemes to http/https
+    private string getHttpUrl() {
+        string result = url;
+        if (result =~ /^dsios:/) {
+            result = regex_subst(result, "^dsios:", "https:");
+        } else if (result =~ /^dsio:/) {
+            result = regex_subst(result, "^dsio:", "http:");
+        }
+        return result;
+    }
+}
+
+} # namespace DataStreamClient

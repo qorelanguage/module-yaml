@@ -6,7 +6,7 @@ SUBDIRS = src
 
 noinst_HEADERS = src/yaml-module.h
 
-USER_MODULES = qlib/YamlRpcClient.qm qlib/YamlRpcHandler.qm qlib/DataStreamUtil.qm qlib/DataStreamClient.qm qlib/DataStreamRequestHandler.qm qlib/YamlSchema.qm qlib/YamlTagHandler.qm
+USER_MODULES = qlib/YamlRpcClient.qm qlib/YamlRpcHandler.qm qlib/DataStreamUtil.qm qlib/DataStreamClient.qm qlib/DataStreamClientIo.qm qlib/DataStreamRequestHandler.qm qlib/YamlSchema.qm qlib/YamlTagHandler.qm
 
 EXTRA_DIST = COPYING.LGPL COPYING.MIT AUTHORS README \
 	RELEASE-NOTES \
@@ -65,14 +65,15 @@ ACLOCAL_AMFLAGS=-I m4
 dist_mod_DATA = $(USER_MODULES)
 
 if COND_DOXYGEN
-DOX = yaml YamlRpcClient YamlRpcHandler DataStreamUtil DataStreamClient DataStreamRequestHandler YamlSchema YamlTagHandler YamlDocumentDataProvider Connect ConnectDataProvider
-DOXYGEN_OUTPUT=docs/yaml/html docs/YamlRpcClient/html docs/YamlRpcHandler/html docs/DataStreamUtil/html docs/DataStreamClient/html docs/DataStreamRequestHandler/html docs/YamlSchema/html docs/YamlTagHandler/html docs/YamlDocumentDataProvider/html docs/Connect/html docs/ConnectDataProvider/html
+DOX = yaml YamlRpcClient YamlRpcHandler DataStreamUtil DataStreamClient DataStreamClientIo DataStreamRequestHandler YamlSchema YamlTagHandler YamlDocumentDataProvider Connect ConnectDataProvider
+DOXYGEN_OUTPUT=docs/yaml/html docs/YamlRpcClient/html docs/YamlRpcHandler/html docs/DataStreamUtil/html docs/DataStreamClient/html docs/DataStreamClientIo/html docs/DataStreamRequestHandler/html docs/YamlSchema/html docs/YamlTagHandler/html docs/YamlDocumentDataProvider/html docs/Connect/html docs/ConnectDataProvider/html
 DOXYFILES = docs/doxyfile docs/mainpage.doxygen
 DOXYFILES_SRC = docs/doxyfile.tmpl docs/qlib/Doxyfile.tmpl docs/footer_template.html
 QLIB_TMP_DOXYFILES = docs/qlib/YamlRpcClient.qm.dox.h docs/qlib/Doxyfile.YamlRpcClient \
 	docs/qlib/YamlRpcHandler.qm.dox.h docs/qlib/Doxyfile.YamlRpcHandler \
 	docs/qlib/DataStreamUtil.qm.dox.h docs/qlib/Doxyfile.DataStreamUtil \
 	docs/qlib/DataStreamClient.qm.dox.h docs/qlib/Doxyfile.DataStreamClient \
+	docs/qlib/DataStreamClientIo.qm.dox.h docs/qlib/Doxyfile.DataStreamClientIo \
 	docs/qlib/DataStreamRequestHandler.qm.dox.h docs/qlib/Doxyfile.DataStreamRequestHandler \
 	docs/qlib/YamlSchema.qm.dox.h docs/qlib/Doxyfile.YamlSchema \
 	docs/qlib/YamlTagHandler.qm.dox.h docs/qlib/Doxyfile.YamlTagHandler \
@@ -124,6 +125,16 @@ docs/qlib/DataStreamClient.qm.dox.h: qlib/DataStreamClient.qm
 docs/DataStreamClient/html: docs/qlib/DataStreamClient.qm.dox.h docs/qlib/Doxyfile.DataStreamClient
 	cd docs; $(DOXYGEN_CMD) qlib/Doxyfile.DataStreamClient
 	$(QDX) --post docs/DataStreamClient/html docs/DataStreamClient/html/search
+
+docs/qlib/Doxyfile.DataStreamClientIo: docs/qlib/Doxyfile.tmp
+	$(QDX) -M=qlib/DataStreamClientIo.qm:qlib/DataStreamClientIo.qm.dox.h -tDataStreamUtil.tag=../../DataStreamUtil/html $< $@
+
+docs/qlib/DataStreamClientIo.qm.dox.h: qlib/DataStreamClientIo.qm
+	$(QDX) $< $@
+
+docs/DataStreamClientIo/html: docs/qlib/DataStreamClientIo.qm.dox.h docs/qlib/Doxyfile.DataStreamClientIo
+	cd docs; $(DOXYGEN_CMD) qlib/Doxyfile.DataStreamClientIo
+	$(QDX) --post docs/DataStreamClientIo/html docs/DataStreamClientIo/html/search
 
 docs/qlib/Doxyfile.DataStreamRequestHandler: docs/qlib/Doxyfile.tmp
 	$(QDX) -M=qlib/DataStreamRequestHandler.qm:qlib/DataStreamRequestHandler.qm.dox.h -tDataStreamUtil.tag=../../DataStreamUtil/html $< $@

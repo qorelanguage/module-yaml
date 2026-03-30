@@ -36,6 +36,7 @@ set(CPP_SRC
 
 set(QMOD
     qlib/DataStreamClient.qm
+    qlib/DataStreamClientIo.qm
     qlib/DataStreamUtil.qm
     qlib/YamlRpcHandler.qm
     qlib/DataStreamRequestHandler.qm
@@ -76,6 +77,7 @@ qore_user_modules("${QMOD}")
 
 qore_external_user_module("qlib/DataStreamUtil.qm" "")
 qore_external_user_module("qlib/DataStreamClient.qm" "DataStreamUtil")
+qore_external_user_module("qlib/DataStreamClientIo.qm" "DataStreamUtil")
 qore_external_user_module("qlib/DataStreamRequestHandler.qm" "DataStreamUtil")
 qore_external_user_module("qlib/YamlRpcClient.qm" "")
 qore_external_user_module("qlib/YamlRpcHandler.qm" "")
