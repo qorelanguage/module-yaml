@@ -24,7 +24,7 @@
 
 #! @see GrpcProtocolAdapter
 #! @see GrpcDetection
-public namespace Connect;
+public namespace Connect {
 
 #! gRPC protocol detection utilities (always available, no grpc module dependency)
 /** Provides static methods for detecting gRPC and gRPC-Web requests from HTTP
@@ -34,7 +34,7 @@ public namespace Connect;
     \c grpc binary module.  They are extracted here so that tests and application
     code can use them even when protobuf support is not compiled in.
 */
-public class Connect::GrpcDetection {
+public class GrpcDetection {
     #! Detect if request uses gRPC wire protocol
     /** @param hdr the HTTP request headers
         @return True if the Content-Type indicates gRPC (but not gRPC-Web)
@@ -78,6 +78,8 @@ public class Connect::GrpcDetection {
         }
     }
 }
+
+} # namespace Connect
 
 %ifndef NoGrpc
 
