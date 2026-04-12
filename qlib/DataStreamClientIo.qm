@@ -249,8 +249,6 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
     #! Override to add DataStream/Connect protocol headers and handle DS-specific responses
     hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body,
             *hash<auto> hdr) {
-        bool use_connect = (getEffectiveProtocol() == DataStreamProtocol::Connect);
-
         # Save originals for potential retry
         auto save_body = body;
         *hash<auto> save_hdr = hdr;
@@ -258,30 +256,14 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
 
         hash<auto> prepared = prepareRequest(method, \path, body, \hdr);
 
-        # Add protocol-specific headers
-        if (use_connect) {
-            connect_set_non_chunked_headers(\hdr, getSendEncoding(), True);
-        } else {
-            ds_set_non_chunked_headers(\hdr, getSendEncoding(), True);
-        }
+        # NOTE: do NOT add DataStream or Connect protocol headers here — restDoRequest()
+        # is called for all regular REST requests (not just DataStream operations).
+        # DataStream-specific headers are added in doRecvDataStream(), doSendDataStream(),
+        # and doSendRecvDataStream() which call setConnectStreamingHeaders() or
+        # ds_set_non_chunked_headers() directly.
 
         hash<auto> raw = getConnectionManager().request(getUrl(), method, path, hdr,
             prepared.serialized_body);
-
-        # Check for Connect rejection in auto mode
-        if (use_connect && protocol_mode == DataStreamProtocol::Auto
-                && isConnectRejection(raw)) {
-            setCachedProtocol(DataStreamProtocol::DataStream);
-            # Retry with DS v1
-            path = save_path;
-            hdr = save_hdr;
-            prepared = prepareRequest(method, \path, save_body, \hdr);
-            ds_set_non_chunked_headers(\hdr, getSendEncoding(), True);
-            raw = getConnectionManager().request(getUrl(), method, path, hdr,
-                prepared.serialized_body);
-        } else if (use_connect && protocol_mode == DataStreamProtocol::Auto) {
-            setCachedProtocol(DataStreamProtocol::Connect);
-        }
 
         # Handle DS v1 responses: map DataStream-Content-Type to content-type for deserialization
         if (raw.headers) {
@@ -303,11 +285,6 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
             path = save_path;
             hdr = save_hdr;
             prepared = prepareRequest(method, \path, save_body, \hdr);
-            if (use_connect) {
-                connect_set_non_chunked_headers(\hdr, getSendEncoding(), True);
-            } else {
-                ds_set_non_chunked_headers(\hdr, getSendEncoding(), True);
-            }
             raw = getConnectionManager().request(getUrl(), method, path, hdr,
                 prepared.serialized_body);
         }
@@ -489,7 +466,7 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
 
         HttpClientIo::HttpClientStreamHandle stream = getConnectionManager().acquireStream(
             getUrl());
-        stream.startStreaming(method, path ?? "/", merged_hdr, True);
+        stream.startStreaming(method, applyConnectionPath(path ?? "/"), merged_hdr, True);
 
         # Send raw data
         while (True) {
@@ -576,7 +553,7 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
 
         HttpClientIo::HttpClientStreamHandle stream = getConnectionManager().acquireStream(
             getUrl());
-        stream.startStreaming(method, path ?? "/", merged_hdr, False, serialized_body);
+        stream.startStreaming(method, applyConnectionPath(path ?? "/"), merged_hdr, False, serialized_body);
 
         hash<auto> rvhdr;
         timeout effective_timeout = timeout_ms > 0 ? timeout_ms : 30s;
@@ -619,6 +596,20 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
     private int getMaxMessageSizeIntern() {
         AutoReadLock al(config_lock);
         return m_max_message_size;
+    }
+
+    #! Prepends the connection path (default_path) to a request path if not already present
+    /** RestClientIo applies the connection_path to request paths in prepareRequest()
+        (for non-streaming REST calls). The streaming methods here bypass that code
+        path, so we must apply it manually to ensure streaming requests hit the same
+        URL as non-streaming REST calls on the same client.
+    */
+    private string applyConnectionPath(string path) {
+        *string cp = getConnectionPath();
+        if (cp.val() && path.substr(0, cp.length()) != cp) {
+            return cp + (path =~ /^\// ? path : "/" + path);
+        }
+        return path;
     }
 
     #! Set Connect streaming headers for HTTP/2 (no Transfer-Encoding: chunked)
@@ -694,7 +685,7 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
         if (use_connect) {
             # Connect: send request as Connect-framed streaming body
             setConnectStreamingHeaders(\merged_hdr);
-            stream.startStreaming(method, path, merged_hdr, True);
+            stream.startStreaming(method, applyConnectionPath(path), merged_hdr, True);
 
             # Frame and send the request body
             if (serialized_body) {
@@ -716,7 +707,8 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
         } else {
             # DS v1: send body as-is, receive chunked response
             ds_set_non_chunked_headers(\merged_hdr, getSendEncoding(), True);
-            stream.startStreaming(method, path, merged_hdr, False, serialized_body);
+            stream.startStreaming(method, applyConnectionPath(path), merged_hdr, False,
+                serialized_body);
             readDSv1Stream(stream, recv_callback, eod_callback, effective_timeout);
         }
     }
@@ -734,7 +726,7 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
 
         HttpClientIo::HttpClientStreamHandle stream = getConnectionManager().acquireStream(
             getUrl());
-        stream.startStreaming(method, path, merged_hdr, True);
+        stream.startStreaming(method, applyConnectionPath(path), merged_hdr, True);
 
         # Send phase
         *code enc_func = ds_get_content_encode(getSendEncoding());
@@ -826,7 +818,7 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
 
         HttpClientIo::HttpClientStreamHandle stream = getConnectionManager().acquireStream(
             getUrl());
-        stream.startStreaming(method, path, merged_hdr, True);
+        stream.startStreaming(method, applyConnectionPath(path), merged_hdr, True);
 
         # Send phase
         *code enc_func = ds_get_content_encode(getSendEncoding());
