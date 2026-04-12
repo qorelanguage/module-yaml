@@ -976,15 +976,20 @@ string dae = ds_get_ds_accept_enc_header(hdr."Accept-Encoding");
         @since DataStreamUtil 1.3
     */
     public bool sub connect_detect_protocol(hash<auto> hdr) {
-        # Check for Connect protocol version header
+        # Check for Connect protocol version header — both unary and streaming Connect
+        # always set this header, so it is the primary detection mechanism
         if (hdr{ConnectProtocolVersionHdr}.val()) {
             return True;
         }
-        # Check for Connect content types
+        # Check for the explicit Connect streaming content type as a fallback;
+        # NOTE: plain "application/yaml" is NOT checked here because it is the official
+        # IANA YAML MIME type (RFC 9512) used by RestClientIo for all YAML requests,
+        # not just Connect; matching it would incorrectly enable Connect mode on regular
+        # REST calls
         *string ct = hdr."content-type";
         if (ct.val()) {
             ct = ct.lwr();
-            if (ct =~ /^application\/yaml/ || ct =~ /^application\/connect\+/) {
+            if (ct =~ /^application\/connect\+/) {
                 return True;
             }
         }

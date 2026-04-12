@@ -535,20 +535,31 @@ class DataStreamUtilTest inherits QUnit::Test {
             ConnectProtocolVersionHdr: "1",
         }), "detect by protocol version header");
 
-        # Detect by application/yaml content type
+        # Bare application/yaml is NOT Connect — it's the standard YAML MIME type (RFC 9512)
+        assertFalse(connect_detect_protocol({
+            "content-type": "application/yaml",
+        }), "bare application/yaml is not Connect");
+
+        # Unary Connect requires the protocol version header alongside application/yaml
         assertTrue(connect_detect_protocol({
             "content-type": "application/yaml",
-        }), "detect by yaml content type");
+            ConnectProtocolVersionHdr: "1",
+        }), "detect unary Connect with version header");
 
         # Detect by streaming content type
         assertTrue(connect_detect_protocol({
             "content-type": "application/connect+yaml",
         }), "detect by streaming content type");
 
-        # Case insensitive content type detection
+        # Case insensitive streaming content type detection
         assertTrue(connect_detect_protocol({
+            "content-type": "Application/Connect+YAML",
+        }), "detect case insensitive streaming content type");
+
+        # Case insensitive bare application/yaml is still not Connect
+        assertFalse(connect_detect_protocol({
             "content-type": "Application/YAML",
-        }), "detect case insensitive");
+        }), "bare Application/YAML is not Connect");
 
         # Not a Connect request: DataStream v1
         assertFalse(connect_detect_protocol({
