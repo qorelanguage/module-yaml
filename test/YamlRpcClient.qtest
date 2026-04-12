@@ -3,6 +3,7 @@
 
 %modern
 
+%requires ../qlib/YamlRpcClientIo
 %requires ../qlib/YamlRpcClient.qm
 %requires ../qlib/YamlRpcHandler.qm
 %requires HttpServer
@@ -54,6 +55,7 @@ class YamlRpcClientTest inherits QUnit::Test {
         addTestCase("YAML-RPC client constructor options", \testConstructorOptions());
         addTestCase("YAML-RPC make request", \testMakeRequest());
         addTestCase("YAML-RPC data stream connection", \testDataStreamConnection());
+        addTestCase("YAML-RPC connection getAsync test", \testYamlRpcConnectionGetAsync());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -142,5 +144,26 @@ class YamlRpcClientTest inherits QUnit::Test {
         string url = "yamlrpc://localhost:8099/test";
         YamlRpcConnection conn("test", "test", url, {"monitor": False});
         assertEq(True, conn instanceof YamlRpcConnection);
+    }
+
+    testYamlRpcConnectionGetAsync() {
+        # getAsync() should return a YamlRpcClientIo object
+        string url = "yamlrpcs://localhost:8099/";
+        YamlRpcConnection conn("async-test", "async test", url, {"monitor": False});
+        auto async_client = conn.getAsync(False);
+        assertTrue(async_client instanceof YamlRpcClientIo::YamlRpcClientIo,
+            "getAsync should return YamlRpcClientIo");
+        string yurl = url;
+        yurl =~ s/^yamlrpc/http/;
+        assertEq(yurl, async_client.getUrl(), "async client URL should be mapped");
+
+        # Test with non-SSL scheme
+        url = "yamlrpc://localhost:8080/api";
+        conn = new YamlRpcConnection("async-http", "async HTTP test", url, {"monitor": False});
+        async_client = conn.getAsync(False);
+        assertTrue(async_client instanceof YamlRpcClientIo::YamlRpcClientIo,
+            "getAsync should return YamlRpcClientIo for non-SSL");
+        assertEq("http://localhost:8080/api", async_client.getUrl(),
+            "async client URL for non-SSL");
     }
 }
