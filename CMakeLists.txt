@@ -43,6 +43,7 @@ set(QMOD
     qlib/YamlRpcClient.qm
     qlib/YamlTagHandler.qm
     qlib/YamlSchema.qm
+    qlib/YamlRpcClientIo
 )
 
 # Check for C++11.
@@ -79,13 +80,14 @@ qore_external_user_module("qlib/DataStreamUtil.qm" "")
 qore_external_user_module("qlib/DataStreamClient.qm" "DataStreamUtil")
 qore_external_user_module("qlib/DataStreamClientIo.qm" "DataStreamUtil")
 qore_external_user_module("qlib/DataStreamRequestHandler.qm" "DataStreamUtil")
-qore_external_user_module("qlib/YamlRpcClient.qm" "")
+qore_external_user_module("qlib/YamlRpcClient.qm" "YamlRpcClientIo")
 qore_external_user_module("qlib/YamlRpcHandler.qm" "")
 qore_external_user_module("qlib/YamlDocumentDataProvider" "")
 qore_external_user_module("qlib/YamlTagHandler.qm" "")
 qore_external_user_module("qlib/YamlSchema.qm" "")
 qore_external_user_module("qlib/Connect" "")
 qore_external_user_module("qlib/ConnectDataProvider" "")
+qore_external_user_module("qlib/YamlRpcClientIo" "")
 
 # install qpp metadata files
 if (COMMAND qore_install_qpp_metadata)

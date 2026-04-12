@@ -32,11 +32,12 @@
 %requires Mime >= 1.0
 
 %requires(reexport) ConnectionProvider >= 1.4
+%requires YamlRpcClientIo
 
 %modern
 
 module YamlRpcClient {
-    version = "1.6";
+    version = "1.7";
     desc = "YamlRpcClient module";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -150,6 +151,11 @@ Content-Length: 118
 
     @section yamlrpcclient_relnotes YamlRpcClient Module Release History
 
+    @subsection yrc_v_1_7 YamlRpcClient v1.7
+    - added \c getAsyncImpl() to \c YamlRpcConnection returning a
+      <a href="../../YamlRpcClientIo/html/index.html">YamlRpcClientIo</a> object for async I/O;
+      call \c getAsync() on the connection to get the async variant
+
     @subsection yrc_v_1_6 YamlRpcClient v1.6
     - added debug logging support
     - updated copyright year to 2025
@@ -188,6 +194,10 @@ public namespace YamlRpcClient {
 /** The %YamlRpcClient class will correctly serialize YAML-RPC messages, send them to the server, deserialize the responses and return a Qore-language data structure for the response.
 
     YAML-RPC is a proprietary HTTP-based RPC protocol; for a description of the YAML-RPC protocol implemented by the %YamlRpcClient class, see @ref YAMLRPC.
+
+    @deprecated Use \c YamlRpcClientIo instead, which provides the same YAML-RPC call API with
+    async I/O via \c HttpClientIo, automatic protocol negotiation (HTTP/3, HTTP/2, HTTP/1.1),
+    and connection pooling.
 
     @note
     - if no URI path is given in the constructor(), the default path used is \c "/YAML"
@@ -332,7 +342,10 @@ public class YamlRpcClient inherits Qore::HTTPClient {
 }
 
 #! class for @ref YAMLRPC "YAML-RPC" connections; returns @ref YamlRpcClient objects
-/** supports the following options:
+/** @deprecated Use \c YamlRpcIoConnection from the \c YamlRpcClientIo module instead, which provides
+    async I/O via \c HttpClientIo with automatic protocol negotiation.
+
+    supports the following options:
 - \c "http_version": HTTP version to use (\c "auto", \c "1.0", \c "1.1", or \c "2.0", defaults to \c "auto");
       HTTP/2 (\c "2.0" or \c "auto") requires TLS and is negotiated via ALPN
     - \c "max_redirects": maximum redirects to support
@@ -413,6 +426,26 @@ public class YamlRpcConnection inherits ConnectionProvider::HttpBasedConnection 
     */
     private YamlRpcClient getImpl(bool connect = True, *hash<auto> rtopts) {
         return new YamlRpcClient(real_opts, !connect);
+    }
+
+    #! returns a @ref YamlRpcClientIo::YamlRpcClientIo object for async I/O
+    /** @param connect this parameter is accepted for compatibility but connections are established on demand
+        @param rtopts this connection type does not accept any runtime options, so this parameter is ignored
+
+        @return a @ref YamlRpcClientIo::YamlRpcClientIo object
+
+        @since YamlRpcClient 1.7
+    */
+    private YamlRpcClientIo::YamlRpcClientIo getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        # Convert yamlrpc/yamlrpcs URL to http/https
+        string http_url = real_opts.url;
+        if (http_url =~ /^yamlrpcs:/) {
+            http_url = regex_subst(http_url, "^yamlrpcs:", "https:");
+        } else if (http_url =~ /^yamlrpc:/) {
+            http_url = regex_subst(http_url, "^yamlrpc:", "http:");
+        }
+
+        return new YamlRpcClientIo::YamlRpcClientIo(http_url, real_opts - "url");
     }
 
     #! Returns the ConnectionSchemeInfo hash for this object

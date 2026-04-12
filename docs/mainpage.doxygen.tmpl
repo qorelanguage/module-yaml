@@ -21,6 +21,7 @@
     User modules implementing the following HTTP-based protocols using YAML for data serialization are included:
     - YAML-RPC: similar to JSON-RPC but using YAML-serialized data
       (<a href="../../YamlRpcClient/html/index.html">YamlRpcClient</a>,
+      <a href="../../YamlRpcClientIo/html/index.html">YamlRpcClientIo</a> (async I/O),
       <a href="../../YamlRpcHandler/html/index.html">YamlRpcHandler</a>)
     - DataStream: allows for data streaming with HTTP 1.1 chunked data transfers where each chunk is a unique data
       entity (<a href="../../DataStreamUtil/html/index.html">DataStreamUtil</a>,
@@ -37,6 +38,7 @@
     - <a href="../../DataStreamClient/html/index.html">DataStreamClient user module</a>
     - <a href="../../DataStreamRequestHandler/html/index.html">DataStreamRequestHandler user module</a>
     - <a href="../../YamlRpcClient/html/index.html">YamlRpcClient user module</a>
+    - <a href="../../YamlRpcClientIo/html/index.html">YamlRpcClientIo user module</a> (async I/O replacement for YamlRpcClient)
     - <a href="../../YamlRpcHandler/html/index.html">YamlRpcHandler user module</a>
     - <a href="../../YamlSchema/html/index.html">YamlSchema user module</a>
     - <a href="../../YamlTagHandler/html/index.html">YamlTagHandler user module</a>
@@ -118,6 +120,18 @@ auto data = parse_yaml(yaml_str);
         an ordered map
 
     @section yamlreleasenotes Release Notes
+
+    @subsection yaml_1_3_0 yaml Module Version 1.3.0
+
+    <b>New User Modules</b>
+    - added <a href="../../YamlRpcClientIo/html/index.html">YamlRpcClientIo</a> (v1.0):
+      pure-Qore YAML-RPC client with async I/O via \c HttpClientIo; this is the async I/O
+      replacement for the \c YamlRpcClient module, providing the same YAML-RPC call API
+      with automatic HTTP/3, HTTP/2, and HTTP/1.1 protocol negotiation and connection pooling
+      - \c yamlrpcio:// and \c yamlrpcios:// URL schemes for ConnectionProvider
+
+    <b>User Module Version Updates</b>
+    - <a href="../../YamlRpcClientIo/html/index.html">YamlRpcClientIo</a>: new module (1.0)
 
     @subsection yaml_1_2_0 yaml Module Version 1.2.0
 
