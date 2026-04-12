@@ -21,6 +21,8 @@ class DataStreamClientIoTest inherits QUnit::Test {
         int m_port;
         int m_tls_port;
         bool m_tls_available = False;
+        int m_quic_port;
+        bool m_quic_available = False;
 
         # Self-signed test certificate (localhost, RSA 2048)
         const CertPem = "-----BEGIN CERTIFICATE-----
@@ -150,6 +152,22 @@ l50Xb2GWQesIt9k5jF5IOw==
             printf("TLS listener setup failed: %s: %s\n", ex.err, ex.desc);
         }
 
+        # QUIC (HTTP/3) listener for H3 streaming tests
+        try {
+            hash<auto> quic_info = m_http.addQuicListener(<HttpListenerOptionInfo>{
+                "cert": new SSLCertificate(CertPem),
+                "key": new SSLPrivateKey(KeyPem),
+            });
+            m_quic_port = quic_info.port;
+            m_quic_available = True;
+
+            addTestCase("H3 recvDataStream (Connect)", \testH3RecvDataStream());
+            addTestCase("H3 sendDataStream (Connect)", \testH3SendDataStream());
+            addTestCase("H3 sendRecvDataStream (Connect)", \testH3SendRecvDataStream());
+        } catch (hash<ExceptionInfo> ex) {
+            printf("QUIC listener setup failed: %s: %s\n", ex.err, ex.desc);
+        }
+
         set_return_value(main());
 
         delete m_http;
@@ -161,6 +179,10 @@ l50Xb2GWQesIt9k5jF5IOw==
 
     private string getHttpsUrl() {
         return sprintf("https://127.0.0.1:%d", m_tls_port);
+    }
+
+    private string getQuicUrl() {
+        return sprintf("https://127.0.0.1:%d", m_quic_port);
     }
 
     # ---- Protocol mode accessor tests ----
@@ -345,6 +367,116 @@ l50Xb2GWQesIt9k5jF5IOw==
         assertEq(2, received.size(), "received 2 bidi replies");
         assertEq("echo:hello", received[0].reply, "first bidi reply");
         assertEq("echo:world", received[1].reply, "second bidi reply");
+    }
+
+    # ---- HTTP/3 (QUIC) Connect streaming tests ----
+
+    testH3RecvDataStream() {
+        if (!m_quic_available) {
+            testSkip("QUIC not available");
+            return;
+        }
+
+        DataStreamClient::DataStreamClientIo client({
+            "url": getQuicUrl(),
+            "protocol": "connect",
+            "accept_all_certs": True,
+        });
+
+        list<auto> received();
+        *string recv_error;
+        client.recvDataStream(
+            sub (auto data) {
+                received += data;
+            },
+            sub (*string err) {
+                recv_error = err;
+            },
+            "POST", "/TestService/Numbers",
+            {"count": 3},
+            30s,
+        );
+
+        assertEq(3, received.size(), "H3: received 3 messages");
+        assertEq(0, received[0].index, "H3: first message index");
+        assertEq("msg-0", received[0].value, "H3: first message value");
+        assertEq(2, received[2].index, "H3: last message index");
+        assertNothing(recv_error, "H3: no error");
+    }
+
+    testH3SendDataStream() {
+        if (!m_quic_available) {
+            testSkip("QUIC not available");
+            return;
+        }
+
+        DataStreamClient::DataStreamClientIo client({
+            "url": getQuicUrl(),
+            "protocol": "connect",
+            "accept_all_certs": True,
+        });
+
+        list<hash<auto>> items = (
+            {"name": "alice"},
+            {"name": "bob"},
+            {"name": "charlie"},
+        );
+        int idx = 0;
+        hash<auto> resp = client.sendDataStream(
+            auto sub () {
+                if (idx >= items.size()) {
+                    return NOTHING;
+                }
+                return items[idx++];
+            },
+            "POST", "/TestService/Aggregate",
+            30s,
+        );
+
+        assertEq(3, resp.body.count, "H3: aggregated count");
+        assertEq(("alice", "bob", "charlie"), resp.body.names, "H3: aggregated names");
+    }
+
+    testH3SendRecvDataStream() {
+        if (!m_quic_available) {
+            testSkip("QUIC not available");
+            return;
+        }
+
+        DataStreamClient::DataStreamClientIo client({
+            "url": getQuicUrl(),
+            "protocol": "connect",
+            "accept_all_certs": True,
+        });
+
+        list<hash<auto>> to_send = (
+            {"text": "hello"},
+            {"text": "world"},
+        );
+        int send_idx = 0;
+        list<auto> received();
+        client.sendRecvDataStream(
+            auto sub () {
+                if (send_idx >= to_send.size()) {
+                    return NOTHING;
+                }
+                return to_send[send_idx++];
+            },
+            sub (auto data) {
+                received += data;
+            },
+            sub (*string err) {
+                if (err) {
+                    throw "BIDI-ERROR", err;
+                }
+            },
+            "POST", "/TestService/BidiEcho",
+            30s,
+        );
+
+        assertEq(2, received.size(), "H3: received 2 bidi replies");
+        assertEq("echo:hello", received[0].reply, "H3: first bidi reply");
+        assertEq("echo:world", received[1].reply, "H3: second bidi reply");
     }
 }
 
