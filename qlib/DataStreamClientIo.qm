@@ -1220,6 +1220,13 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
 
         deliver_headers();
 
+        # Accumulation buffer for normal (non-error) response data.
+        # HTTP/2 and HTTP/3 transports may fragment a single response body
+        # across multiple DATA frames at arbitrary byte boundaries, so we
+        # must reassemble the complete body before passing it to
+        # ds_get_recv() for YAML document splitting and deserialization.
+        binary data_buf;
+
         while (True) {
             auto rd = stream.readData(timeout_ms);
             if (!exists rd) {
@@ -1230,6 +1237,10 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
                     if (exists error_body) {
                         throwErrorResponse(response_status,
                             response_status_message, error_body);
+                    }
+                    # Deliver the reassembled body to ds_get_recv()
+                    if (data_buf) {
+                        ds_recv({"data": data_buf, "chunked": False});
                     }
                     *hash<string, string> trailers = stream.getTrailers();
                     *string ds_error = trailers ? trailers{DataStreamError.lwr()} : NOTHING;
@@ -1257,7 +1268,8 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
                 error_body += rd.typeCode() == NT_BINARY ? rd : binary(rd);
                 continue;
             }
-            ds_recv({"data": rd, "chunked": False});
+            # Accumulate data; will be delivered at end_stream
+            data_buf += rd.typeCode() == NT_BINARY ? rd : binary(rd);
         }
     }
 
