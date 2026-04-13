@@ -1183,25 +1183,14 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
     private readDSv1Stream(HttpClientIo::HttpClientStreamHandle stream,
             code<nothing(auto)> recv_callback, code<nothing(*string)> eod_callback,
             timeout timeout_ms) {
-        # Delegate body deserialization to the shared @ref ds_get_recv()
-        # decoder from DataStreamUtil — it already handles content-encoding
-        # (gzip/deflate/bzip2), content-type dispatch (YAML/JSON/XML),
-        # chunked vs non-chunked delivery, and the datastream flag needed
-        # for multiplexed transports. Synthesize the @c hdr / @c data
-        # events that @ref ds_get_recv() expects from the @ref readData()
-        # event stream on the @ref HttpClientStreamHandle so behavior
-        # matches the sync @ref DataStreamClient path exactly.
         code<nothing(hash<auto>)> ds_recv = ds_get_recv(recv_callback, eod_callback);
 
         bool headers_delivered;
-        # Use a closure to deliver headers exactly once, pulling them from
-        # whichever surface makes them available first: a standalone
-        # \c headers event from readData(), or (on H2/H3) the coalesced
-        # response metadata captured by the stream handle when body bytes
-        # and headers arrive in the same channel event. ds_get_recv
-        # requires the @c hdr event to precede any @c data event so that
-        # the decoder can resolve content-type, content-encoding, and the
-        # DataStream negotiation flag before trying to deserialize.
+        *int response_status;
+        *string response_status_message;
+        # Error-body drain buffer; set when status >= 300 detected
+        *binary error_body;
+
         code deliver_headers = sub (*hash<auto> maybe_hdr) {
             if (headers_delivered) {
                 return;
@@ -1219,24 +1208,29 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
                     hdr.status_code = resp.status_code;
                 }
             }
-            ds_recv({"hdr": hdr, "obj": self});
+            response_status = hdr.status_code;
+            response_status_message = hdr.status_message;
             headers_delivered = True;
+            if (response_status >= 300) {
+                error_body = binary();
+                return;
+            }
+            ds_recv({"hdr": hdr, "obj": self});
         };
 
-        # Headers may already be captured if the response was kicked off
-        # before we entered this function — deliver them up front so the
-        # decoder is primed for the first body chunk.
         deliver_headers();
 
         while (True) {
             auto rd = stream.readData(timeout_ms);
             if (!exists rd) {
-                # Timeout — keep trying
                 continue;
             }
             if (rd.typeCode() == NT_HASH) {
                 if (rd.end_stream) {
-                    # Signal EOD; use trailer DataStream-Error if present
+                    if (exists error_body) {
+                        throwErrorResponse(response_status,
+                            response_status_message, error_body);
+                    }
                     *hash<string, string> trailers = stream.getTrailers();
                     *string ds_error = trailers ? trailers{DataStreamError.lwr()} : NOTHING;
                     eod_callback(ds_error);
@@ -1250,20 +1244,52 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
                     deliver_headers(hdr);
                 }
                 if (rd.error) {
+                    if (exists error_body) {
+                        throwErrorResponse(response_status,
+                            response_status_message, error_body);
+                    }
                     throw "DATASTREAM-STREAM-ERROR", sprintf("stream error: %y", rd.error);
                 }
                 continue;
             }
-            # Body chunk — ensure ds_get_recv has seen the headers first
-            # (H2/H3 coalesced case, where the first channel event
-            # delivers body bytes but the handle's response member is
-            # populated synchronously with the same event).
             deliver_headers();
-            # Hand off to the shared decoder, which handles content-encoding
-            # (gzip/deflate/bzip2) and deserialization per the negotiated
-            # @c DataStream-Content-Type header.
+            if (exists error_body) {
+                error_body += rd.typeCode() == NT_BINARY ? rd : binary(rd);
+                continue;
+            }
             ds_recv({"data": rd, "chunked": False});
         }
+    }
+
+    #! Throws a typed exception from an HTTP error response body
+    /** Attempts to deserialize the body as YAML, then JSON. If the
+        deserialized body contains \c err and \c desc keys, throws the
+        server's exception directly; otherwise throws
+        \c DATASTREAM-CLIENT-RECEIVE-ERROR with the status code and body.
+
+        @param status_code the HTTP status code
+        @param status_message the HTTP status message
+        @param body the raw response body
+    */
+    private throwErrorResponse(int status_code, *string status_message, binary body) {
+        string body_str = body.toString("utf-8");
+        auto parsed;
+        try {
+            parsed = parse_yaml(body_str);
+        } catch () {
+            try {
+                parsed = parse_json(body_str);
+            } catch () {
+            }
+        }
+        if (parsed.typeCode() == NT_HASH && parsed.err && parsed.desc) {
+            throw parsed.err, sprintf("server-side error: %s: %s",
+                get_ex_pos(parsed), parsed.desc), parsed.arg;
+        }
+        throw "DATASTREAM-CLIENT-RECEIVE-ERROR",
+            sprintf("HTTP status code %d received: message: %y",
+                status_code, status_message),
+            {"status_code": status_code, "body": body_str};
     }
 
     #! Internal: send Connect-framed data via stream handle
