@@ -468,6 +468,150 @@ public namespace DataStreamUtil {
         throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize data stream request body; request includes unknown content-encoding %y", ce);
     }
 
+    #! Applies @a dce to each concatenated compressed stream in @a data
+    /** The DataStream v1 protocol compresses each record as an independent
+        gzip / deflate stream, relying on HTTP/1.x chunked transfer-encoding
+        to preserve record boundaries. Multiplexed transports (HTTP/2 and
+        HTTP/3) have no chunked transfer-encoding and are free to batch
+        multiple records into a single DATA frame, so a callback may receive
+        N concatenated compressed streams in one buffer. Single-shot
+        @ref Qore::gunzip_to_string() "gunzip_to_string()" (and siblings)
+        throw @c ZLIB-ERROR with \"Unexpected bytes at the end of compressed
+        data\" when handed such a buffer.
+
+        This helper fast-paths the single-stream case (the common case on
+        HTTP/1.x and when the sender has not batched) by calling @a dce
+        directly and returning a one-element list. When that fails, it
+        boundary-scans the buffer and returns one decompressed string per
+        stream in wire order, allowing the caller to deserialize each
+        record independently and invoke per-record callbacks the same way
+        it would when receiving HTTP/1.x chunks.
+
+        For gzip and deflate the scanner locates stream-start magic in the
+        input (@c 0x1f @c 0x8b for gzip; @c 0x78 followed by @c 0x01,
+        @c 0x9c, or @c 0xda for zlib/deflate) and tries decompression at
+        each candidate split; the first split that decompresses cleanly
+        is accepted and decompression continues on the remainder. Other
+        codecs (bzip2, brotli, zstd) rethrow unchanged — per-record
+        concatenation is a gzip/deflate-only pattern in DataStream v1.
+
+        @param dce a decompressor call reference (from @ref ds_get_content_decode())
+        @param data the possibly-concatenated compressed bytes
+        @param enc the output string encoding (UTF-8 for DataStream)
+
+        @return one decompressed string per source stream, in wire order
+
+        @throw ZLIB-ERROR the buffer could not be split into decompressible
+        streams (rethrown from the underlying decoder)
+
+        @since DataStreamUtil 1.4
+    */
+    #! Splits a concatenated stream of YAML documents into individual document strings
+    /** The DataStream v1 protocol emits one YAML document per record, separated by
+        \c "%YAML" directive markers at document boundaries. HTTP/1.x chunked transfer
+        preserves record boundaries naturally (one chunk per doc), but multiplexed
+        transports (HTTP/2, HTTP/3) may batch N docs into one DATA frame, leaving the
+        client with a single concatenated-docs string. This helper splits on the
+        \c "%YAML" directive to recover individual document strings that the single-
+        document @ref Qore::parse_yaml() can handle.
+
+        The first document may omit the directive (it always starts the stream), so
+        the split preserves any leading chunk before the first \c "%YAML" marker.
+        Empty trailing segments after the final newline are discarded.
+
+        @param data the concatenated YAML stream
+        @return one string per YAML document, each suitable for @ref Qore::parse_yaml()
+
+        @since DataStreamUtil 1.4
+    */
+    public list<string> sub ds_split_yaml_documents(string data) {
+        # Match on line-start %YAML directive; keep the directive with its own doc.
+        # Use regex split to preserve each "%YAML 1.2" header with its body. Returning
+        # N docs with the directive re-added where it was removed by the split.
+        list<string> parts = data.split("%YAML ");
+        list<string> out = ();
+        # If the input starts with "%YAML" the first split element is empty; skip it
+        # and re-prepend the directive to subsequent parts. Otherwise keep the
+        # leading content as its own document.
+        bool first = True;
+        foreach string p in (parts) {
+            if (first) {
+                first = False;
+                if (p.val()) {
+                    out += p;
+                }
+                continue;
+            }
+            out += "%YAML " + p;
+        }
+        # Strip empty trailing strings (trailing newline)
+        while (out && !out[out.size() - 1].val()) {
+            pop out;
+        }
+        return out;
+    }
+
+    public list<string> sub ds_decode_content_streams(code dce, binary data, string enc) {
+        # Fast path: buffer is a single compressed stream — succeeds on
+        # HTTP/1.x chunked transfer and whenever the sender did not pack
+        # multiple streams into one frame.
+        try {
+            return (dce(data, enc),);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "ZLIB-ERROR") {
+                # Other codecs (bzip2, brotli, zstd) raise codec-specific
+                # error codes — propagate unchanged; chunk-per-record
+                # concatenation is a gzip/deflate-only pattern in
+                # DataStream v1.
+                rethrow;
+            }
+        }
+        # Boundary-scan slow path.
+        list<string> out = ();
+        int pos = 0;
+        while (pos < data.size()) {
+            list<int> cands = ();
+            int p = pos + 2;
+            while (p + 1 < data.size()) {
+                bool is_magic = False;
+                # gzip magic
+                if (data[p] == 0x1f && data[p+1] == 0x8b) {
+                    is_magic = True;
+                }
+                # zlib (deflate) magic: 0x78 followed by 0x01/0x9c/0xda
+                if (data[p] == 0x78 && (data[p+1] == 0x01
+                        || data[p+1] == 0x9c || data[p+1] == 0xda)) {
+                    is_magic = True;
+                }
+                if (is_magic) {
+                    cands += p;
+                }
+                p++;
+            }
+            cands += data.size();
+            bool found = False;
+            foreach int c in (cands) {
+                try {
+                    out += dce(data.substr(pos, c - pos), enc);
+                    pos = c;
+                    found = True;
+                    break;
+                } catch (hash<ExceptionInfo> ex) {
+                    if (ex.err != "ZLIB-ERROR") {
+                        rethrow;
+                    }
+                    # candidate split is inside a deflate block — try next
+                }
+            }
+            if (!found) {
+                throw "ZLIB-ERROR",
+                    sprintf("could not decompose %d-byte buffer into "
+                        "concatenated compressed streams", data.size() - pos);
+            }
+        }
+        return out;
+    }
+
     #! returns a @ref call_reference "call reference" (or @ref nothing) based on an optional \c "Content-Encoding" header value for encoding HTTP encoded data
     /** @par Example:
         @code{.py}
@@ -662,80 +806,124 @@ httpclient.sendWithRecvCallback(ds_get_recv(recv_callback), body, method, path, 
                 # to check for data.
             }
             if (exists h."data") {
-                if (!h.deserialized) {
-                    switch (h."data".typeCode()) {
-                        # can be a string if sent in a regular body without content-encoding
-                        case NT_STRING: {
-                            # only decode chunked data; monolithic bodies are decoded by the Qore library
-                            # automatically
-                            if (dce && chunked) {
-                                h."data" = dce(binary(h."data"), "utf8");
-                            } else if (h."data".encoding() != "UTF-8") {
+                if (h.deserialized) {
+                    # Caller already deserialized; just hand through.
+                    recv_callback(h."data");
+                    return;
+                }
+                # Decode content-encoding. May produce multiple items when
+                # the sender packed N compressed records into one buffer
+                # (common on HTTP/2 / HTTP/3 where chunked transfer-encoding
+                # doesn't exist; see ds_decode_content_streams()).
+                list<auto> items;
+                switch (h."data".typeCode()) {
+                    # string if sent in a regular body without content-encoding
+                    case NT_STRING: {
+                        # only decode chunked data; monolithic bodies are
+                        # decoded by the Qore library automatically
+                        if (dce && chunked) {
+                            items = ds_decode_content_streams(dce, binary(h."data"), "utf8");
+                        } else {
+                            if (h."data".encoding() != "UTF-8") {
                                 h."data" = force_encoding(h."data", "utf8");
                             }
-                            break;
+                            items = (h."data",);
                         }
-                        # is a binary if sent in a regular body without content-encoding or sent chunked
-                        case NT_BINARY: {
-                            if (dce) {
-                                if (!chunked || datastream) {
-                                    h."data" = dce(h."data", "utf8");
-                                }
+                        break;
+                    }
+                    # binary if sent in a regular body without content-encoding
+                    # or sent chunked
+                    case NT_BINARY: {
+                        if (dce) {
+                            if (!chunked || datastream) {
+                                items = ds_decode_content_streams(dce, h."data", "utf8");
                             } else {
-                                h."data" = binary_to_string(h."data", "utf8");
+                                # HTTP/1.x chunked without DataStream
+                                # negotiation — single chunk, single stream.
+                                items = (dce(h."data", "utf8"),);
                             }
-                            break;
+                        } else {
+                            items = (binary_to_string(h."data", "utf8"),);
                         }
-                        default:
-                            throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize request body; body type is %y",
-                                h."data".type());
+                        break;
                     }
-                    *hash<auto> ddc = DataStreamDeserializationSupport{ct};
-                    if (!ddc) {
-                        if (body_callback && ct) {
-                            body_callback(h."data", ct);
-                        }
-                        # if an HTTP error code was returned, then raise another exception
-                        if (status_code >= 400) {
-                            throw "DESERIALIZATION-ERROR", sprintf("HTTP server returned a \"%d %s\" response with "
-                                "non-deserializable Content-Type %y: %s", status_code, status_message, ct, h."data");
-                        }
-                        throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize request body; content-type is: "
-                            "%y; types supported: %y", ct, DataStreamDeserializationSupport.keys());
-                    }
+                    default:
+                        throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize request body; body type is %y",
+                            h."data".type());
+                }
 
-                    # pass the content-decoded body to any "body callback" before deserialization
+                *hash<auto> ddc = DataStreamDeserializationSupport{ct};
+                if (!ddc) {
+                    # Fall back to the legacy single-buffer path: hand the
+                    # first (only) decoded item to body_callback and raise.
+                    auto buf = items.lsize() > 1 ? items.join("") : items[0];
+                    if (body_callback && ct) {
+                        body_callback(buf, ct);
+                    }
+                    if (status_code >= 400) {
+                        throw "DESERIALIZATION-ERROR", sprintf("HTTP server returned a \"%d %s\" response with "
+                            "non-deserializable Content-Type %y: %s", status_code, status_message, ct, buf);
+                    }
+                    throw "DESERIALIZATION-ERROR", sprintf("cannot deserialize request body; content-type is: "
+                        "%y; types supported: %y", ct, DataStreamDeserializationSupport.keys());
+                }
+
+                # For YAML payloads over multiplexed transports (H2/H3), a single
+                # decompressed item may still carry multiple concatenated YAML
+                # documents if the sender batched records without per-record
+                # compression. Split on @c %YAML directive boundaries so each
+                # document can be deserialized individually.
+                if (ddc."code" == "yaml" && (datastream || (!chunked && !extern_decode))) {
+                    list<auto> expanded = ();
+                    foreach auto item in (items) {
+                        string s = item.typeCode() == NT_BINARY ? item.toString("utf-8")
+                            : item;
+                        if (s =~ /\n%YAML /) {
+                            expanded += ds_split_yaml_documents(s);
+                        } else {
+                            expanded += s;
+                        }
+                    }
+                    if (expanded) {
+                        items = expanded;
+                    }
+                }
+
+                foreach auto item in (items) {
+                    auto record;
                     if (body_callback) {
-                        body_callback(h."data", ddc."code");
+                        body_callback(item, ddc."code");
                     }
                     if (datastream || (!chunked && !extern_decode)) {
-                        # convert binary to string for deserialization (HTTP/2+ returns binary bodies)
-                        auto data = h."data";
+                        # deserialize each decoded stream independently
+                        auto data = item;
                         if (data.typeCode() == NT_BINARY) {
                             data = data.toString("utf-8");
                         }
-                        h."data" = ddc.in(data);
+                        record = ddc.in(data);
+                    } else {
+                        record = item;
                     }
-                }
 
-                # if the server has returned a status code, then handle as an exception on the remote side, otherwise
-                # throw a SEND-ABORTED exception
-                if (!chunked) {
-                    if ((send_aborted || status_code >= 300) && h."data".err && h."data".desc) {
-                        throw h."data".err, h."data".desc, h."data".arg;
-                    }
-                    if (send_aborted) {
-                        if (status_code) {
-                            throw "SEND-ABORTED", sprintf("receiver sent status code %d before chunked send was "
-                                "complete", status_code), h."data";
-                        } else {
-                            throw "SEND-ABORTED", "receiver sent a reply before chunked send was complete", h."data";
+                    # if the server has returned a status code, then handle
+                    # as an exception on the remote side, otherwise throw a
+                    # SEND-ABORTED exception
+                    if (!chunked) {
+                        if ((send_aborted || status_code >= 300) && record.err && record.desc) {
+                            throw record.err, record.desc, record.arg;
+                        }
+                        if (send_aborted) {
+                            if (status_code) {
+                                throw "SEND-ABORTED", sprintf("receiver sent status code %d before chunked send was "
+                                    "complete", status_code), record;
+                            } else {
+                                throw "SEND-ABORTED", "receiver sent a reply before chunked send was complete", record;
+                            }
                         }
                     }
-                }
 
-                # call data callback
-                recv_callback(h."data");
+                    recv_callback(record);
+                }
             }
         };
     }

@@ -187,6 +187,18 @@ public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRest
         /** @since DataStreamRequestHandler 1.2
         */
         bool connect_mode = False;
+
+        #! Effective content-encoding sent in the response (may be empty on multiplexed transports)
+        /** On HTTP/2 and HTTP/3 for the DataStream v1 protocol, per-record
+            compression is suppressed because there is no chunked transfer-
+            encoding to preserve record boundaries. This member captures the
+            encoding actually used on the wire, which @ref getResponseHeaderMessageImpl()
+            reports back to the client via the DataStream-Content-Encoding
+            header. Equals @c cx.encoding for Connect mode and for HTTP/1.x.
+
+            @since DataStreamRequestHandler 1.3
+        */
+        *string effective_encoding;
     }
 
     #! creates the chunked request handler according to the arguments
@@ -203,18 +215,48 @@ public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRest
         # from Connect to DataStream v1 (e.g. after a CONNECT-HTTP-ERROR) may send DataStream v1
         # over HTTP/2, and the server must honor the actual Content-Type.
         connect_mode = connect_detect_protocol(cx.hdr);
-        @debug(printf("AbstractDataStreamRequestHandler::constructor() encoding=%y connect_mode=%y\n",
-            cx.encoding, connect_mode));
+        # Per-record gzip/deflate compression is incompatible with multiplexed
+        # transports (HTTP/2, HTTP/3) for the DataStream v1 protocol: those
+        # transports have no chunked transfer-encoding to preserve record
+        # boundaries, so the server's per-record-compressed output gets
+        # batched into a single DATA frame as N concatenated compressed
+        # streams, which the receiver cannot decompose without boundary-
+        # scanning. Disable compression on H2/H3 so each record travels as
+        # plain YAML — the client can still split records at @c %YAML
+        # directive boundaries. (H1.x clients continue to receive per-
+        # record-compressed chunks unchanged.) Connect protocol (DataStream
+        # 2.0) is unaffected: it frames each record with an explicit length
+        # header so batching cannot blur record boundaries.
+        bool multiplexed = !connect_mode && isMultiplexedTransport();
+        effective_encoding = multiplexed ? NOTHING : cx.encoding;
+        @debug(printf("AbstractDataStreamRequestHandler::constructor() "
+            "encoding=%y effective_encoding=%y connect_mode=%y multiplexed=%y\n",
+            cx.encoding, effective_encoding, connect_mode, multiplexed));
         if (connect_mode) {
             recv_callback = connect_get_recv(\recvData(), \recvDataDone());
             scb = connect_get_send(\sendData(), ds_get_content_encode(cx.encoding));
         } else {
             recv_callback = ds_get_recv(\recvData(), \recvDataDone());
-            scb = ds_get_send(\sendData(), ds_get_content_encode(cx.encoding));
+            scb = ds_get_send(\sendData(), ds_get_content_encode(effective_encoding));
         }
 
         # setup data stream with header
         call_function(recv_callback, {"hdr": cx.hdr, "obj": cx.socketobject});
+    }
+
+    #! Returns @ref True if the request arrived over a multiplexed HTTP transport (H2 or H3)
+    /** Multiplexed transports have no chunked transfer-encoding, so the server
+        must avoid per-record content-encoding for the DataStream v1 protocol.
+
+        @since DataStreamRequestHandler 1.3
+    */
+    private bool isMultiplexedTransport() {
+        *string hv = cx.hdr.http_version;
+        if (!hv) {
+            return False;
+        }
+        # Match H2, H3, HTTP/2, HTTP/3 (or any future 2.x / 3.x)
+        return hv =~ /^(HTTP\/)?[23]/;
     }
 
     #! returns @ref False because DataStream manages its own per-chunk content encoding
@@ -331,7 +373,7 @@ public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRest
         if (connect_mode) {
             connect_set_chunked_headers(\hdr, cx.encoding);
         } else {
-            ds_set_chunked_headers(\hdr, cx.encoding);
+            ds_set_chunked_headers(\hdr, effective_encoding);
         }
         return {
             "code": 200,
