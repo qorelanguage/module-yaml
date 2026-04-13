@@ -416,7 +416,19 @@ public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRest
             } else if (data.typeCode() == NT_BINARY || data.typeCode() == NT_STRING) {
                 string yaml_str = data.typeCode() == NT_BINARY
                     ? binary_to_string(data, "utf-8") : data;
-                recvDataImpl(parse_yaml(yaml_str));
+                # On HTTP/2 and HTTP/3, multiple sendData() calls from the client
+                # get batched into a single request body (no chunked transfer-
+                # encoding to preserve boundaries).  Split on @c %YAML directive
+                # boundaries so each document can be deserialized and delivered
+                # individually.  On HTTP/1.x with chunked transfer, each chunk
+                # is a single YAML document and the split is a no-op.
+                if (yaml_str =~ /\n%YAML /) {
+                    foreach string doc in (DataStreamUtil::ds_split_yaml_documents(yaml_str)) {
+                        recvDataImpl(parse_yaml(doc));
+                    }
+                } else {
+                    recvDataImpl(parse_yaml(yaml_str));
+                }
             } else {
                 recvDataImpl(data);
             }
