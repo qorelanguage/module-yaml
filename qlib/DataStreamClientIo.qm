@@ -1349,6 +1349,30 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
     private sendDSv1Stream(HttpClientIo::HttpClientStreamHandle stream,
             code<auto()> scb, *code enc_func) {
         while (True) {
+            # DSv1 is request-then-response: the server does not send its response
+            # until it has fully read the request body, unless it is terminating
+            # the request early with an error (e.g. COLUMN-ERROR surfaced
+            # mid-stream).  Drain any pending stream events non-blockingly so
+            # that an early response or stream reset updates the handle's state;
+            # without this, the send loop never observes server-initiated
+            # termination and producers like DbRemoteSend's infinite-loop tests
+            # spin forever pushing data into a stream the server has already
+            # closed.
+            try {
+                stream.readData(0);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "HTTPCLIENT-STREAM-CLOSED") {
+                    stream.writesDone();
+                    return;
+                }
+                # other exceptions indicate a real stream error — surface it
+                rethrow;
+            }
+            if (stream.isDone() || stream.hasError()
+                    || exists stream.getResponse().status_code) {
+                stream.writesDone();
+                return;
+            }
             auto data;
             try {
                 data = scb();
