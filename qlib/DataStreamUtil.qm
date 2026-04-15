@@ -412,7 +412,7 @@ public namespace DataStreamUtil {
     public const DataStreamDeserializationSupport = {
         MimeTypeYamlRpc: DataStreamDeserializeYaml,
         MimeTypeYaml: DataStreamDeserializeYaml,
-        MimeTypeYamlApp: DataStreamDeserializeYaml,
+        "text/x-yaml": DataStreamDeserializeYaml,
 %ifndef NoJson
         MimeTypeJson: {
             "code": "json",
