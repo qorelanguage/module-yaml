@@ -1318,21 +1318,46 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
                 if (ex.err == "THREAD-CANCELLED" || ex.err == "PROGRAM-INTERRUPTED") {
                     rethrow;
                 }
-                # Send EndStreamResponse with error
+                # Send EndStreamResponse with error.  If the stream is already
+                # in a terminal state (cancelled by the caller, reset by the
+                # peer, connection closed, etc.) sendData / writesDone will
+                # throw HTTPCLIENT-STATE-ERROR or HTTPCLIENT-STREAM-CLOSED —
+                # swallow those, because the peer already knows the stream is
+                # over and there is nothing to signal.  Letting the exception
+                # propagate here would abort the socket-thread with a
+                # secondary error, triggering belt-and-suspenders cleanup in
+                # the caller that can block on the REST helper's default
+                # request_timeout.
                 string err_msg = sprintf("%s: %s", ex.err, ex.desc);
                 err_msg =~ s/[\r\n]/ /g;
                 string json = make_json({"error": {"code": "internal", "message": err_msg}});
-                stream.sendData(connect_frame_message(binary(json),
-                    CONNECT_FLAG_END_STREAM), False);
-                stream.writesDone();
+                try {
+                    stream.sendData(connect_frame_message(binary(json),
+                        CONNECT_FLAG_END_STREAM), False);
+                    stream.writesDone();
+                } catch (hash<ExceptionInfo> send_ex) {
+                    if (send_ex.err != "HTTPCLIENT-STATE-ERROR"
+                            && send_ex.err != "HTTPCLIENT-STREAM-CLOSED") {
+                        rethrow;
+                    }
+                    # stream already terminal — peer already knows
+                }
                 return;
             }
 
             if (!exists data) {
-                # End of stream: emit EndStreamResponse frame
-                stream.sendData(connect_frame_message(binary("{}"),
-                    CONNECT_FLAG_END_STREAM), False);
-                stream.writesDone();
+                # End of stream: emit EndStreamResponse frame.  Same
+                # terminal-state tolerance as the error path above.
+                try {
+                    stream.sendData(connect_frame_message(binary("{}"),
+                        CONNECT_FLAG_END_STREAM), False);
+                    stream.writesDone();
+                } catch (hash<ExceptionInfo> send_ex) {
+                    if (send_ex.err != "HTTPCLIENT-STATE-ERROR"
+                            && send_ex.err != "HTTPCLIENT-STREAM-CLOSED") {
+                        rethrow;
+                    }
+                }
                 return;
             }
 
