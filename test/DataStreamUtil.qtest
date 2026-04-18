@@ -418,7 +418,7 @@ class DataStreamUtilTest inherits QUnit::Test {
         ds_set_chunked_headers(\hdr, NOTHING, True);
 
         # Check Accept header
-        assertTrue(hdr.Accept =~ /text\/x-yaml/);
+        assertTrue(hdr.Accept.find(MimeTypeYaml) >= 0);
         assertTrue(hdr.Accept =~ /application\/octet-stream/);
 
         # Check DataStream-Accept header
