@@ -295,8 +295,11 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
         # and doSendRecvDataStream() which call setConnectStreamingHeaders() or
         # ds_set_non_chunked_headers() directly.
 
+        # Honor setTimeout() — pass the per-instance override through to the manager
+        *timeout req_to = getRequestTimeoutOverride();
+
         hash<auto> raw = getConnectionManager().request(getUrl(), method, path, hdr,
-            prepared.serialized_body);
+            prepared.serialized_body, req_to);
 
         # Handle DS v1 responses: map DataStream-Content-Type to content-type for deserialization
         if (raw.headers) {
@@ -319,7 +322,7 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
             hdr = save_hdr;
             prepared = prepareRequest(method, \path, save_body, \hdr);
             raw = getConnectionManager().request(getUrl(), method, path, hdr,
-                prepared.serialized_body);
+                prepared.serialized_body, req_to);
         }
 
         return buildResponse(raw, prepared.error_passthru,
