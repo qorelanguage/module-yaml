@@ -163,36 +163,35 @@ public class GrpcProtocolAdapter {
             grpc_message = "deadline exceeded";
         }
 
-        # Build gRPC response
+        # Build gRPC response — route through the *Async Socket methods so
+        # this handler thread never holds the socket wrapper lock during
+        # HTTP/2 I/O.  io_wake (forwarded by HttpServer.qm from the async
+        # controller's conn_info.header_info) nudges the I/O thread to flush
+        # the pending frames promptly; without it, frames sit in nghttp2's
+        # outbound buffer until the next controller tick.  Replaces the old
+        # sync submit/send/trailer + startPollHttp2Flush + Socket::poll loop.
         int stream_id = cx."header-info".stream_id ?? 0;
+        *code<nothing()> io_wake = cx."header-info".io_wake;
 
         if (grpc_status == 0) {
-            # Encode response
             binary encoded = codec.serialize(response);
             binary framed = ConnectHelper::frameMessage(encoded);
 
-            s.submitHttp2StreamingResponseHeaders(stream_id, 200,
+            s.submitHttp2StreamingResponseHeadersAsync(stream_id, 200,
                 {"content-type": "application/grpc+proto"});
-            s.sendHttp2StreamData(stream_id, framed, False);
+            s.sendHttp2StreamDataAsync(stream_id, framed, False);
         } else {
-            s.submitHttp2StreamingResponseHeaders(stream_id, 200,
+            s.submitHttp2StreamingResponseHeadersAsync(stream_id, 200,
                 {"content-type": "application/grpc+proto"});
         }
 
-        s.sendHttp2Trailers(stream_id, {
+        s.sendHttp2TrailersAsync(stream_id, {
             "grpc-status": string(grpc_status),
             "grpc-message": grpc_message,
         });
 
-        AbstractPollOperation flush_op = s.startPollHttp2Flush();
-        int i = 0;
-        while (!flush_op.goalReached() && i < 5000) {
-            *hash<SocketPollInfo> info = flush_op.continuePoll();
-            if (!info) {
-                break;
-            }
-            Socket::poll((info,), 100ms);
-            ++i;
+        if (io_wake) {
+            io_wake();
         }
 
         return <HttpResponseInfo>{

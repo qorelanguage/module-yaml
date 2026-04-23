@@ -649,9 +649,12 @@ handler.registerDatagramBidi("Sensor", "Exchange",
             }
         }
 
-        # Create server stream for handler to write responses
+        # Create server stream for handler to write responses.  Forward
+        # io_wake (from HttpServer's async-controller bridge) so the stream
+        # can use the *Async Socket methods without a handler-thread flush.
+        *code<nothing()> io_wake = cx."header-info".io_wake;
         ConnectServerStream stream(s, codec, stream_id, http3, session_id, (),
-            m_max_message_size, send_encoding, recv_encoding);
+            m_max_message_size, send_encoding, recv_encoding, io_wake);
 
         *hash<ConnectErrorInfo> error;
         try {
@@ -686,8 +689,13 @@ handler.registerDatagramBidi("Sensor", "Exchange",
                 s.waitForQuicStreamDrain(session_id, stream_id, 5s);
             }
         } else {
-            s.sendHttp2StreamData(stream_id, end_frame, True);
-            s.flushHttp2();
+            # Async H2 end-of-stream write + io_wake to flush promptly.
+            # Replaces the former sendHttp2StreamData + flushHttp2 sync pair.
+            s.sendHttp2StreamDataAsync(stream_id, end_frame, True);
+            *code<nothing()> io_wake = cx."header-info".io_wake;
+            if (io_wake) {
+                io_wake();
+            }
         }
 
         bool is_multiplexed = http3 || (cx."header-info".http2 ?? False);
@@ -719,8 +727,9 @@ handler.registerDatagramBidi("Sensor", "Exchange",
         list<auto> messages = parseStreamMessages(body, codec, recv_encoding);
 
         # Create server stream with pre-parsed messages
+        *code<nothing()> io_wake = cx."header-info".io_wake;
         ConnectServerStream stream(s, codec, stream_id, http3, session_id, messages,
-            m_max_message_size, send_encoding, recv_encoding);
+            m_max_message_size, send_encoding, recv_encoding, io_wake);
 
         auto response;
         *hash<ConnectErrorInfo> error;
@@ -756,7 +765,7 @@ handler.registerDatagramBidi("Sensor", "Exchange",
                     s.waitForQuicStreamDrain(session_id, stream_id, 5s);
                 }
             } else {
-                s.sendHttp2StreamData(stream_id, framed, False);
+                s.sendHttp2StreamDataAsync(stream_id, framed, False);
             }
         }
 
@@ -769,8 +778,13 @@ handler.registerDatagramBidi("Sensor", "Exchange",
                 s.waitForQuicStreamDrain(session_id, stream_id, 5s);
             }
         } else {
-            s.sendHttp2StreamData(stream_id, end_frame, True);
-            s.flushHttp2();
+            # Async H2 end-of-stream write + io_wake to flush promptly.
+            # Replaces the former sendHttp2StreamData + flushHttp2 sync pair.
+            s.sendHttp2StreamDataAsync(stream_id, end_frame, True);
+            *code<nothing()> io_wake = cx."header-info".io_wake;
+            if (io_wake) {
+                io_wake();
+            }
         }
 
         bool is_multiplexed = http3 || (cx."header-info".http2 ?? False);
@@ -802,8 +816,9 @@ handler.registerDatagramBidi("Sensor", "Exchange",
         list<auto> messages = parseStreamMessages(body, codec, recv_encoding);
 
         # Create server stream with pre-parsed messages
+        *code<nothing()> io_wake = cx."header-info".io_wake;
         ConnectServerStream stream(s, codec, stream_id, http3, session_id, messages,
-            m_max_message_size, send_encoding, recv_encoding);
+            m_max_message_size, send_encoding, recv_encoding, io_wake);
 
         *hash<ConnectErrorInfo> error;
         try {
@@ -838,8 +853,13 @@ handler.registerDatagramBidi("Sensor", "Exchange",
                 s.waitForQuicStreamDrain(session_id, stream_id, 5s);
             }
         } else {
-            s.sendHttp2StreamData(stream_id, end_frame, True);
-            s.flushHttp2();
+            # Async H2 end-of-stream write + io_wake to flush promptly.
+            # Replaces the former sendHttp2StreamData + flushHttp2 sync pair.
+            s.sendHttp2StreamDataAsync(stream_id, end_frame, True);
+            *code<nothing()> io_wake = cx."header-info".io_wake;
+            if (io_wake) {
+                io_wake();
+            }
         }
 
         bool is_multiplexed = http3 || (cx."header-info".http2 ?? False);

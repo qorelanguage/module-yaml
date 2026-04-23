@@ -89,6 +89,15 @@ public class ConnectServerStream {
         *string m_send_encoding;
         #! Compression encoding for incoming messages (client→server)
         *string m_recv_encoding;
+
+        #! Optional I/O-controller wake closure
+        /** Forwarded by @ref ConnectHandler from @c cx."header-info".io_wake.
+            When set, @ref sendStreamData() / @ref ensureHeadersSent() call
+            the @c *Async Socket methods and then invoke this closure so the
+            I/O thread flushes pending frames promptly.  The only HTTP/2
+            code path on the server side once the sync H2 APIs are removed.
+        */
+        *code<nothing()> m_io_wake;
     }
 
     #! Create a server stream in buffered mode
@@ -108,7 +117,8 @@ public class ConnectServerStream {
     constructor(Socket socket, AbstractConnectCodec codec, int stream_id,
             bool http3, *int session_id, list<auto> messages = (),
             int max_message_size = CONNECT_DEFAULT_MAX_MESSAGE_SIZE,
-            *string send_encoding, *string recv_encoding) {
+            *string send_encoding, *string recv_encoding,
+            *code<nothing()> io_wake) {
         m_socket = socket;
         m_codec = codec;
         m_stream_id = stream_id;
@@ -118,6 +128,7 @@ public class ConnectServerStream {
         m_max_message_size = max_message_size;
         m_send_encoding = send_encoding;
         m_recv_encoding = recv_encoding;
+        m_io_wake = io_wake;
     }
 
     #! Create a server stream in live mode
@@ -301,7 +312,10 @@ public class ConnectServerStream {
             if (m_http3) {
                 m_socket.submitQuicResponseStreaming(m_session_id, m_stream_id, 200, headers);
             } else {
-                m_socket.submitHttp2StreamingResponseHeaders(m_stream_id, 200, headers);
+                m_socket.submitHttp2StreamingResponseHeadersAsync(m_stream_id, 200, headers);
+                if (m_io_wake) {
+                    m_io_wake();
+                }
             }
             m_headers_sent = True;
         }
@@ -382,16 +396,23 @@ public class ConnectServerStream {
                 m_socket.waitForQuicStreamDrain(m_session_id, m_stream_id, 5s);
             }
         } else {
-            m_socket.sendHttp2StreamData(m_stream_id, data, end_stream);
+            # Async send — the I/O thread flushes on the next tick, or
+            # immediately if m_io_wake nudges it.  Replaces the former
+            # sync sendHttp2StreamData + flushHttp2 pair.
+            m_socket.sendHttp2StreamDataAsync(m_stream_id, data, end_stream);
+            if (m_io_wake) {
+                m_io_wake();
+            }
         }
     }
 
     #! Flush the transport stream
+    /** No-op for HTTP/2 when writes go through the *Async path — the
+        I/O thread flushes after each write via the io_wake closure.
+        HTTP/3 flushes automatically via writePackets() on the I/O thread.
+    */
     private flushStream() {
-        if (!m_http3) {
-            m_socket.flushHttp2();
-        }
-        # HTTP/3: I/O thread flushes automatically via writePackets()
+        # intentional no-op; m_io_wake already flushed on sendStreamData
     }
 }
 
