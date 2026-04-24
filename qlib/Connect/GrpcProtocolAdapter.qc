@@ -177,15 +177,15 @@ public class GrpcProtocolAdapter {
             binary encoded = codec.serialize(response);
             binary framed = ConnectHelper::frameMessage(encoded);
 
-            s.submitHttp2StreamingResponseHeadersAsync(stream_id, 200,
+            s.submitHttp2StreamingResponseHeaders(stream_id, 200,
                 {"content-type": "application/grpc+proto"});
-            s.sendHttp2StreamDataAsync(stream_id, framed, False);
+            s.sendHttp2StreamData(stream_id, framed, False);
         } else {
-            s.submitHttp2StreamingResponseHeadersAsync(stream_id, 200,
+            s.submitHttp2StreamingResponseHeaders(stream_id, 200,
                 {"content-type": "application/grpc+proto"});
         }
 
-        s.sendHttp2TrailersAsync(stream_id, {
+        s.sendHttp2Trailers(stream_id, {
             "grpc-status": string(grpc_status),
             "grpc-message": grpc_message,
         });

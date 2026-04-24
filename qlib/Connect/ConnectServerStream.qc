@@ -195,7 +195,7 @@ public class ConnectServerStream {
             if (m_http3) {
                 m_socket.submitQuicResponseStreaming(m_session_id, m_stream_id, 200, headers);
             } else {
-                m_socket.submitHttp2StreamingResponseHeadersAsync(m_stream_id, 200, headers);
+                m_socket.submitHttp2StreamingResponseHeaders(m_stream_id, 200, headers);
                 if (m_io_wake) {
                     m_io_wake();
                 }
@@ -214,7 +214,7 @@ public class ConnectServerStream {
         } else {
             # Async send — the I/O thread flushes on the next tick, or
             # immediately if m_io_wake nudges it.
-            m_socket.sendHttp2StreamDataAsync(m_stream_id, data, end_stream);
+            m_socket.sendHttp2StreamData(m_stream_id, data, end_stream);
             if (m_io_wake) {
                 m_io_wake();
             }
