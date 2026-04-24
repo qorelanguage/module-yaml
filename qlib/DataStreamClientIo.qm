@@ -92,8 +92,6 @@ hash<auto> sub dsio_strip_opts(*hash<auto> opts) {
 #! Extends @ref RestClientIo::RestClientIo "RestClientIo" with support for the @ref datastreamprotocol "DataStream protocol"
 /** Provides the same DataStream streaming methods as @ref DataStreamClient::DataStreamClient "DataStreamClient"
     but built on the multiplexed async I/O infrastructure of @ref RestClientIo::RestClientIo "RestClientIo".
-
-    @since DataStreamClientIo 1.0
 */
 public class DataStreamClientIo inherits RestClientIo::RestClientIo {
     public {
@@ -184,8 +182,6 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
 
     #! Set the protocol preference
     /** @param proto the protocol mode; see @ref DataStreamProtocol for valid values
-
-        @since DataStreamClientIo 1.0
     */
     setProtocol(DataStreamProtocol proto) {
         AutoWriteLock al(config_lock);
@@ -194,8 +190,6 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
 
     #! Get the protocol preference
     /** @return the current protocol mode; see @ref DataStreamProtocol
-
-        @since DataStreamClientIo 1.0
     */
     DataStreamProtocol getProtocol() {
         AutoReadLock al(config_lock);
@@ -204,8 +198,6 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
 
     #! Get the detected/cached protocol from auto-negotiation
     /** @return the detected protocol, or NOTHING if not yet detected
-
-        @since DataStreamClientIo 1.0
     */
     *DataStreamProtocol getDetectedProtocol() {
         AutoReadLock al(config_lock);
@@ -213,8 +205,6 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
     }
 
     #! Reset the protocol cache to force re-negotiation
-    /** @since DataStreamClientIo 1.0
-    */
     resetProtocolCache() {
         AutoWriteLock al(config_lock);
         cached_protocol = NOTHING;
@@ -235,8 +225,6 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
 
     #! Set the maximum message size for Connect mode
     /** @param size maximum message size in bytes; 0 means no limit
-
-        @since DataStreamClientIo 1.0
     */
     setMaxMessageSize(int size) {
         AutoWriteLock al(config_lock);
@@ -245,8 +233,6 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
 
     #! Get the maximum message size for Connect mode
     /** @return the maximum message size in bytes; 0 means no limit
-
-        @since DataStreamClientIo 1.0
     */
     int getMaxMessageSize() {
         AutoReadLock al(config_lock);
@@ -1559,8 +1545,6 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
 }
 
 #! Class for DataStream REST connections using multiplexed I/O; returns @ref DataStreamClientIo objects
-/** @since DataStreamClientIo 1.0
-*/
 public class DataStreamConnectionIo inherits ConnectionProvider::AbstractConnectionWithInfo {
     public {
         #! Connection entry info
