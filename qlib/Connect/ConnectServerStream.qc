@@ -29,11 +29,9 @@ public namespace Connect {
     Used for server-streaming, client-streaming, and bidirectional-streaming
     handler implementations.
 
-    Two operational modes:
-    - <b>Buffered</b>: for server-streaming where the client request has already
-      been fully received.  Pre-parsed client messages are returned by read().
-    - <b>Live</b>: for client-streaming and bidirectional-streaming where client
-      messages arrive incrementally via the HTTP/2 or HTTP/3 stream.
+    Pre-parsed client messages are returned by @ref read() in the order they
+    were received; the stream is constructed only after the request body has
+    been drained, so @ref read() never blocks.
 
     @par Example (server-streaming handler):
     @code{.py}
@@ -69,15 +67,9 @@ public class ConnectServerStream {
         bool m_http3;
         #! HTTP/3 session ID (HTTP/3 only)
         *int m_session_id;
-        #! Read buffer for accumulating partial frames (live mode)
-        binary m_read_buf = binary();
-        #! Whether all client messages have been consumed
-        bool m_reads_done = False;
         #! Whether response headers have been sent
         bool m_headers_sent = False;
-        #! Live mode: read from socket incrementally (vs pre-parsed buffer)
-        bool m_live = False;
-        #! Pre-parsed messages for buffered mode
+        #! Pre-parsed messages
         list<auto> m_messages = ();
         #! Current read position in pre-parsed messages
         int m_read_pos = 0;
@@ -100,7 +92,7 @@ public class ConnectServerStream {
         *code<nothing()> m_io_wake;
     }
 
-    #! Create a server stream in buffered mode
+    #! Create a server stream
     /** @param socket the client Socket
         @param codec the codec for message serialization
         @param stream_id the HTTP/2 stream ID
@@ -113,6 +105,9 @@ public class ConnectServerStream {
         (server→client); when set, all written messages are compressed
         @param recv_encoding optional compression encoding for incoming messages
         (client→server); when set, compressed frames from the client are decompressed
+        @param io_wake optional async I/O-thread wake closure; when set, write
+        paths invoke it after enqueuing HTTP/2 frames so the I/O thread flushes
+        promptly
     */
     constructor(Socket socket, AbstractConnectCodec codec, int stream_id,
             bool http3, *int session_id, list<auto> messages = (),
@@ -131,118 +126,24 @@ public class ConnectServerStream {
         m_io_wake = io_wake;
     }
 
-    #! Create a server stream in live mode
-    /** @param socket the client Socket
-        @param codec the codec for message serialization
-        @param stream_id the HTTP/2 stream ID
-        @param http3 whether this is an HTTP/3 connection
-        @param session_id the HTTP/3 session ID (only used for HTTP/3)
-        @param live if True, read from the stream incrementally
-        @param max_message_size maximum message size in bytes (0 = no limit);
-        defaults to @ref CONNECT_DEFAULT_MAX_MESSAGE_SIZE
-        @param send_encoding optional compression encoding for outgoing messages
-        @param recv_encoding optional compression encoding for incoming messages
-    */
-    constructor(Socket socket, AbstractConnectCodec codec, int stream_id,
-            bool http3, *int session_id, bool live,
-            int max_message_size = CONNECT_DEFAULT_MAX_MESSAGE_SIZE,
-            *string send_encoding, *string recv_encoding) {
-        m_socket = socket;
-        m_codec = codec;
-        m_stream_id = stream_id;
-        m_http3 = http3;
-        m_session_id = session_id;
-        m_live = live;
-        m_max_message_size = max_message_size;
-        m_send_encoding = send_encoding;
-        m_recv_encoding = recv_encoding;
-    }
-
     #! Read the next client message
-    /** For client-streaming and bidirectional-streaming handlers.
+    /** Returns pre-parsed messages one at a time.
 
-        In buffered mode, returns pre-parsed messages one at a time.
-        In live mode, blocks until a complete Connect frame arrives from the
-        stream, the stream completes (END_STREAM), or the timeout expires.
-
-        @param timeout_ms read timeout (default 30s); only used in live mode
+        @param timeout_ms ignored; retained for API compatibility
 
         @return the next deserialized message, or NOTHING when all messages
         have been read
     */
     *auto read(*timeout timeout_ms) {
-        if (!m_live) {
-            # Buffered mode
-            if (m_read_pos >= m_messages.size()) {
-                return NOTHING;
-            }
-            return m_messages[m_read_pos++];
-        }
-
-        # Live mode: read from HTTP/2 or HTTP/3 stream incrementally
-        if (m_reads_done) {
+        if (m_read_pos >= m_messages.size()) {
             return NOTHING;
         }
-        if (!timeout_ms) {
-            timeout_ms = 30s;
-        }
-        date deadline = now_us() + milliseconds(timeout_ms);
-
-        while (True) {
-            # Try to parse a complete Connect frame from buffer
-            *auto msg = tryParseFrame();
-            if (exists msg) {
-                return msg;
-            }
-
-            # Check if reads are done (set by tryParseFrame on end-stream)
-            if (m_reads_done) {
-                return NOTHING;
-            }
-
-            # Check if stream is complete (END_STREAM received)
-            if (isStreamComplete()) {
-                # Drain any remaining data
-                *binary remaining = readStreamData(0ms);
-                if (remaining) {
-                    m_read_buf += remaining;
-                }
-                # Try to parse remaining buffered data
-                *auto result = tryParseFrame();
-                if (!exists result && m_read_buf.size() > 0) {
-                    # Incomplete frame after END_STREAM — unrecoverable
-                    m_read_buf = binary();
-                }
-                m_reads_done = True;
-                return result;
-            }
-
-            # Calculate remaining timeout
-            int remaining_ms = (deadline - now_us()).durationMilliseconds();
-            if (remaining_ms <= 0) {
-                return NOTHING;  # Timeout
-            }
-
-            # Blocking read from stream
-            *binary chunk = readStreamData(milliseconds(remaining_ms));
-            if (chunk) {
-                m_read_buf += chunk;
-                # Validate buffer size to prevent unbounded accumulation
-                if (m_max_message_size > 0 && m_read_buf.size() > 5 + m_max_message_size) {
-                    throw "CONNECT-MESSAGE-SIZE-ERROR",
-                        sprintf("read buffer size %d exceeds maximum message size %d bytes",
-                            m_read_buf.size(), m_max_message_size);
-                }
-            }
-        }
+        return m_messages[m_read_pos++];
     }
 
     #! Write a response message to the client
     /** For server-streaming and bidirectional-streaming handlers.
         Serializes, frames, and sends a Connect message.
-
-        In live mode, the stream is flushed after each write to ensure
-        immediate delivery.
 
         @param message the message data to send
     */
@@ -256,31 +157,13 @@ public class ConnectServerStream {
         }
         binary framed = ConnectHelper::frameMessage(encoded, flags);
         sendStreamData(framed, False);
-        if (m_live) {
-            flushStream();
-        }
     }
 
     #! Check if all client messages have been consumed
     /** @return True if all messages have been read
     */
     bool readsDone() {
-        if (!m_live) {
-            return m_read_pos >= m_messages.size();
-        }
-        if (m_reads_done) {
-            return True;
-        }
-        if (!isStreamComplete()) {
-            return False;
-        }
-        # Stream complete; check if there's a parseable frame remaining
-        if (m_read_buf.size() < 5) {
-            return True;
-        }
-        int len = (m_read_buf[1] << 24) | (m_read_buf[2] << 16)
-            | (m_read_buf[3] << 8) | m_read_buf[4];
-        return m_read_buf.size() < 5 + len;
+        return m_read_pos >= m_messages.size();
     }
 
     #! Set custom trailing metadata to send with the response
@@ -321,73 +204,6 @@ public class ConnectServerStream {
         }
     }
 
-    #! Try to parse a complete Connect frame from the read buffer
-    /** Handles both regular data frames and end-of-stream frames.
-
-        @return the deserialized message from a data frame, or NOTHING if no
-        complete frame is available.  Sets m_reads_done if an end-stream
-        frame is found.
-    */
-    private *auto tryParseFrame() {
-        if (m_read_buf.size() < 5) {
-            return NOTHING;
-        }
-        int flags = m_read_buf[0];
-        int len = (m_read_buf[1] << 24) | (m_read_buf[2] << 16)
-            | (m_read_buf[3] << 8) | m_read_buf[4];
-        if (m_max_message_size > 0 && len > m_max_message_size) {
-            throw "CONNECT-MESSAGE-SIZE-ERROR",
-                sprintf("Connect frame payload size %d exceeds maximum %d bytes",
-                    len, m_max_message_size);
-        }
-        if (m_read_buf.size() < 5 + len) {
-            return NOTHING;
-        }
-        # Extract the frame payload
-        binary payload = m_read_buf.substr(5, len);
-        # Remove consumed bytes from buffer
-        if (m_read_buf.size() > 5 + len) {
-            m_read_buf = m_read_buf.substr(5 + len);
-        } else {
-            m_read_buf = binary();
-        }
-
-        # Check for end-of-stream flag
-        if (flags & CONNECT_FLAG_END_STREAM) {
-            m_reads_done = True;
-            return NOTHING;
-        }
-
-        # Decompress if needed
-        if ((flags & CONNECT_FLAG_COMPRESSED) && m_recv_encoding) {
-            payload = ConnectCompression::decompress(payload, m_recv_encoding);
-            if (m_max_message_size > 0 && payload.size() > m_max_message_size) {
-                throw "CONNECT-MESSAGE-SIZE-ERROR",
-                    sprintf("decompressed payload size %d exceeds maximum %d bytes",
-                        payload.size(), m_max_message_size);
-            }
-        }
-
-        # Regular data frame — deserialize with codec
-        return m_codec.deserialize(payload);
-    }
-
-    #! Check if the transport stream is complete
-    private bool isStreamComplete() {
-        if (m_http3) {
-            return m_socket.isQuicStreamComplete(m_session_id, m_stream_id);
-        }
-        return m_socket.isHttp2StreamComplete(m_stream_id);
-    }
-
-    #! Read data from the transport stream
-    private *binary readStreamData(timeout timeout_ms) {
-        if (m_http3) {
-            return m_socket.readQuicStreamDataBlock(m_session_id, m_stream_id, timeout_ms);
-        }
-        return m_socket.readHttp2StreamDataBlock(m_stream_id, timeout_ms);
-    }
-
     #! Send data on the transport stream
     private sendStreamData(binary data, bool end_stream) {
         if (m_http3) {
@@ -397,22 +213,12 @@ public class ConnectServerStream {
             }
         } else {
             # Async send — the I/O thread flushes on the next tick, or
-            # immediately if m_io_wake nudges it.  Replaces the former
-            # sync sendHttp2StreamData + flushHttp2 pair.
+            # immediately if m_io_wake nudges it.
             m_socket.sendHttp2StreamDataAsync(m_stream_id, data, end_stream);
             if (m_io_wake) {
                 m_io_wake();
             }
         }
-    }
-
-    #! Flush the transport stream
-    /** No-op for HTTP/2 when writes go through the *Async path — the
-        I/O thread flushes after each write via the io_wake closure.
-        HTTP/3 flushes automatically via writePackets() on the I/O thread.
-    */
-    private flushStream() {
-        # intentional no-op; m_io_wake already flushed on sendStreamData
     }
 }
 
