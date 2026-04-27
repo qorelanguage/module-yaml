@@ -300,9 +300,7 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
             try {
                 getNewTokenIntern();
             } catch () {
-                return buildResponse(raw, prepared.error_passthru,
-                    prepared.allow_any_response, method, path, hdr,
-                    prepared.serialized_body);
+                return buildAndWrapResponse(raw, prepared, method, path, hdr);
             }
             path = save_path;
             hdr = save_hdr;
@@ -311,9 +309,64 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
                 prepared.serialized_body, req_to);
         }
 
-        return buildResponse(raw, prepared.error_passthru,
-            prepared.allow_any_response, method, path, hdr,
-            prepared.serialized_body);
+        return buildAndWrapResponse(raw, prepared, method, path, hdr);
+    }
+
+    #! Calls @ref RestClientIo::buildResponse and rewrites generic error responses
+    /** Mirrors the synchronous @ref DataStreamClient::DataStreamClient typed-error
+        contract: any HTTP error response that the underlying
+        @ref RestClientIo::RestClientIo would surface as a generic
+        @c REST-RESPONSE-ERROR (or that fails to deserialize entirely) is
+        re-thrown as @c DATASTREAM-CLIENT-RECEIVE-ERROR with the HTTP status
+        code and message embedded in the description, so callers going
+        through @ref DataStreamClientIo on H2/H3 paths can catch the same
+        typed exception they have always caught on H1.
+
+        Server-produced typed errors (\c {err, desc, arg} bodies) are still
+        propagated unchanged by RestClientIo::buildResponse — only the generic
+        error-passthru path is rewrapped.
+    */
+    private hash<RestClient::RestResponseInfo> buildAndWrapResponse(hash<auto> raw,
+            hash<auto> prepared, string method, string path, *hash<auto> hdr) {
+        try {
+            return buildResponse(raw, prepared.error_passthru,
+                prepared.allow_any_response, method, path, hdr,
+                prepared.serialized_body);
+        } catch (hash<ExceptionInfo> ex) {
+            if (prepared.error_passthru || raw.status_code < 300) {
+                rethrow;
+            }
+            # Two cases the sync DataStreamClient turns into DATASTREAM-CLIENT-RECEIVE-ERROR:
+            # 1. Status >= 300 with a non-typed body (RestClientIo throws REST-RESPONSE-ERROR).
+            # 2. Status >= 300 with an undecodable body (e.g. a 401 page with text/html
+            #    body): RestClientIo throws DESERIALIZATION-ERROR before checking the
+            #    status; the sync RestClient swallows that error in decodeError() and
+            #    proceeds to the same status-based throw.
+            if (ex.err != "REST-RESPONSE-ERROR" && ex.err != "DESERIALIZATION-ERROR") {
+                rethrow;
+            }
+            # status_message is populated for HTTP/1 (carries reason
+            # phrase on the wire); H2/H3 don't carry one and leave it
+            # NOTHING — the description still has the status code.
+            *string status_message = raw.status_message;
+            *data body = (ex.err == "REST-RESPONSE-ERROR") ? ex.arg.body : raw.body;
+            hash<RestClient::RestResponseInfo> rv = <RestClient::RestResponseInfo>{
+                "status_code": raw.status_code,
+                "headers": raw.headers,
+                "body": body,
+                "content_type": raw.headers."content-type",
+                "response_body_raw": raw.body,
+                "request_method": method,
+                "request_path": path,
+                "request_headers": hdr,
+                "request_body": prepared.serialized_body,
+                "protocol": raw.protocol,
+            };
+            throw "DATASTREAM-CLIENT-RECEIVE-ERROR",
+                sprintf("HTTP status code %d received: message: %y", raw.status_code,
+                    status_message),
+                rv;
+        }
     }
 
     #! receives streaming data from the server
