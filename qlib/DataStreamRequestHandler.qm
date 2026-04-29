@@ -456,6 +456,13 @@ public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRest
 
     #! this method is called when all data has been received
     private nothing recvDataDone(*string err) {
+        # If no explicit error string was passed but the stream handler
+        # captured a recv error (e.g. COLUMN-ERROR caught during chunked
+        # body processing), propagate the error so recvDataDoneImpl()
+        # rolls back instead of committing.
+        if (!err && hasError()) {
+            err = "recv error";
+        }
         send_error = err;
         recv_done = err ? False : True;
         recvDataDoneImpl(err);
