@@ -1408,7 +1408,20 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
                 payload = enc_func(payload);
                 flags = CONNECT_FLAG_COMPRESSED;
             }
-            stream.sendData(connect_frame_message(payload, flags), False);
+            try {
+                stream.sendData(connect_frame_message(payload, flags), False);
+            } catch (hash<ExceptionInfo> ex) {
+                # Server may have closed the stream after sending an error
+                # response; let the caller's response-reading path surface
+                # the actual server error instead of the generic
+                # stream-closed error from sendData().
+                try {
+                    stream.writesDone();
+                } catch () {
+                    # writesDone may also fail on a closed stream
+                }
+                return;
+            }
         }
     }
 
@@ -1462,7 +1475,23 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
             if (enc_func) {
                 yaml_data = enc_func(yaml_data);
             }
-            stream.sendData(yaml_data, False);
+            try {
+                stream.sendData(yaml_data, False);
+            } catch (hash<ExceptionInfo> ex) {
+                # The server may have closed the connection after sending
+                # an error response (e.g. COLUMN-ERROR detected mid-stream
+                # in HTTP/1.1, where the server aborts the chunked body
+                # read and force-closes the connection).  Stop sending and
+                # let the caller's readDSv1Stream() path surface the actual
+                # server error from the in-flight response, instead of the
+                # generic stream-closed error from sendData().
+                try {
+                    stream.writesDone();
+                } catch () {
+                    # writesDone may also fail on a closed connection
+                }
+                return;
+            }
         }
     }
 

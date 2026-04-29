@@ -458,10 +458,17 @@ public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRest
     private nothing recvDataDone(*string err) {
         # If no explicit error string was passed but the stream handler
         # captured a recv error (e.g. COLUMN-ERROR caught during chunked
-        # body processing), propagate the error so recvDataDoneImpl()
-        # rolls back instead of committing.
+        # body processing), call recvDataDoneImpl() with an error marker
+        # so it rolls back, but do NOT set send_error -- send_error means
+        # the SENDER reported an error in the trailer, which routes
+        # getErrorResponse() to a 400 plain-text response.  A recv-side
+        # error must keep send_error clear so the captured exception (ex)
+        # surfaces through getErrorResponse() as the rich 409 response
+        # with the original error code and description.
         if (!err && hasError()) {
-            err = "recv error";
+            recv_done = False;
+            recvDataDoneImpl("recv error");
+            return;
         }
         send_error = err;
         recv_done = err ? False : True;
