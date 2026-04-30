@@ -49,6 +49,7 @@ class DataStreamUtilTest inherits QUnit::Test {
         addTestCase("connect boundary max_message_size", \testConnectBoundaryMaxMessageSize());
         addTestCase("connect serialization error", \testConnectSerializationError());
         addTestCase("ds v1 send recv roundtrip", \testDSv1SendRecvRoundtrip());
+        addTestCase("ds v1 multiplexed partial YAML", \testDSv1MultiplexedPartialYaml());
         addTestCase("ds v1 send error trailer", \testDSv1SendErrorTrailer());
 
         # Return for compatibility with test harness that checks return value.
@@ -1303,6 +1304,69 @@ class DataStreamUtilTest inherits QUnit::Test {
         assertEq("gamma", received[2].name, "DS v1 recv: third name");
         assertTrue(eod_called, "DS v1 recv: EOD called");
         assertEq(NOTHING, eod_error, "DS v1 recv: no error");
+    }
+
+    testDSv1MultiplexedPartialYaml() {
+        list<auto> items = (
+            {"name": "alpha", "val": 1},
+            {"name": "beta", "val": 2},
+            {"name": "gamma", "val": 3},
+        );
+        string first = make_yaml(items[0]);
+        string second = make_yaml(items[1]);
+        string third = make_yaml(items[2]);
+
+        list<auto> received = ();
+        bool eod_called = False;
+        *string eod_error;
+
+        code recv_data = sub (auto data) { push received, data; };
+        code eod_data = sub (*string err) { eod_called = True; eod_error = err; };
+        code recv_cb = ds_get_recv(recv_data, eod_data);
+
+        MockSocket sock();
+        recv_cb({
+            "hdr": {
+                "content-type": "application/octet-stream",
+                DataStreamContentType.lwr(): MimeTypeYaml + ";charset=utf8",
+                "status_code": 200,
+            },
+            "obj": sock,
+        });
+
+        int split_pos = first.size() / 2;
+        recv_cb({"data": first.substr(0, split_pos)});
+        assertEq(0, received.size(), "partial first document is buffered");
+
+        recv_cb({"data": first.substr(split_pos) + second.substr(0, 8)});
+        assertEq(1, received.size(), "first document delivered at next YAML boundary");
+        assertEq("alpha", received[0].name, "first buffered document value");
+
+        recv_cb({"data": second.substr(8) + third});
+        assertEq(2, received.size(), "second document delivered at next YAML boundary");
+        assertEq("beta", received[1].name, "second buffered document value");
+        assertFalse(eod_called, "EOD not called before trailer");
+
+        recv_cb({"hdr": {}});
+        assertTrue(eod_called, "EOD called after trailer");
+        assertEq(NOTHING, eod_error, "multiplexed DS v1 recv: no error");
+        assertEq(3, received.size(), "trailing document delivered at EOD");
+        assertEq("gamma", received[2].name, "trailing buffered document value");
+
+        received = ();
+        recv_cb = ds_get_recv(recv_data, eod_data);
+        MockSocket sock2();
+        recv_cb({
+            "hdr": {
+                "content-type": "application/octet-stream",
+                DataStreamContentType.lwr(): MimeTypeYaml + ";charset=utf8",
+                "status_code": 200,
+            },
+            "obj": sock2,
+        });
+        recv_cb({"data": first + second + third, "final": True});
+        assertEq(3, received.size(), "final full body delivers all documents");
+        assertEq("gamma", received[2].name, "final full body trailing value");
     }
 
     testDSv1SendErrorTrailer() {

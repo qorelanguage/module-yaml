@@ -1394,7 +1394,7 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
                     }
                     # Deliver the reassembled body to ds_get_recv()
                     if (data_buf) {
-                        ds_recv({"data": data_buf, "chunked": False});
+                        ds_recv({"data": data_buf, "chunked": False, "final": True});
                     }
                     *hash<string, string> trailers = stream.getTrailers();
                     *string ds_error = trailers ? trailers{DataStreamError.lwr()} : NOTHING;

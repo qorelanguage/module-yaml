@@ -525,28 +525,37 @@ public namespace DataStreamUtil {
         @since DataStreamUtil 1.4
     */
     public list<string> sub ds_split_yaml_documents(string data) {
-        # Match on line-start %YAML directive; keep the directive with its own doc.
-        # Use regex split to preserve each "%YAML 1.2" header with its body. Returning
-        # N docs with the directive re-added where it was removed by the split.
-        list<string> parts = data.split("%YAML ");
+        return ds_extract_yaml_documents(\data, True);
+    }
+
+    #! Extracts complete DataStream YAML documents from an incremental receive buffer
+    /** DataStream v1 emits one YAML document per record. HTTP/2 and HTTP/3
+        DATA frames can split or coalesce those records, so receivers need to
+        parse only complete documents and keep the trailing partial document in
+        the buffer until another \c "%YAML" directive or end-of-stream arrives.
+
+        @param data the mutable receive buffer
+        @param is_final if True, the trailing buffered document is complete and is
+        returned as well
+
+        @return complete YAML document strings removed from \a data
+
+        @since DataStreamUtil 1.4
+    */
+    public list<string> sub ds_extract_yaml_documents(reference<string> data,
+            bool is_final = False) {
         list<string> out = ();
-        # If the input starts with "%YAML" the first split element is empty; skip it
-        # and re-prepend the directive to subsequent parts. Otherwise keep the
-        # leading content as its own document.
-        bool first = True;
-        foreach string p in (parts) {
-            if (first) {
-                first = False;
-                if (p.val()) {
-                    out += p;
-                }
-                continue;
+        while (True) {
+            int pos = data.find("\n%YAML ");
+            if (pos < 0) {
+                break;
             }
-            out += "%YAML " + p;
+            out += data.substr(0, pos + 1);
+            data = data.substr(pos + 1);
         }
-        # Strip empty trailing strings (trailing newline)
-        while (out && !out[out.size() - 1].val()) {
-            pop out;
+        if (is_final && data.val()) {
+            out += data;
+            data = "";
         }
         return out;
     }
@@ -751,6 +760,46 @@ httpclient.sendWithRecvCallback(ds_get_recv(recv_callback), body, method, path, 
         *string status_message;
         # content type received
         *string ct;
+        # partial YAML document buffered for DataStream v1 over multiplexed transports
+        string yaml_doc_buf;
+
+        code deliver_items = sub (list<auto> items, hash<auto> ddc) {
+            foreach auto item in (items) {
+                auto record;
+                if (body_callback) {
+                    body_callback(item, ddc."code");
+                }
+                if (datastream || (!chunked && !extern_decode)) {
+                    # deserialize each decoded stream independently
+                    auto data = item;
+                    if (data.typeCode() == NT_BINARY) {
+                        data = data.toString("utf-8");
+                    }
+                    record = ddc.in(data);
+                } else {
+                    record = item;
+                }
+
+                # if the server has returned a status code, then handle
+                # as an exception on the remote side, otherwise throw a
+                # SEND-ABORTED exception
+                if (!chunked) {
+                    if ((send_aborted || status_code >= 300) && record.err && record.desc) {
+                        throw record.err, record.desc, record.arg;
+                    }
+                    if (send_aborted) {
+                        if (status_code) {
+                            throw "SEND-ABORTED", sprintf("receiver sent status code %d before chunked send was "
+                                "complete", status_code), record;
+                        } else {
+                            throw "SEND-ABORTED", "receiver sent a reply before chunked send was complete", record;
+                        }
+                    }
+                }
+
+                recv_callback(record);
+            }
+        };
 
         return sub (hash<auto> h) {
             #printf("DBG ds_get_recv() h: %y\n", h);
@@ -759,6 +808,12 @@ httpclient.sendWithRecvCallback(ds_get_recv(recv_callback), body, method, path, 
             if (h.hasKey("hdr")) {
                 #printf("hp: %y hdr: %y\n", hp, h.hdr);
                 if (hp) {
+                    if (yaml_doc_buf.val()) {
+                        *hash<auto> ddc = DataStreamDeserializationSupport{ct};
+                        if (ddc && ddc."code" == "yaml") {
+                            deliver_items(ds_extract_yaml_documents(\yaml_doc_buf, True), ddc);
+                        }
+                    }
                     # call "end of data" callback with any error message reported by the sender
                     eod_callback(h.hdr{DataStreamError.lwr()});
                     return;
@@ -868,11 +923,29 @@ httpclient.sendWithRecvCallback(ds_get_recv(recv_callback), body, method, path, 
                         "%y; types supported: %y", ct, DataStreamDeserializationSupport.keys());
                 }
 
-                # For YAML payloads over multiplexed transports (H2/H3), a single
-                # decompressed item may still carry multiple concatenated YAML
-                # documents if the sender batched records without per-record
-                # compression. Split on @c %YAML directive boundaries so each
-                # document can be deserialized individually.
+                # For YAML DataStream v1 payloads over multiplexed transports
+                # (H2/H3), DATA frames are arbitrary byte ranges: one frame can
+                # contain a partial YAML document or multiple documents. Buffer
+                # the trailing partial document and only parse complete records.
+                if (ddc."code" == "yaml" && datastream && !chunked) {
+                    list<auto> expanded = ();
+                    bool is_final = h.final ?? False;
+                    foreach auto item in (items) {
+                        yaml_doc_buf += item.typeCode() == NT_BINARY ? item.toString("utf-8")
+                            : item;
+                        expanded += ds_extract_yaml_documents(\yaml_doc_buf, is_final);
+                    }
+                    if (expanded) {
+                        deliver_items(expanded, ddc);
+                    }
+                    return;
+                }
+
+                # For other YAML payloads, a single decompressed item may still
+                # carry multiple concatenated YAML documents if the sender
+                # batched records without per-record compression. Split on
+                # @c %YAML directive boundaries so each document can be
+                # deserialized individually.
                 if (ddc."code" == "yaml" && (datastream || (!chunked && !extern_decode))) {
                     list<auto> expanded = ();
                     foreach auto item in (items) {
@@ -889,41 +962,7 @@ httpclient.sendWithRecvCallback(ds_get_recv(recv_callback), body, method, path, 
                     }
                 }
 
-                foreach auto item in (items) {
-                    auto record;
-                    if (body_callback) {
-                        body_callback(item, ddc."code");
-                    }
-                    if (datastream || (!chunked && !extern_decode)) {
-                        # deserialize each decoded stream independently
-                        auto data = item;
-                        if (data.typeCode() == NT_BINARY) {
-                            data = data.toString("utf-8");
-                        }
-                        record = ddc.in(data);
-                    } else {
-                        record = item;
-                    }
-
-                    # if the server has returned a status code, then handle
-                    # as an exception on the remote side, otherwise throw a
-                    # SEND-ABORTED exception
-                    if (!chunked) {
-                        if ((send_aborted || status_code >= 300) && record.err && record.desc) {
-                            throw record.err, record.desc, record.arg;
-                        }
-                        if (send_aborted) {
-                            if (status_code) {
-                                throw "SEND-ABORTED", sprintf("receiver sent status code %d before chunked send was "
-                                    "complete", status_code), record;
-                            } else {
-                                throw "SEND-ABORTED", "receiver sent a reply before chunked send was complete", record;
-                            }
-                        }
-                    }
-
-                    recv_callback(record);
-                }
+                deliver_items(items, ddc);
             }
         };
     }
