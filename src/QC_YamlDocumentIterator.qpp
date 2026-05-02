@@ -147,7 +147,7 @@ YamlDocumentIterator::constructor(Qore::InputStream[InputStream] stream, *hash<Y
     // Use default values when option keys are not present (not just when options is null)
     bool skip_empty = true;
     int64 max_docs = 0;
-    const char* enc = "UTF-8";
+    std::string enc = "UTF-8";
     if (options) {
         QoreValue v = options->getKeyValue("skip_empty_documents");
         if (!v.isNothing()) {
@@ -159,10 +159,11 @@ YamlDocumentIterator::constructor(Qore::InputStream[InputStream] stream, *hash<Y
         }
         v = options->getKeyValue("encoding");
         if (!v.isNothing()) {
-            enc = v.get<const QoreStringNode>()->c_str();
+            QoreStringValueHelper str(v);
+            enc = str->c_str();
         }
     }
-    const QoreEncoding* encoding = QEM.findCreate(enc);
+    const QoreEncoding* encoding = QEM.findCreate(enc.c_str());
     // Use obj_stream (the QoreObject*) - the C++ class will ref it
     self->setPrivate(CID_YAMLDOCUMENTITERATOR,
         new QoreYamlDocumentIterator(const_cast<QoreObject*>(obj_stream), encoding, skip_empty, max_docs, xsink));

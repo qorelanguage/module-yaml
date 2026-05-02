@@ -69,8 +69,10 @@ QoreYamlEmitter::QoreYamlEmitter(QoreYamlWriteHandler& wh, int flags, int width,
 
 int QoreYamlEmitter::emit(const QoreValue& v) {
     switch (v.getType()) {
-        case NT_STRING:
-            return emitValue(*v.get<const QoreStringNode>());
+        case NT_STRING: {
+            QoreStringNodeValueHelper str(v);
+            return emitValue(**str);
+        }
 
         case NT_INT:
             return emitValue(v.getAsBigInt());
