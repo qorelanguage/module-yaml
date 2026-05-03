@@ -395,7 +395,9 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
         } catch (hash<ExceptionInfo> ex) {
             if (use_connect && protocol_mode == DataStreamProtocol::Auto
                     && isConnectRejectionEx(ex)) {
-                setCachedProtocol(DataStreamProtocol::DataStream);
+                if (shouldCacheDataStreamFallback(ex)) {
+                    setCachedProtocol(DataStreamProtocol::DataStream);
+                }
                 doRecvDataStream(False, recv_callback, eod_callback, method, save_path,
                     save_body, timeout_ms, \info, save_hdr);
                 return;
@@ -446,7 +448,9 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
         } catch (hash<ExceptionInfo> ex) {
             if (use_connect && protocol_mode == DataStreamProtocol::Auto
                     && isConnectRejectionEx(ex)) {
-                setCachedProtocol(DataStreamProtocol::DataStream);
+                if (shouldCacheDataStreamFallback(ex)) {
+                    setCachedProtocol(DataStreamProtocol::DataStream);
+                }
                 return doSendDataStream(False, scb, method, save_path, timeout_ms, \info,
                     save_hdr);
             }
@@ -494,7 +498,9 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
         } catch (hash<ExceptionInfo> ex) {
             if (use_connect && protocol_mode == DataStreamProtocol::Auto
                     && isConnectRejectionEx(ex)) {
-                setCachedProtocol(DataStreamProtocol::DataStream);
+                if (shouldCacheDataStreamFallback(ex)) {
+                    setCachedProtocol(DataStreamProtocol::DataStream);
+                }
                 doSendRecvDataStream(False, scb, recv_callback, eod_callback, method,
                     save_path, timeout_ms, \info, save_hdr);
                 return;
@@ -881,8 +887,8 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
         if (cached_protocol) {
             return cached_protocol;
         }
-        # RestClientIo defaults to HTTP/2+ via HttpClientConnectionManager,
-        # so Connect is the natural default
+        # RestClientIo defaults to H3-first happy eyeballs for HTTPS, so
+        # Connect is the natural default for multiplexed transports.
         return DataStreamProtocol::Connect;
     }
 
@@ -904,9 +910,21 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
                 return True;
             }
         }
-        # Connect frame parse errors
-        if (ex.err == "CONNECT-FRAMING-ERROR" || ex.err == "CONNECT-MESSAGE-SIZE-ERROR") {
+        if (ex.err == "CONNECT-PROTOCOL-FALLBACK") {
             return True;
+        }
+        # Connect frame parse errors are not protocol rejections here.  They
+        # commonly mean a Connect request failed and the server returned a
+        # non-Connect HTTP error body.  Downgrading to DataStream v1 would send
+        # chunk-boundary-sensitive data over H2/H3, which is unsafe.
+        return False;
+    }
+
+    #! Returns True only when Connect is rejected globally by the peer
+    private static bool shouldCacheDataStreamFallback(hash<ExceptionInfo> ex) {
+        if (ex.arg.typeCode() == NT_HASH) {
+            *int status = ex.arg.status_code;
+            return status == 415 || status == 406 || status == 501;
         }
         return False;
     }
@@ -1104,6 +1122,52 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
         binary buf = initial_data ?? binary();
         *code dce = ds_get_content_decode(getSendEncoding());
         int max_msg_size = getMaxMessageSizeIntern();
+        bool headers_delivered;
+        *int response_status;
+        *string response_status_message;
+        *binary error_body;
+
+        code deliver_headers = sub (*hash<auto> maybe_hdr) {
+            if (headers_delivered) {
+                return;
+            }
+            hash<auto> hdr;
+            if (maybe_hdr.val()) {
+                hdr = maybe_hdr;
+            } else {
+                *hash<auto> resp = stream.getResponse();
+                if (!resp.headers) {
+                    return;
+                }
+                hdr = resp.headers;
+                if (resp.status_code) {
+                    hdr.status_code = resp.status_code;
+                }
+                if (resp.status_message) {
+                    hdr.status_message = resp.status_message;
+                }
+            }
+            headers_delivered = True;
+            response_status = hdr.":status" ?? hdr.status_code;
+            response_status_message = hdr.status_message;
+            *string content_type = hdr."content-type";
+            *string ce = hdr{ConnectContentEncodingHdr} ?? hdr."content-encoding";
+            if (ce) {
+                dce = ds_get_content_decode(ce);
+            }
+            if (response_status < 300 && content_type
+                    && content_type !~ /^application\/connect\+/i) {
+                throw "CONNECT-PROTOCOL-FALLBACK",
+                    sprintf("server returned HTTP %d with non-Connect content type %y",
+                        response_status, content_type),
+                    {"status_code": response_status, "content_type": content_type};
+            }
+            if (response_status >= 300 && (!content_type || content_type !~ /^application\/connect\+/i)) {
+                error_body = binary();
+            }
+        };
+
+        deliver_headers();
 
         while (True) {
             # Try to parse complete frames from buffer
@@ -1168,6 +1232,10 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
             }
             if (rd.typeCode() == NT_HASH) {
                 if (rd.end_stream) {
+                    if (exists error_body) {
+                        throwConnectHttpErrorResponse(response_status,
+                            response_status_message, error_body);
+                    }
                     # Server closed stream; try final buffer parse
                     if (buf.size() >= 5) {
                         int frame_size = connect_next_frame_size(buf);
@@ -1190,19 +1258,36 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
                     return;
                 }
                 if (rd.headers) {
-                    # Response headers — skip (already handled or not needed for Connect)
+                    hash<auto> hdr = rd.headers;
+                    if (rd.status_code) {
+                        hdr.status_code = rd.status_code;
+                    }
+                    if (rd.status_message) {
+                        hdr.status_message = rd.status_message;
+                    }
+                    deliver_headers(hdr);
                     continue;
                 }
                 if (rd.error) {
+                    if (exists error_body) {
+                        throwConnectHttpErrorResponse(response_status,
+                            response_status_message, error_body);
+                    }
                     throw "CONNECT-STREAM-ERROR", sprintf("stream error: %y", rd.error);
                 }
                 continue;
             }
+            deliver_headers();
             # Accumulate data
             if (rd.typeCode() == NT_BINARY) {
                 buf += rd;
             } else {
                 buf += binary(rd);
+            }
+            if (exists error_body) {
+                error_body = buf;
+                buf = binary();
+                continue;
             }
             # Validate buffer size
             if (max_msg_size > 0 && buf.size() > 5 + max_msg_size) {
@@ -1211,6 +1296,29 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
                         buf.size(), max_msg_size);
             }
         }
+    }
+
+    #! Throws a typed exception from a non-Connect HTTP error response
+    private throwConnectHttpErrorResponse(int status_code, *string status_message,
+            binary body) {
+        string body_str = body.toString("utf-8");
+        auto parsed;
+        try {
+            parsed = parse_yaml(body_str);
+        } catch () {
+            try {
+                parsed = parse_json(body_str);
+            } catch () {
+            }
+        }
+        if (parsed.typeCode() == NT_HASH && parsed.err && parsed.desc) {
+            throw parsed.err, sprintf("server-side error: %s: %s",
+                get_ex_pos(parsed), parsed.desc), parsed.arg;
+        }
+        throw "CONNECT-HTTP-ERROR",
+            sprintf("HTTP status code %d received for Connect request: message: %y",
+                status_code, status_message),
+            {"status_code": status_code, "body": body_str};
     }
 
     #! Internal: read DS v1 streaming data from a stream handle

@@ -227,11 +227,15 @@ public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRest
         # record-compressed chunks unchanged.) Connect protocol (DataStream
         # 2.0) is unaffected: it frames each record with an explicit length
         # header so batching cannot blur record boundaries.
-        bool multiplexed = !connect_mode && isMultiplexedTransport();
-        effective_encoding = multiplexed ? NOTHING : cx.encoding;
+        bool suppress_ds_v1_content_encoding =
+            !connect_mode && isMultiplexedTransport();
+        effective_encoding = suppress_ds_v1_content_encoding
+            ? NOTHING : cx.encoding;
         @debug(printf("AbstractDataStreamRequestHandler::constructor() "
-            "encoding=%y effective_encoding=%y connect_mode=%y multiplexed=%y\n",
-            cx.encoding, effective_encoding, connect_mode, multiplexed));
+            "encoding=%y effective_encoding=%y connect_mode=%y "
+            "suppress_ds_v1_content_encoding=%y\n",
+            cx.encoding, effective_encoding, connect_mode,
+            suppress_ds_v1_content_encoding));
         if (connect_mode) {
             recv_callback = connect_get_recv(\recvData(), \recvDataDone());
             scb = connect_get_send(\sendData(), ds_get_content_encode(cx.encoding));
