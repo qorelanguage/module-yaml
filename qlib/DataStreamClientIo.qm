@@ -349,7 +349,11 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
             # phrase on the wire); H2/H3 don't carry one and leave it
             # NOTHING — the description still has the status code.
             *string status_message = raw.status_message;
-            *data body = (ex.err == "REST-RESPONSE-ERROR") ? ex.arg.body : raw.body;
+            # body is `auto` not `*data`: deserialized error bodies are
+            # commonly typed-hash structures (e.g. {error:..., message:...})
+            # which `*data` rejects with PARSE-TYPE-ERROR / RUNTIME-TYPE-ERROR
+            # at this assignment, masking the actual server-side error code.
+            auto body = (ex.err == "REST-RESPONSE-ERROR") ? ex.arg.body : raw.body;
             hash<RestClient::RestResponseInfo> rv = <RestClient::RestResponseInfo>{
                 "status_code": raw.status_code,
                 "headers": raw.headers,
