@@ -130,6 +130,13 @@ auto data = parse_yaml(yaml_str);
       with automatic HTTP/3, HTTP/2, and HTTP/1.1 protocol negotiation and connection pooling
       - \c yamlrpcio:// and \c yamlrpcios:// URL schemes for ConnectionProvider
 
+    <b>Bug Fixes</b>
+    - fixed an emitter bug where date-only timestamps whose day ended in \c '0' were
+      truncated by an unconditional \c trim_trailing('0') intended only for the
+      microseconds component (e.g. \c "2026-04-10" was emitted as \c "2026-04-1"); the
+      fractional-seconds trim is now skipped when the formatted string contains no decimal
+      point, so date-only values round-trip exactly
+
     <b>User Module Version Updates</b>
     - <a href="../../YamlRpcClientIo/html/index.html">YamlRpcClientIo</a>: new module (1.0)
 

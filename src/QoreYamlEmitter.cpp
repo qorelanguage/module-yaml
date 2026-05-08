@@ -184,10 +184,14 @@ int QoreYamlEmitter::emitValue(const DateTime &d) {
         }
     }
 
-    // remove trailing zeros from microseconds time
-    str.trim_trailing('0');
-    // remove empty decimal point if us == 0
-    str.trim_trailing('.');
+    // remove trailing zeros from the microseconds component, but only if the
+    // string actually has a fractional-seconds component — otherwise this would
+    // strip a trailing '0' from date-only output like "2026-04-10" → "2026-04-1"
+    if (strchr(str.c_str(), '.')) {
+        str.trim_trailing('0');
+        // remove empty decimal point if us == 0
+        str.trim_trailing('.');
+    }
 
     // if not emitting the canonical format and there is a time zone offset,
     // then add a space
