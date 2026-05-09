@@ -11,10 +11,62 @@
 %requires json
 %requires ../qlib/DataStreamUtil.qm
 %requires ../qlib/DataStreamClientIo.qm
+%requires ../qlib/DataStreamRequestHandler.qm
 %requires ../qlib/Connect
+%requires RestHandler
 %requires QUnit
 
 %exec-class DataStreamClientIoTest
+
+class RestDataStreamArgHandler inherits AbstractDataStreamRequestHandler {
+    private {
+        hash<auto> args = {};
+    }
+
+    constructor(hash<auto> cx, *hash<auto> ah) : AbstractDataStreamRequestHandler(cx, ah) {
+    }
+
+    private nothing recvDataImpl(auto data) {
+        if (data.typeCode() == NT_HASH) {
+            map args.$1 = data.$1, keys data;
+        }
+    }
+
+    hash<auto> getResponseHeaderMessageImpl() {
+        *hash<auto> err = getErrorResponse();
+        if (err) {
+            return err;
+        }
+        return {
+            "code": 200,
+            "body": args,
+        };
+    }
+
+    *code getPersistentClosedNotification() {
+        return sub () {};
+    }
+
+    private auto sendDataImpl() {
+    }
+}
+
+class RestDataStreamHandler inherits RestHandler::RestHandler {
+    constructor() : RestHandler(NOTHING) {
+    }
+
+    removeRootPath(reference<string> path) {
+        path = regex_subst(path, "^/?ds", "");
+    }
+
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return RestHandler::wantsBodyStreaming(cx, hdr);
+    }
+
+    AbstractRestStreamRequestHandler streamPutArgs(hash<auto> cx, *hash<auto> ah) {
+        return new RestDataStreamArgHandler(cx, ah);
+    }
+}
 
 class DataStreamClientIoTest inherits QUnit::Test {
     private {
@@ -89,6 +141,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
             "logger": logger,
             "debug": True,
+            "quic_headers_only": True,
         };
         m_http = new HttpServer(http_opts);
         # Enable async I/O for HTTP/2 streaming support
@@ -132,6 +185,7 @@ l50Xb2GWQesIt9k5jF5IOw==
 
         m_http.setHandler("connect", "", NOTHING, handler);
         m_http.setDefaultHandler("connect", handler);
+        m_http.setHandler("ds-rest", "/ds", NOTHING, new RestDataStreamHandler(), NOTHING, False);
 
         # HTTP/1.1 (plain) listener for non-streaming tests
         m_port = m_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
@@ -165,6 +219,8 @@ l50Xb2GWQesIt9k5jF5IOw==
             m_quic_available = True;
 
             addTestCase("H3 recvDataStream (Connect)", \testH3RecvDataStream());
+            addTestCase("H3 REST recvDataStream initial body (Connect)",
+                \testH3RestRecvDataStreamInitialBody());
             addTestCase("H3 sendDataStream (Connect)", \testH3SendDataStream());
             addTestCase("H3 sendRecvDataStream (Connect)", \testH3SendRecvDataStream());
             addTestCase("H3 openConnectInteractiveStream (Connect)",
@@ -486,6 +542,38 @@ l50Xb2GWQesIt9k5jF5IOw==
         assertEq("msg-0", received[0].value, "H3: first message value");
         assertEq(2, received[2].index, "H3: last message index");
         assertNothing(recv_error, "H3: no error");
+    }
+
+    testH3RestRecvDataStreamInitialBody() {
+        if (!m_quic_available) {
+            testSkip("QUIC not available");
+            return;
+        }
+
+        DataStreamClient::DataStreamClientIo client({
+            "url": getQuicUrl(),
+            "protocol": "connect",
+            "accept_all_certs": True,
+        });
+
+        list<auto> received();
+        *string recv_error;
+        client.recvDataStream(
+            sub (auto data) {
+                received += data;
+            },
+            sub (*string err) {
+                recv_error = err;
+            },
+            "PUT", "/ds?action=args",
+            {"sql": "select 1 as a", "args": ("x")},
+            30s,
+        );
+
+        assertEq(1, received.size(), "H3 REST: received one response message");
+        assertEq("select 1 as a", received[0].sql, "H3 REST: initial body sql received");
+        assertEq(("x"), received[0].args, "H3 REST: initial body args received");
+        assertNothing(recv_error, "H3 REST: no error");
     }
 
     testH3SendDataStream() {
