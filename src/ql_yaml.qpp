@@ -171,7 +171,7 @@ string str = make_yaml(data, YAML::Canonical);
 
     @since yaml 0.5 as a replacement for deprecated camel-case makeYAML()
  */
-string make_yaml(auto data, int flags = {Qore::YAML::Yaml1_2}QYE_VER_1_2, softint width = -1, softint indent = 2) [flags=RET_VALUE_ONLY] {
+string make_yaml(auto data, int flags = {Qore::YAML::Yaml1_2}QYE_VER_1_2, softint width = -1, softint indent = 2) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return q_make_yaml(data, flags, width, indent, xsink);
 }
 
@@ -190,7 +190,7 @@ string make_yaml(auto data, int flags = {Qore::YAML::Yaml1_2}QYE_VER_1_2, softin
 
     @deprecated use make_yaml(); camel-case function names were deprecated in yaml 0.5
  */
-string makeYAML(auto data, int flags = {Qore::YAML::Yaml1_2}QYE_VER_1_2, softint width = -1, softint indent = 2) [flags=RET_VALUE_ONLY,DEPRECATED] {
+string makeYAML(auto data, int flags = {Qore::YAML::Yaml1_2}QYE_VER_1_2, softint width = -1, softint indent = 2) [flags=RET_VALUE_ONLY,DEPRECATED,NAMED_ARGS] {
     return q_make_yaml(data, flags, width, indent, xsink);
 }
 
@@ -212,7 +212,7 @@ auto data = parse_yaml(yaml_string);
 
     @see make_yaml()
  */
-auto parse_yaml(string yaml) [flags=RET_VALUE_ONLY] {
+auto parse_yaml(string yaml) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     QoreYamlParser parser(*yaml, xsink);
     return parser.parse();
 }
@@ -228,7 +228,7 @@ auto parse_yaml(string yaml) [flags=RET_VALUE_ONLY] {
 
     @deprecated use parse_yaml(); camel-case function names were deprecated in yaml 0.5
  */
-auto parseYAML(string yaml) [flags=RET_VALUE_ONLY,DEPRECATED] {
+auto parseYAML(string yaml) [flags=RET_VALUE_ONLY,DEPRECATED,NAMED_ARGS] {
     QoreYamlParser parser(*yaml, xsink);
     return parser.parse();
 }
@@ -260,7 +260,7 @@ list<auto> docs = parse_yaml_documents(yaml);
 
     @since yaml 1.1
 */
-list<auto> parse_yaml_documents(string yaml) [flags=RET_VALUE_ONLY] {
+list<auto> parse_yaml_documents(string yaml) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return parse_yaml_documents_intern(yaml, xsink);
 }
 

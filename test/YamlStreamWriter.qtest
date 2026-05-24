@@ -16,6 +16,7 @@ class YamlStreamWriterTest inherits QUnit::Test {
         addTestCase("multiple documents", \testMultipleDocuments());
         addTestCase("anchors and aliases", \testAnchorsAndAliases());
         addTestCase("auto write", \testAutoWrite());
+        addTestCase("named argument calls", \testNamedArgumentCalls());
         addTestCase("flush", \testFlush());
         addTestCase("document count", \testDocumentCount());
 
@@ -228,6 +229,31 @@ class YamlStreamWriterTest inherits QUnit::Test {
         string yaml = sos.getData();
         auto parsed = parse_yaml(yaml);
         assertEq(data, parsed);
+    }
+
+    testNamedArgumentCalls() {
+        StringOutputStream sos();
+        YamlStreamWriter writer(stream: sos, options: <YamlStreamWriterOptions>{"indent": 2});
+
+        writer.startDocument();
+        writer.startMapping(anchor: "root");
+        writer.writeKey(key: "name");
+        writer.writeScalar(value: "qore", tag: NOTHING, anchor: "name_anchor");
+        writer.writeKey(key: "copy");
+        writer.writeAlias(anchor: "name_anchor");
+        writer.writeKey(key: "items");
+        writer.startSequence(anchor: NOTHING);
+        writer.write(value: "one");
+        writer.write(value: "two");
+        writer.endSequence();
+        writer.endMapping();
+        writer.endDocument();
+        writer.close();
+
+        auto parsed = parse_yaml(sos.getData());
+        assertEq("qore", parsed.name);
+        assertEq("qore", parsed.copy);
+        assertEq(("one", "two"), parsed.items);
     }
 
     testFlush() {

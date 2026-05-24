@@ -13,6 +13,7 @@ class YamlDocumentIteratorTest inherits QUnit::Test {
         addTestCase("single document", \testSingleDocument());
         addTestCase("mixed types", \testMixedTypes());
         addTestCase("stream input", \testStreamInput());
+        addTestCase("named argument constructors", \testNamedArgumentConstructors());
         addTestCase("document count", \testDocumentCount());
         addTestCase("reset string iterator", \testResetStringIterator());
         addTestCase("parse_yaml_documents", \testParseYamlDocuments());
@@ -124,6 +125,26 @@ scalar value
         assertEq(2, docs.size());
         assertEq({"foo": 1}, docs[0]);
         assertEq({"bar": 2}, docs[1]);
+    }
+
+    testNamedArgumentConstructors() {
+        string yaml = "---\nfoo: 1\n---\nbar: 2\n---\nbaz: 3";
+        YamlDocumentIterator string_iter(
+            yaml_str: yaml, options: <YamlDocumentIteratorOptions>{"max_documents": 2});
+
+        list<auto> docs = ();
+        while (string_iter.next()) {
+            push docs, string_iter.getValue();
+        }
+        assertEq(2, docs.size());
+        assertEq({"foo": 1}, docs[0]);
+        assertEq({"bar": 2}, docs[1]);
+
+        StringInputStream sis(yaml);
+        YamlDocumentIterator stream_iter(
+            stream: sis, options: <YamlDocumentIteratorOptions>{"skip_empty_documents": True});
+        assertTrue(stream_iter.next());
+        assertEq({"foo": 1}, stream_iter.getValue());
     }
 
     testDocumentCount() {

@@ -77,6 +77,7 @@ public class Main inherits QUnit::Test {
         addTestCase("float rounding test", \floatRoundingTest());
         addTestCase("issue 3394", \issue3394());
         addTestCase("base test", \testYaml());
+        addTestCase("named argument calls", \testNamedArgumentCalls());
         addTestCase("Options test", \testOptions());
         addTestCase("Skipped test", \testIndent());
         addTestCase("Len test", \testLen());
@@ -109,6 +110,17 @@ public class Main inherits QUnit::Test {
                 "example": "user-1234",
             },
         }, parse_yaml(YamlWithAlias));
+    }
+
+    testNamedArgumentCalls() {
+        hash<auto> source = {"name": "qore", "items": (1, 2)};
+        string yaml = make_yaml(data: source, flags: YAML::Yaml1_2, width: -1, indent: 2);
+        assertEq(source, parse_yaml(yaml: yaml));
+
+        list<auto> docs = parse_yaml_documents(yaml: "---\na: 1\n---\nb: 2\n");
+        assertEq(2, docs.size());
+        assertEq(1, docs[0].a);
+        assertEq(2, docs[1].b);
     }
 
     testMergeKeys() {

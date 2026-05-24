@@ -318,7 +318,7 @@ parser.parse("items:\n  - one\n  - two", sub (hash<YamlSaxEvent> e) {
     @note The callback is invoked synchronously for each event. If the callback
     throws an exception, parsing stops and the exception is propagated directly.
 */
-nothing YamlSaxParser::parse(string yaml_str, code callback) {
+nothing YamlSaxParser::parse(string yaml_str, code callback) [flags=NAMED_ARGS] {
     ReferenceHolder<ResolvedCallReferenceNode> holder(callback->refRefSelf(), xsink);
     parser->parse(yaml_str, *holder, xsink);
 }
@@ -341,7 +341,7 @@ parser.parseStream(fis, sub (hash<YamlSaxEvent> e) {
 });
     @endcode
 */
-nothing YamlSaxParser::parseStream(Qore::InputStream[InputStream] stream, code callback, *string encoding) {
+nothing YamlSaxParser::parseStream(Qore::InputStream[InputStream] stream, code callback, *string encoding) [flags=NAMED_ARGS] {
     const QoreEncoding* enc = encoding ? QEM.findCreate(encoding->c_str()) : QCS_UTF8;
     ReferenceHolder<ResolvedCallReferenceNode> holder(callback->refRefSelf(), xsink);
     // Use obj_stream (the QoreObject*) - the C++ class will ref it

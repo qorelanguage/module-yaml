@@ -15,6 +15,7 @@ class YamlSaxParserTest inherits QUnit::Test {
         addTestCase("anchors and aliases", \testAnchorsAndAliases());
         addTestCase("multiple documents", \testMultipleDocuments());
         addTestCase("stream input", \testStreamInput());
+        addTestCase("named argument parsing", \testNamedArgumentParsing());
         addTestCase("depth tracking", \testDepthTracking());
         addTestCase("line/column tracking", \testLineColumnTracking());
         addTestCase("unicode content", \testUnicodeContent());
@@ -207,6 +208,26 @@ doc3: value3
 
         assertTrue(events.size() > 0);
         assertEq(YAML::YamlSaxEventType::StreamStart, events[0].type);
+    }
+
+    testNamedArgumentParsing() {
+        YamlSaxParser parser();
+        list<hash<YamlSaxEvent>> events = ();
+        code callback = sub (hash<YamlSaxEvent> e) {
+            if (e.type == YAML::YamlSaxEventType::Scalar) {
+                push events, e;
+            }
+        };
+
+        parser.parse(callback: callback, yaml_str: "name: qore");
+        assertEq("name", events[0].value);
+        assertEq("qore", events[1].value);
+
+        events = ();
+        StringInputStream sis("streamed: true");
+        parser.parseStream(stream: sis, callback: callback, encoding: "UTF-8");
+        assertEq("streamed", events[0].value);
+        assertEq(True, events[1].value);
     }
 
     testDepthTracking() {
