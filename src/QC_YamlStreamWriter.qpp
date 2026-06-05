@@ -154,7 +154,7 @@ qclass YamlStreamWriter [arg=QoreYamlStreamWriter* writer; ns=Qore::YAML];
 /** @param stream the output stream to write YAML to
     @param options optional writer configuration
 */
-YamlStreamWriter::constructor(Qore::OutputStream[OutputStream] stream, *hash<YamlStreamWriterOptions> options) {
+YamlStreamWriter::constructor(Qore::OutputStream[OutputStream] stream, *hash<YamlStreamWriterOptions> options) [flags=NAMED_ARGS] {
     // Use default values when option keys are not present (not just when options is null)
     int flags = 0;
     int width = -1;
@@ -208,7 +208,7 @@ nothing YamlStreamWriter::endDocument() {
 
     @throw YAML-STREAM-EMIT-ERROR if not in valid context for sequence
 */
-nothing YamlStreamWriter::startSequence(*string anchor) {
+nothing YamlStreamWriter::startSequence(*string anchor) [flags=NAMED_ARGS] {
     writer->startSequence(anchor ? anchor->c_str() : nullptr, xsink);
 }
 
@@ -222,7 +222,7 @@ nothing YamlStreamWriter::endSequence() {
 //! Starts a YAML mapping (hash/object)
 /** @param anchor optional anchor name for later reference
 */
-nothing YamlStreamWriter::startMapping(*string anchor) {
+nothing YamlStreamWriter::startMapping(*string anchor) [flags=NAMED_ARGS] {
     writer->startMapping(anchor ? anchor->c_str() : nullptr, xsink);
 }
 
@@ -238,7 +238,7 @@ nothing YamlStreamWriter::endMapping() {
 
     @note Must be followed by a value (scalar, sequence, mapping, or alias)
 */
-nothing YamlStreamWriter::writeKey(string key) {
+nothing YamlStreamWriter::writeKey(string key) [flags=NAMED_ARGS] {
     writer->writeKey(key, xsink);
 }
 
@@ -247,7 +247,7 @@ nothing YamlStreamWriter::writeKey(string key) {
     @param tag optional explicit YAML tag (e.g., "!!str", "!custom")
     @param anchor optional anchor name
 */
-nothing YamlStreamWriter::writeScalar(auto value, *string tag, *string anchor) {
+nothing YamlStreamWriter::writeScalar(auto value, *string tag, *string anchor) [flags=NAMED_ARGS] {
     writer->writeScalar(value, tag, anchor, xsink);
 }
 
@@ -256,7 +256,7 @@ nothing YamlStreamWriter::writeScalar(auto value, *string tag, *string anchor) {
 
     @throw YAML-STREAM-EMIT-ERROR if anchor is unknown
 */
-nothing YamlStreamWriter::writeAlias(string anchor) {
+nothing YamlStreamWriter::writeAlias(string anchor) [flags=NAMED_ARGS] {
     writer->writeAlias(anchor->c_str(), xsink);
 }
 
@@ -265,7 +265,7 @@ nothing YamlStreamWriter::writeAlias(string anchor) {
 
     Recursively writes complex structures.
 */
-nothing YamlStreamWriter::write(auto value) {
+nothing YamlStreamWriter::write(auto value) [flags=NAMED_ARGS] {
     writer->write(value, xsink);
 }
 

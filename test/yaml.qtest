@@ -77,6 +77,7 @@ public class Main inherits QUnit::Test {
         addTestCase("float rounding test", \floatRoundingTest());
         addTestCase("issue 3394", \issue3394());
         addTestCase("base test", \testYaml());
+        addTestCase("named argument calls", \testNamedArgumentCalls());
         addTestCase("Options test", \testOptions());
         addTestCase("Skipped test", \testIndent());
         addTestCase("Len test", \testLen());
@@ -109,6 +110,17 @@ public class Main inherits QUnit::Test {
                 "example": "user-1234",
             },
         }, parse_yaml(YamlWithAlias));
+    }
+
+    testNamedArgumentCalls() {
+        hash<auto> source = {"name": "qore", "items": (1, 2)};
+        string yaml = make_yaml(data: source, flags: YAML::Yaml1_2, width: -1, indent: 2);
+        assertEq(source, parse_yaml(yaml: yaml));
+
+        list<auto> docs = parse_yaml_documents(yaml: "---\na: 1\n---\nb: 2\n");
+        assertEq(2, docs.size());
+        assertEq(1, docs[0].a);
+        assertEq(2, docs[1].b);
     }
 
     testMergeKeys() {
@@ -518,7 +530,7 @@ target:
     testIndent() {
         for (int i = 0; i < 100; i++) {
             string s = make_yaml(DATA, NOTHING, NOTHING, 1);
-            any l = parse_yaml(s);
+            auto l = parse_yaml(s);
             testAssertion(sprintf("indent: %2d", i), \equals(), (DATA, l));
         }
     }
@@ -526,7 +538,7 @@ target:
     testLen() {
         for (int i = -10; i < 11; i++) {
             string s = make_yaml(DATA, NOTHING, i);
-            any l = parse_yaml(s);
+            auto l = parse_yaml(s);
             testAssertion(sprintf("len: %2d", i), \equals(), (DATA, l));
         }
     }
@@ -542,13 +554,13 @@ target:
         date dt2 = tz.date(dt1);
         testAssertion("timezone test", \equals(), (dt1, dt2));
 
-        any dt3 = parse_yaml(make_yaml(dt1));
+        auto dt3 = parse_yaml(make_yaml(dt1));
         testAssertion("yaml date test", \equals(), (dt2, dt3));
     }
 
     testNanStructure() {
         string s = make_yaml(DATA2);
-        any l = parse_yaml(s);
+        auto l = parse_yaml(s);
         assertEq(DATA2[0], l[0]);
         assertEq(DATA2[1], l[1]);
         assertEq(DATA2[2], l[2]);
