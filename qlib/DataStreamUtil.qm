@@ -1223,6 +1223,76 @@ string dae = ds_get_ds_accept_enc_header(hdr."Accept-Encoding");
         return False;
     }
 
+    #! Returns an interactive send callback for Connect-framed chunked data
+    /** Unlike @ref connect_get_send(), this callback does <b>not</b> emit an EndStreamResponse frame
+        the first time \a scb returns @ref nothing.  In an interactive (interleaved read -> reply)
+        exchange \a scb returns @ref nothing to mean "no more replies for the current inbound
+        operation" — which must <b>not</b> close the stream, because the client will send further
+        operations on it.  The stream is closed (the EndStreamResponse frame emitted) only when
+        \a eos_check returns @ref True "True" (i.e. the inbound side has been fully received / the
+        client half-closed the stream).
+
+        @param scb the send data callback; returns the next reply for the current operation, or
+        @ref nothing when none remain
+        @param enc_func an optional call reference for content encoding after YAML serialization
+        @param eos_check a callback returning @ref True "True" when the stream has ended (the inbound
+        side is fully received) so the terminal EndStreamResponse frame may be emitted
+
+        @return a closure suitable for use with the interactive HTTP/2 / HTTP/3 streaming send path;
+        each call serializes one reply to YAML and frames it, returns @ref nothing between operations,
+        and emits the EndStreamResponse frame exactly once at end of stream
+
+        @see connect_get_send()
+
+        @since DataStreamUtil 1.4
+    */
+    public code<auto()> sub connect_get_send_interactive(code<auto()> scb, *code enc_func,
+            code<bool()> eos_check) {
+        bool eos_sent = False;
+        return auto sub () {
+            if (eos_sent) {
+                return NOTHING;
+            }
+            auto data;
+            try {
+                data = scb();
+                if (!exists data) {
+                    # no more replies for the current operation; only close the stream once the
+                    # inbound side has been fully received (the client half-closed the stream)
+                    if (eos_check()) {
+                        eos_sent = True;
+                        return connect_frame_message(binary("{}"), CONNECT_FLAG_END_STREAM);
+                    }
+                    return NOTHING;
+                }
+                # Serialize to YAML
+                binary payload = binary(make_yaml(data));
+                # Optionally compress
+                int flags = 0;
+                if (enc_func) {
+                    payload = enc_func(payload);
+                    flags = CONNECT_FLAG_COMPRESSED;
+                }
+                return connect_frame_message(payload, flags);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "THREAD-CANCELLED" || ex.err == "PROGRAM-INTERRUPTED") {
+                    rethrow;
+                }
+                # Emit EndStreamResponse with error
+                eos_sent = True;
+                string err_msg = sprintf("%s: %s", ex.err, ex.desc);
+                err_msg =~ s/[\r\n]/ /g;
+%ifdef NoJson
+                string json = "{\"code\":\"internal\",\"message\":"
+                    + connect_json_escape(err_msg) + "}";
+%else
+                string json = make_json({"error": {"code": "internal", "message": err_msg}});
+%endif
+                return connect_frame_message(binary(json), CONNECT_FLAG_END_STREAM);
+            }
+        };
+    }
+
     #! Returns a send callback for Connect-framed chunked data
     /** @param scb the send data callback that should return data for sending; when it returns
         NOTHING, an EndStreamResponse frame is emitted

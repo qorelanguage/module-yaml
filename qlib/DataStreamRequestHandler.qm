@@ -171,6 +171,11 @@ public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRest
         #! the send callback as returned by the @ref datastreamutilintro "DataStreamUtil" module
         code<auto()> scb;
 
+        #! the interactive send callback (Connect mode, lazily created); used when @ref wantsInteractiveStreaming() is @ref True "True"
+        /** @since DataStreamRequestHandler 1.3
+        */
+        *code<auto()> interactive_scb;
+
         #! flag for when all data has been received
         bool recv_done = False;
 
@@ -442,11 +447,57 @@ public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRest
     }
 
     #! calls the send callback as returned by the @ref datastreamutilintro "DataStreamUtil" module
-    /** The send callback calls @ref sendDataImpl() to get the data to serialize and encode and send as a response
+    /** The send callback calls @ref sendDataImpl() to get the data to serialize and encode and send as a response.
+
+        In interactive mode (@ref wantsInteractiveStreaming() returns @ref True "True"), a Connect send
+        callback that frames each reply individually and only emits the terminal EndStreamResponse
+        frame once the inbound side has been fully received is used instead, so the handler can reply
+        per inbound operation without prematurely closing the stream.
     */
     auto sendImpl() {
         @debug(printf("AbstractDataStreamRequestHandler::sendImpl()\n"));
+        if (wantsInteractiveStreaming()) {
+            if (!interactive_scb) {
+                interactive_scb = connect_get_send_interactive(\sendData(),
+                    ds_get_content_encode(cx.encoding), \isInteractiveStreamEnded());
+            }
+            return interactive_scb();
+        }
         return scb();
+    }
+
+    #! Returns @ref True "True" to drive an interactive (interleaved read -> reply) bidirectional stream on HTTP/2 / HTTP/3
+    /** The default implementation returns @ref False "False" — existing handlers keep the
+        recv-all-then-send model unchanged.  Connect-mode handlers that need an interactive exchange
+        (the client sends an operation, reads its result, then decides the next operation on the same
+        stream — e.g. read-your-writes within one remote SQL session) override this to return
+        @ref True "True".  Interactive mode applies only on HTTP/2 and HTTP/3 (the legacy half-duplex
+        model is always used on HTTP/1.x); typical implementations return
+        @code{.py} connect_mode && isMultiplexedTransport() @endcode
+
+        When enabled, @ref recvDataImpl() must process each inbound operation and queue exactly the
+        reply for it, and @ref sendDataImpl() must return that queued reply and @ref nothing when none
+        remain for the current operation (it will be called again for the next operation).
+
+        @return @ref True "True" to opt in to interactive bidirectional streaming, @ref False "False"
+        (the default) to use the legacy recv-all-then-send model
+
+        @see HttpServer::AbstractStreamRequest::wantsInteractiveStreaming()
+
+        @since DataStreamRequestHandler 1.3
+    */
+    bool wantsInteractiveStreaming() {
+        return False;
+    }
+
+    #! Returns @ref True "True" once the inbound side of an interactive stream has been fully received
+    /** Used by the interactive Connect send callback to decide when the terminal EndStreamResponse
+        frame may be emitted; the stream is only closed after the client half-closes it.
+
+        @since DataStreamRequestHandler 1.3
+    */
+    private bool isInteractiveStreamEnded() {
+        return recv_done;
     }
 
     #! Returns True if the request uses the Connect protocol (DataStream 2.0)
