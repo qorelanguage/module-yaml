@@ -803,6 +803,36 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
         }
     }
 
+    #! Opens an interactive (interleaved send/read) Connect stream and returns the started stream handle
+    /** Issue #5351: unlike @ref sendDataStream() / @ref sendRecvDataStream() (which are
+        send-all-then-read), this opens a full-duplex Connect stream the caller drives interactively —
+        sending one Connect-framed message, reading its reply, then deciding the next message — which
+        is required for read-your-writes within one session.  The connection's auth headers, path, and
+        Connect streaming headers are applied here; the caller frames messages with
+        @ref DataStreamUtil::connect_frame_message() and parses replies with
+        @ref DataStreamUtil::connect_unframe_message().  The caller owns the returned handle and must
+        finalize it (send END_STREAM via @ref HttpClientIo::HttpClientStreamHandle::writesDone() and
+        drain to end-of-stream).
+
+        @param method the HTTP method (typically \c "POST")
+        @param path the request path (relative paths get the connection path prepended)
+        @param hdr optional extra request headers
+
+        @return the started @ref HttpClientIo::HttpClientStreamHandle for interleaved
+        @ref HttpClientIo::HttpClientStreamHandle::sendData() / @ref HttpClientIo::HttpClientStreamHandle::readData()
+
+        @since DataStreamClientIo 1.1
+    */
+    public HttpClientIo::HttpClientStreamHandle openConnectInteractiveStream(string method, string path,
+            *hash<auto> hdr) {
+        hash<auto> merged_hdr = getDefaultHeaders() + (hdr ?? {});
+        setConnectStreamingHeaders(\merged_hdr);
+        HttpClientIo::HttpClientStreamHandle stream = getConnectionManager().acquireStream(getUrl());
+        string effective_path = applyConnectionPath(path);
+        stream.startStreaming(method, effective_path, merged_hdr, True);
+        return stream;
+    }
+
     #! Internal: register an active stream for cancellation support
     private string registerActiveStream(HttpClientIo::HttpClientStreamHandle stream) {
         string token = get_random_bytes(16).toHex();
