@@ -3,6 +3,7 @@
 
 %modern
 
+%requires HttpClientIo
 %requires HttpServer
 %requires Logger
 %requires Mime
@@ -148,6 +149,8 @@ l50Xb2GWQesIt9k5jF5IOw==
             addTestCase("H2 recvDataStream (Connect)", \testH2RecvDataStream());
             addTestCase("H2 sendDataStream (Connect)", \testH2SendDataStream());
             addTestCase("H2 sendRecvDataStream (Connect)", \testH2SendRecvDataStream());
+            addTestCase("H2 openConnectInteractiveStream (Connect)",
+                \testH2OpenConnectInteractiveStream());
         } catch (hash<ExceptionInfo> ex) {
             printf("TLS listener setup failed: %s: %s\n", ex.err, ex.desc);
         }
@@ -164,6 +167,8 @@ l50Xb2GWQesIt9k5jF5IOw==
             addTestCase("H3 recvDataStream (Connect)", \testH3RecvDataStream());
             addTestCase("H3 sendDataStream (Connect)", \testH3SendDataStream());
             addTestCase("H3 sendRecvDataStream (Connect)", \testH3SendRecvDataStream());
+            addTestCase("H3 openConnectInteractiveStream (Connect)",
+                \testH3OpenConnectInteractiveStream());
         } catch (hash<ExceptionInfo> ex) {
             printf("QUIC listener setup failed: %s: %s\n", ex.err, ex.desc);
         }
@@ -256,6 +261,76 @@ l50Xb2GWQesIt9k5jF5IOw==
         DataStreamClient::DataStreamClientIo client = conn.get(True);
         assertTrue(client instanceof DataStreamClient::DataStreamClientIo,
             "connection returns DataStreamClientIo");
+    }
+
+    private hash<auto> readConnectReply(HttpClientIo::HttpClientStreamHandle stream,
+            binary buf, string label) {
+        while (True) {
+            while (True) {
+                int frame_size = connect_next_frame_size(buf);
+                if (frame_size < 0) {
+                    break;
+                }
+                hash<auto> frame = connect_unframe_message(buf);
+                if (buf.size() > frame_size) {
+                    buf = buf.substr(frame_size);
+                } else {
+                    buf = binary();
+                }
+
+                if (frame.flags & CONNECT_FLAG_END_STREAM) {
+                    return {"end": True, "buf": buf};
+                }
+
+                return {
+                    "body": parse_yaml(frame.data.toString("utf-8")),
+                    "buf": buf,
+                };
+            }
+
+            auto rd = stream.readData(10s);
+            if (!exists rd) {
+                throw "CONNECT-INTERACTIVE-STREAM-TIMEOUT",
+                    sprintf("%s: timed out waiting for a Connect reply", label);
+            }
+            if (rd.typeCode() == NT_HASH) {
+                if (rd.end_stream) {
+                    return {"end": True, "buf": buf};
+                }
+                if (rd.error) {
+                    throw "CONNECT-INTERACTIVE-STREAM-ERROR",
+                        sprintf("%s: stream error: %y", label, rd.error);
+                }
+                continue;
+            }
+
+            buf += rd.typeCode() == NT_BINARY ? rd : binary(rd);
+        }
+    }
+
+    private testOpenConnectInteractiveStream(string url, string label) {
+        DataStreamClient::DataStreamClientIo client({
+            "url": url,
+            "protocol": "connect",
+            "accept_all_certs": True,
+        });
+
+        HttpClientIo::HttpClientStreamHandle stream = client.openConnectInteractiveStream(
+            "POST", "/TestService/BidiEcho");
+        on_exit stream.cancel();
+
+        binary buf = binary();
+        stream.sendData(connect_frame_message(binary(make_yaml({"text": "hello"})), 0), False);
+        stream.sendData(connect_frame_message(binary(make_yaml({"text": "world"})), 0), False);
+        stream.writesDone();
+
+        hash<auto> reply = readConnectReply(stream, buf, label);
+        buf = reply.buf;
+        assertEq("echo:hello", reply.body.reply, label + ": first interactive reply");
+
+        reply = readConnectReply(stream, buf, label);
+        buf = reply.buf;
+        assertEq("echo:world", reply.body.reply, label + ": second interactive reply");
     }
 
     # ---- HTTP/2 streaming tests (require TLS) ----
@@ -369,6 +444,15 @@ l50Xb2GWQesIt9k5jF5IOw==
         assertEq("echo:world", received[1].reply, "second bidi reply");
     }
 
+    testH2OpenConnectInteractiveStream() {
+        if (!m_tls_available) {
+            testSkip("TLS not available");
+            return;
+        }
+
+        testOpenConnectInteractiveStream(getHttpsUrl(), "H2");
+    }
+
     # ---- HTTP/3 (QUIC) Connect streaming tests ----
 
     testH3RecvDataStream() {
@@ -477,6 +561,15 @@ l50Xb2GWQesIt9k5jF5IOw==
         assertEq(2, received.size(), "H3: received 2 bidi replies");
         assertEq("echo:hello", received[0].reply, "H3: first bidi reply");
         assertEq("echo:world", received[1].reply, "H3: second bidi reply");
+    }
+
+    testH3OpenConnectInteractiveStream() {
+        if (!m_quic_available) {
+            testSkip("QUIC not available");
+            return;
+        }
+
+        testOpenConnectInteractiveStream(getQuicUrl(), "H3");
     }
 }
 
