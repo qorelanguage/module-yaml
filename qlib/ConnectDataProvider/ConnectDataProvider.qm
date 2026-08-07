@@ -50,6 +50,7 @@ module ConnectDataProvider {
         # Register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": ConnectDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Connect RPC",
             "short_desc": "Remote procedure calls over HTTP/2 and HTTP/3",
             "desc": "Provides integration with **Connect RPC** services (DataStream 2.0) "

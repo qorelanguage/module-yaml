@@ -40,6 +40,7 @@ module YamlDocumentDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": YamlDocumentDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "YAML Document Files",
             "short_desc": "Read and write YAML document streams",
             "desc": "Provides read and write access to **YAML document streams** — files or "
