@@ -1,0 +1,215 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires yaml
+%requires QUnit
+
+%exec-class YamlScalarResolutionTest
+
+class YamlScalarResolutionTest inherits QUnit::Test {
+    constructor() : Test("YAML scalar resolution", "1.0") {
+        addTestCase("non-numeric plain scalars", \testNonNumericScalars());
+        addTestCase("finite numeric scalars", \testFiniteScalars());
+        addTestCase("YAML special floats", \testSpecialFloats());
+        addTestCase("quoted numeric strings", \testQuotedStrings());
+        addTestCase("block scalar strings", \testBlockStrings());
+        addTestCase("Qore numeric extensions", \testQoreNumbers());
+        addTestCase("invalid explicit floats", \testInvalidTaggedFloats());
+        addTestCase("scalar round trips", \testRoundTrips());
+        addTestCase("OpenAPI description", \testOpenApiDescription());
+        set_return_value(main());
+    }
+
+    private assertValue(auto expected, auto actual, string label) {
+        assertEq(expected.type(), actual.type(), label + " type");
+        if ((expected.type() == Type::Float || expected.type() == Type::Number) && expected.nanp()) {
+            assertTrue(actual.nanp(), label + " NaN");
+        } else {
+            assertEq(expected, actual, label + " value");
+        }
+    }
+
+    # Exercise the shared resolver through every parser, including stream input,
+    # with implicit and explicit YAML version directives.
+    private assertScalar(string scalar, auto expected) {
+        foreach string prefix in (("", "%YAML 1.1\n---\n", "%YAML 1.2\n---\n")) {
+            string yaml = prefix + "v: " + scalar + "\n";
+            string label = sprintf("scalar %Y, directive %Y", scalar, prefix);
+            assertValue(expected, parse_yaml(yaml).v, label + " parse_yaml");
+            list<auto> docs = parse_yaml_documents(yaml);
+            assertEq(1, docs.size(), label + " document count");
+            assertValue(expected, docs[0].v, label + " parse_yaml_documents");
+
+            YamlDocumentIterator iter(yaml);
+            assertTrue(iter.next(), label + " iterator document");
+            assertValue(expected, iter.getValue().v, label + " iterator");
+            assertFalse(iter.next(), label + " iterator end");
+
+            StringInputStream input(yaml);
+            YamlDocumentIterator stream_iter(input);
+            assertTrue(stream_iter.next(), label + " stream document");
+            assertValue(expected, stream_iter.getValue().v, label + " stream iterator");
+            assertFalse(stream_iter.next(), label + " stream end");
+
+            YamlSaxParser parser();
+            list<auto> values = ();
+            code<nothing(hash<YamlSaxEvent>)> callback = sub (hash<YamlSaxEvent> event) {
+                if (event.type == YAML::YamlSaxEventType::Scalar) {
+                    push values, event.value;
+                }
+            };
+            parser.parse(yaml, callback);
+            assertEq(2, values.size(), label + " SAX scalar count");
+            assertValue(expected, values[1], label + " SAX");
+            values = ();
+            StringInputStream sax_input(yaml);
+            parser.parseStream(sax_input, callback);
+            assertEq(2, values.size(), label + " stream SAX scalar count");
+            assertValue(expected, values[1], label + " stream SAX");
+        }
+    }
+
+    testNonNumericScalars() {
+        foreach string scalar in ((
+            ".", "-.", "+.", ".e3", "-.e3", "+.E-3", "..", "...", "-.-", "+",
+            "e3", "-e3", "+E3", "1e", "1e+", "1e-", "1e2+3", "1e2-3", "1e++3",
+            "1e--3", "1e+-3", "1e2e3", "1.2.3", "1e2.3", "1 2", "1.0x", ".5é",
+            "n", "+n", "-n", ".n", "-.n", ".e3n", "1en", "1e+n", "1e2+3n",
+            "1n{0}", "1n{}", "1n{128}x", ".inF", ".iNF", ".Nan", ".nAn",
+            "+.nan", "-.nan", ".infinity", ".infmore", ".nanmore", ".infn", ".nann",
+            "inf", "nan"
+        )) {
+            assertScalar(scalar, scalar);
+        }
+    }
+
+    testFiniteScalars() {
+        hash<auto> cases = {
+            ".5": 0.5, "-.5": -0.5, "+.5": 0.5, "5.": 5.0, "-5.": -5.0, "+5.": 5.0,
+            "0.0": 0.0, "-0.0": -0.0, "1e3": 1000.0, "1E+3": 1000.0,
+            "1e-3": 0.001, ".5e2": 50.0, "5.e-1": 0.5, "-1.25E+2": -125.0,
+            "0": 0, "-0": 0, "+0": 0, "42": 42, "-42": -42, "+42": 42,
+            "9223372036854775807": 9223372036854775807,
+            "-9223372036854775808": -9223372036854775807 - 1,
+            "+9223372036854775807": 9223372036854775807,
+            "9223372036854775808": 9223372036854775808n,
+            "-9223372036854775809": -9223372036854775809n,
+        };
+        foreach string scalar in (keys cases) {
+            assertScalar(scalar, cases{scalar});
+            assertScalar("!!float " + scalar, cases{scalar}.toFloat());
+        }
+    }
+
+    testSpecialFloats() {
+        foreach string spelling in ((".inf", ".Inf", ".INF")) {
+            foreach string sign in (("", "+", "-")) {
+                float expected = sign == "-" ? -@inf@ : @inf@;
+                assertScalar(sign + spelling, expected);
+                assertScalar("!!float " + sign + spelling, expected);
+                assertScalar("!!float '" + sign + spelling + "'", expected);
+            }
+        }
+        foreach string spelling in ((".nan", ".NaN", ".NAN")) {
+            assertScalar(spelling, @nan@);
+            assertScalar("!!float " + spelling, @nan@);
+            assertScalar("!!float '" + spelling + "'", @nan@);
+        }
+    }
+
+    testQuotedStrings() {
+        foreach string scalar in (("", "-", ".", "-.", "+.", ".e3", "+", "n", ".n",
+                ".inf", "+.Inf", "-.INF", ".nan", ".NaN", ".NAN", ".5", "5.", "1e3", "42")) {
+            assertScalar("'" + scalar + "'", scalar);
+            assertScalar("\"" + scalar + "\"", scalar);
+            assertScalar("!!str '" + scalar + "'", scalar);
+        }
+    }
+
+    testQoreNumbers() {
+        hash<auto> cases = {
+            "1n": 1n, "-1n": -1n, "+1n": 1n, ".5n": 0.5n, "5.n": 5n,
+            "1e3n": 1000n, "1e-3n": 0.001n, "5e+02n{128}": 500n,
+            "@inf@n": @inf@n, "-@inf@n": -@inf@n, "@nan@n": @nan@n,
+            "@inf@n{128}": @inf@n, "@nan@n{128}": @nan@n,
+        };
+        foreach string scalar in (keys cases) {
+            # Preserve support for single-quoted Qore number literals.
+            assertScalar("'" + scalar + "'", cases{scalar});
+            if (index(scalar, "@") < 0) {
+                assertScalar(scalar, cases{scalar});
+            }
+        }
+        foreach string spelling in (("@inf@", "+@inf@", "-@inf@", "@nan@", "-@nan@")) {
+            float expected = spelling =~ /nan/ ? @nan@ : (spelling[0] == "-" ? -@inf@ : @inf@);
+            assertScalar("!!float '" + spelling + "'", expected);
+        }
+    }
+
+    testBlockStrings() {
+        foreach string scalar in ((".", ".inf", "-.inf", ".nan", ".5", "5.", "1e3", "42", "1n",
+                "true", "null", "2026-09-07")) {
+            assertScalar("|-\n  " + scalar, scalar);
+            assertScalar(">-\n  " + scalar, scalar);
+            assertScalar("|\n  " + scalar, scalar + "\n");
+            assertScalar(">\n  " + scalar, scalar + "\n");
+        }
+    }
+
+    testInvalidTaggedFloats() {
+        foreach string scalar in (("", ".", "+", "-.", ".e3", "e3", "1e", "1e+", "1e2+3",
+                "1n", "1.0x", ".inF", ".Nan", "+.nan")) {
+            string yaml = "keep: {items: [1, 2, 3]}\nv: !!float '" + scalar + "'\n";
+            assertThrows("YAML-PARSER-ERROR", \parse_yaml(), yaml);
+            assertThrows("YAML-PARSER-ERROR", \parse_yaml_documents(), yaml);
+            YamlDocumentIterator iter(yaml);
+            assertThrows("YAML-PARSER-ERROR", \iter.next());
+            StringInputStream input(yaml);
+            YamlDocumentIterator stream_iter(input);
+            assertThrows("YAML-PARSER-ERROR", \stream_iter.next());
+            YamlSaxParser parser();
+            code<nothing(hash<YamlSaxEvent>)> callback = sub (hash<YamlSaxEvent> event) { };
+            assertThrows("YAML-PARSER-ERROR", \parser.parse(), (yaml, callback));
+            StringInputStream sax_input(yaml);
+            assertThrows("YAML-PARSER-ERROR", \parser.parseStream(), (sax_input, callback));
+        }
+    }
+
+    testRoundTrips() {
+        list<auto> values = (".", "-.", "+.", ".e3", ".inf", ".nan", ".Inf", "-.inf",
+            ".5", "5.", "1e3", "n", ".n", "", @inf@, -@inf@, @nan@, 0.5, 5.0, -5.0,
+            0.0, -0.0, M_PI, 1e-308, 1e308, 500n, @inf@n, -@inf@n, @nan@n);
+        push values, parse_yaml("!number '1.23456789012345678901234567890123456789n{256}'");
+        foreach auto value in (values) {
+            foreach int flags in ((YAML::None, YAML::Yaml1_1, YAML::Yaml1_2, YAML::Canonical)) {
+                string yaml = make_yaml(value, flags);
+                assertValue(value, parse_yaml(yaml), sprintf("round trip %Y flags %d", value, flags));
+            }
+            StringOutputStream output();
+            YamlStreamWriter writer(output);
+            writer.startDocument();
+            writer.writeScalar(value);
+            writer.endDocument();
+            writer.close();
+            auto actual = parse_yaml(output.getData());
+            assertValue(value, actual, sprintf("stream round trip %Y", value));
+            if (value.type() == Type::Number) {
+                assertEq(value.prec(), actual.prec(), "stream number precision");
+            } else if (value.type() == Type::Float && value == 0.0) {
+                assertEq(sprintf("%g", value), sprintf("%g", actual), "stream signed zero");
+            }
+        }
+    }
+
+    testOpenApiDescription() {
+        string yaml = "components:\n  schemas:\n    SearchRecordsRequest:\n      properties:\n"
+            + "        query:\n          description: .\n";
+        hash<auto> document = parse_yaml(yaml);
+        assertValue(".", document.components.schemas.SearchRecordsRequest.properties.query.description,
+            "OpenAPI description");
+        assertEq(document, parse_yaml(make_yaml(document)), "OpenAPI round trip");
+    }
+}

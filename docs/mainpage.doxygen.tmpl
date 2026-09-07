@@ -67,6 +67,30 @@ string yaml_str = make_yaml(data, YAML::Canonical);
 auto data = parse_yaml(yaml_str);
     @endcode
 
+    @section yaml_scalar_resolution Numeric Scalar Resolution
+
+    Plain decimal numbers require at least one mantissa digit and, when present, at least one exponent digit.
+    For example, \c .5, \c 5., and \c 1e3 are floats; \c ., \c -., \c +., \c .e3, and \c 1e2+3 are strings.
+    The YAML special float spellings \c .inf, \c .Inf, and \c .INF accept an optional sign; \c .nan,
+    \c .NaN, and \c .NAN represent NaN without a sign. Quoting these YAML spellings preserves string values;
+    literal and folded block scalars also remain strings.
+    The same rules apply to parse_yaml(), parse_yaml_documents(), YamlDocumentIterator, and YamlSaxParser.
+    An explicit \c !!float tag requires a valid float value; invalid values raise \c YAML-PARSER-ERROR.
+
+    Qore's existing numeric extensions, including <tt>\@inf\@</tt>, <tt>\@nan\@</tt>, and arbitrary-precision
+    literals such as \c 5e+02n{128}, remain supported. Single-quoted Qore numeric extensions retain their
+    existing special interpretation; use double quotes to preserve them as strings.
+
+    @code{.py}
+%modern
+%requires yaml
+hash<auto> data = parse_yaml("description: .\nlimit: .inf\nratio: .5\n");
+@assert(data.description == ".");
+@assert(data.limit.infp());
+@assert(data.ratio == 0.5);
+@assert(parse_yaml(make_yaml(".inf")) == ".inf");
+    @endcode
+
     @section yaml_functions Available Functions
 
     |!Function|!Description
@@ -131,6 +155,14 @@ auto data = parse_yaml(yaml_str);
       - \c yamlrpcio:// and \c yamlrpcios:// URL schemes for ConnectionProvider
 
     <b>Bug Fixes</b>
+    - fixed scalar resolution silently converting digit-free tokens such as \c . and \c .e3 to zero;
+      malformed exponents and malformed Qore numeric suffixes now remain strings
+    - added YAML \c .inf and \c .nan spellings, including their specified case variants, to implicit
+      resolution and explicit \c !!float parsing; invalid explicitly tagged floats now raise a parser error
+      instead of converting a partial value or aborting on empty input
+    - fixed implicit type resolution incorrectly converting literal and folded block scalar text to other types
+    - fixed YamlStreamWriter numeric round trips: special floats use YAML spellings, finite floats retain
+      precision and their float type, and arbitrary-precision numbers retain their value and precision
     - fixed an emitter bug where date-only timestamps whose day ended in \c '0' were
       truncated by an unconditional \c trim_trailing('0') intended only for the
       microseconds component (e.g. \c "2026-04-10" was emitted as \c "2026-04-1"); the

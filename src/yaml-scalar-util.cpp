@@ -64,17 +64,87 @@ static unsigned is_prec(const char* str, size_t len) {
     return (unsigned)atoi(str + 1);
 }
 
-double yaml_parse_float(const char* val, size_t len) {
-    assert(len);
+// Match only the special float spellings defined by the YAML core schema.
+// In particular, NaN has no sign and arbitrary mixed case is not accepted.
+static bool yaml_try_parse_special_float(const char* val, size_t len, double& result) {
+    bool sign = len && (*val == '-' || *val == '+');
+    if (len == static_cast<size_t>(4 + sign)
+        && (!memcmp(val + sign, ".inf", 4) || !memcmp(val + sign, ".Inf", 4)
+            || !memcmp(val + sign, ".INF", 4))) {
+        result = *val == '-' ? -INFINITY : INFINITY;
+        return true;
+    }
+    if (len == 4 && (!memcmp(val, ".nan", 4) || !memcmp(val, ".NaN", 4) || !memcmp(val, ".NAN", 4))) {
+        result = NAN;
+        return true;
+    }
+    return false;
+}
+
+// Scan a decimal mantissa and optional exponent, requiring digits in each.
+// Return the first unconsumed byte so callers can validate Qore number suffixes.
+static const char* yaml_scan_numeric(const char* val, size_t len, bool& integer) {
+    const char* str = val;
+    const char* end = val + len;
+    integer = true;
+    if (str != end && (*str == '-' || *str == '+')) {
+        ++str;
+    }
+    const char* digits = str;
+    while (str != end && *str >= '0' && *str <= '9') {
+        ++str;
+    }
+    bool mantissa_digits = str != digits;
+    if (str != end && *str == '.') {
+        integer = false;
+        digits = ++str;
+        while (str != end && *str >= '0' && *str <= '9') {
+            ++str;
+        }
+        mantissa_digits = mantissa_digits || str != digits;
+    }
+    if (!mantissa_digits) {
+        return nullptr;
+    }
+    if (str != end && (*str == 'e' || *str == 'E')) {
+        integer = false;
+        ++str;
+        if (str != end && (*str == '-' || *str == '+')) {
+            ++str;
+        }
+        digits = str;
+        while (str != end && *str >= '0' && *str <= '9') {
+            ++str;
+        }
+        if (str == digits) {
+            return nullptr;
+        }
+    }
+    return str;
+}
+
+double yaml_parse_float(const char* val, size_t len, ExceptionSink* xsink) {
+    assert(val);
+    double special;
+    if (yaml_try_parse_special_float(val, len, special)) {
+        return special;
+    }
     bool sign = (*val == '-' || *val == '+');
     if ((len == static_cast<size_t>(5 + sign)) && (!strcasecmp(val + sign, "@nan@")
         || !strcasecmp(val + sign, "@inf@"))) {
-        if (val[1 + sign] == 'n' || val[1 + sign] == 'N')
+        if (val[1 + sign] == 'n' || val[1 + sign] == 'N') {
             return (double)NAN;
+        }
         double d = (double)INFINITY;
-        if (*val == '-')
+        if (*val == '-') {
             d = -d;
+        }
         return d;
+    }
+    bool integer;
+    if (yaml_scan_numeric(val, len, integer) != val + len) {
+        xsink->raiseException(QY_PARSE_ERR, "cannot parse floating-point value '%s'", val);
+        return 0.0;
     }
     // Use locale-independent parsing
     return q_strtod(val);
@@ -109,9 +179,10 @@ QoreNumberNode* yaml_parse_number(const char* val, size_t len) {
 }
 
 QoreValue yaml_try_parse_number(const char* val, size_t len, bool no_simple_numeric) {
-    // issue #4893: parsing 'n' -> 0n instead of "n"
-    if (len == 1 && *val == 'n') {
-        return QoreValue();
+    assert(val);
+    double special;
+    if (yaml_try_parse_special_float(val, len, special)) {
+        return no_simple_numeric ? QoreValue() : QoreValue(special);
     }
 
     bool sign = (*val == '-' || *val == '+');
@@ -138,57 +209,34 @@ QoreValue yaml_try_parse_number(const char* val, size_t len, bool no_simple_nume
         return QoreValue();
     }
 
-    const char* str = val + (int)sign;
-    // only digits flag
-    bool od = true;
-    // e char flag
-    bool e = false;
-    // decimal point flag
-    bool dp = false;
-    // plus or minus flag (for exponent)
-    bool pm = false;
-    while (*str) {
-        if (isdigit(*str)) {
-            ++str;
-            continue;
-        }
+    bool integer;
+    const char* str = yaml_scan_numeric(val, len, integer);
+    if (!str) {
+        return QoreValue();
+    }
+    if (str != val + len) {
         if (*str == 'n') {
-            if ((size_t)(str - val + 1) == len)
+            if (str + 1 == val + len) {
                 return new QoreNumberNode(val);
-            else {
-                unsigned prec = is_prec(str + 1, len - (str - val) - 1);
-                if (prec)
-                    return new QoreNumberNode(val, prec);
+            }
+            unsigned prec = is_prec(str + 1, len - (str - val) - 1);
+            if (prec) {
+                return new QoreNumberNode(val, prec);
             }
         }
-        if (od)
-            od = false;
-        if (*str == '.') {
-            if (dp || e || pm)
-                return QoreValue();
-            dp = true;
-        } else if ((*str == 'e' || *str == 'E') && (isdigit(*(str + 1)) || *(str + 1) == '+' || *(str + 1) == '-')) {
-            if (e || pm)
-                return QoreValue();
-            e = true;
-        } else if ((*str == '+' || *str == '-') && isdigit(*(str + 1))) {
-            if (pm || !e)
-                return QoreValue();
-            pm = true;
-        } else
-            return QoreValue();
-        ++str;
+        return QoreValue();
     }
 
-    if (od) {
+    if (integer) {
         if ((len < 19
             || (len == 19 && !sign
                 && ((strcmp(val, "9223372036854775807") <= 0)))
             || (len == 20 && sign
                 && ((*val == '+' && strcmp(val, "+9223372036854775807") <= 0)
                     || (*val == '-' && strcmp(val, "-9223372036854775808") <= 0))))) {
-            if (no_simple_numeric)
+            if (no_simple_numeric) {
                 return QoreValue();
+            }
             errno = 0;
             int64 iv = strtoll(val, 0, 10);
             assert(errno != ERANGE);
@@ -487,8 +535,9 @@ QoreValue yaml_parse_tagged_scalar(const char* val, size_t len, const char* tag,
     }
     if (!strcmp(tag, YAML_INT_TAG))
         return q_atoll(val);
-    if (!strcmp(tag, YAML_FLOAT_TAG))
-        return yaml_parse_float(val, len);
+    if (!strcmp(tag, YAML_FLOAT_TAG)) {
+        return yaml_parse_float(val, len, xsink);
+    }
     if (!strcmp(tag, QORE_YAML_DURATION_TAG))
         return new DateTimeNode(val);
     if (!strcmp(tag, QORE_YAML_NUMBER_TAG))
@@ -502,8 +551,9 @@ QoreValue yaml_parse_tagged_scalar(const char* val, size_t len, const char* tag,
 
 QoreValue yaml_parse_implicit_scalar(const char* val, size_t len, yaml_scalar_style_t style,
                                       bool favor_string, ExceptionSink* xsink) {
-    // For double-quoted strings with favor_string, always return as string
-    if (favor_string || (style == YAML_DOUBLE_QUOTED_SCALAR_STYLE)) {
+    // Double-quoted and block scalars always contain string data.
+    if (favor_string || style == YAML_DOUBLE_QUOTED_SCALAR_STYLE
+        || style == YAML_LITERAL_SCALAR_STYLE || style == YAML_FOLDED_SCALAR_STYLE) {
         return new QoreStringNode(val, len, QCS_UTF8);
     }
 

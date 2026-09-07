@@ -24,6 +24,9 @@
 #include "QC_YamlStreamWriter.h"
 #include "yaml-module.h"
 
+#include <cmath>
+#include <limits>
+
 // Write handler implementation - streams data directly to output stream
 QoreYamlStreamWriteHandler::QoreYamlStreamWriteHandler(QoreObject* stream)
     : output_stream(stream), has_error(false) {
@@ -380,11 +383,42 @@ int QoreYamlStreamWriter::writeScalar(QoreValue value, const QoreStringNode* tag
             str_node->sprintf(QLLD, value.getAsBigInt());
             style = YAML_PLAIN_SCALAR_STYLE;
             break;
-        case NT_FLOAT:
+        case NT_FLOAT: {
             str_node = new QoreStringNode();
-            str_node->sprintf("%g", value.getAsFloat());
+            double f = value.getAsFloat();
+            if (std::isnan(f)) {
+                str_node->concat(".nan");
+            } else if (std::isinf(f)) {
+                str_node->concat(f < 0 ? "-.inf" : ".inf");
+            } else {
+                str_node->sprintf("%.*g", std::numeric_limits<double>::max_digits10, f);
+                // Keep integral floats distinguishable from integers on parse.
+                if (!strpbrk(str_node->c_str(), ".eE")) {
+                    str_node->concat(".0");
+                }
+            }
             style = YAML_PLAIN_SCALAR_STYLE;
             break;
+        }
+        case NT_NUMBER: {
+            str_node = new QoreStringNode();
+            const QoreNumberNode* n = value.get<const QoreNumberNode>();
+            n->toString(**str_node, QORE_NF_SCIENTIFIC | QORE_NF_RAW);
+            if (**str_node == "inf") {
+                str_node->set("@inf@n");
+            } else if (**str_node == "-inf") {
+                str_node->set("-@inf@n");
+            } else if (**str_node == "nan") {
+                str_node->set("@nan@n");
+            } else {
+                str_node->concat('n');
+            }
+            str_node->sprintf("{%d}", n->getPrec());
+            if (!tag_str) {
+                tag_str = QORE_YAML_NUMBER_TAG;
+            }
+            break;
+        }
         case NT_NULL:
         case NT_NOTHING:
             str_node = new QoreStringNode("null");

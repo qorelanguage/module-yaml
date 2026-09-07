@@ -92,12 +92,14 @@ DLLLOCAL DateTimeNode* yaml_parse_duration(const char* val);
 DLLLOCAL QoreValue yaml_try_parse_number(const char* val, size_t len, bool no_simple_numeric = false);
 
 //! Parse a float value with locale-independent handling
-/** Handles @inf@, -@inf@, @nan@ special values.
+/** Handles YAML .inf / .nan spellings and Qore @inf@ / @nan@ special values.
+    Finite values must have a decimal mantissa and optional exponent with digits in each.
     @param val the value string
     @param len the length of the string
+    @param xsink exception sink for invalid float values
     @return the parsed double value
 */
-DLLLOCAL double yaml_parse_float(const char* val, size_t len);
+DLLLOCAL double yaml_parse_float(const char* val, size_t len, ExceptionSink* xsink);
 
 //! Parse an arbitrary-precision number value
 /** Handles precision suffix in format: value{precision}

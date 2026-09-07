@@ -105,18 +105,17 @@ enum Qore::YAML::YamlScalarStyle : string {
 
     @par Event Types and Available Fields:
 
-    | Event Type | Available Fields |
-    |------------|------------------|
-    | @ref YamlSaxEventType::StreamStart | type, line, column |
-    | @ref YamlSaxEventType::StreamEnd | type, line, column |
-    | @ref YamlSaxEventType::DocumentStart | type, depth, line, column |
-    | @ref YamlSaxEventType::DocumentEnd | type, depth, line, column |
-    | @ref YamlSaxEventType::Scalar | type, depth, line, column, value, anchor, tag, style, implicit |
-    | @ref YamlSaxEventType::SequenceStart | type, depth, line, column, anchor, tag |
-    | @ref YamlSaxEventType::SequenceEnd | type, depth, line, column |
-    | @ref YamlSaxEventType::MappingStart | type, depth, line, column, anchor, tag |
-    | @ref YamlSaxEventType::MappingEnd | type, depth, line, column |
-    | @ref YamlSaxEventType::Alias | type, depth, line, column, alias |
+    |!Event Type|!Available Fields
+    |@ref YamlSaxEventType::StreamStart|type, line, column
+    |@ref YamlSaxEventType::StreamEnd|type, line, column
+    |@ref YamlSaxEventType::DocumentStart|type, depth, line, column
+    |@ref YamlSaxEventType::DocumentEnd|type, depth, line, column
+    |@ref YamlSaxEventType::Scalar|type, depth, line, column, value, anchor, tag, style, implicit
+    |@ref YamlSaxEventType::SequenceStart|type, depth, line, column, anchor, tag
+    |@ref YamlSaxEventType::SequenceEnd|type, depth, line, column
+    |@ref YamlSaxEventType::MappingStart|type, depth, line, column, anchor, tag
+    |@ref YamlSaxEventType::MappingEnd|type, depth, line, column
+    |@ref YamlSaxEventType::Alias|type, depth, line, column, alias
 
     @par Example: Inspecting events
     @code{.py}

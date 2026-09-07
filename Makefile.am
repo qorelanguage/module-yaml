@@ -16,6 +16,7 @@ EXTRA_DIST = COPYING.LGPL COPYING.MIT AUTHORS README \
 	src/QC_YamlStreamWriter.qpp \
 	test/yaml.qtest \
 	test/Yaml12.qtest \
+	test/YamlScalarResolution.qtest \
 	test/YamlRpcClient.qtest \
 	test/YamlRpcHandler.qtest \
 	test/DataStreamUtil.qtest \
