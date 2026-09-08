@@ -36,6 +36,8 @@
 #include <stdarg.h>
 
 #include <map>
+#include <cmath>
+#include <limits>
 
 #define QYE_NONE                0
 #define QYE_CANONICAL           (1 << 0)
@@ -243,22 +245,17 @@ public:
 
     DLLLOCAL int emitValue(double f) {
         QoreString tmp(QCS_UTF8);
-        if (((double)((int64)f)) == f)
-            tmp.sprintf("%g.0", f);
-        else {
-            tmp.sprintf("%.25g", f);
-            // apply noise reduction algorithm
-            qore_apply_rounding_heuristic(tmp, 6, 8);
+        if (std::isnan(f)) {
+            tmp.set(".nan");
+        } else if (std::isinf(f)) {
+            tmp.set(f < 0 ? "-.inf" : ".inf");
+        } else {
+            tmp.sprintf("%.*g", std::numeric_limits<double>::max_digits10, f);
+            // Preserve float identity without appending a decimal point to an exponent.
+            if (!strpbrk(tmp.c_str(), ".eE")) {
+                tmp.concat(".0");
+            }
         }
-
-        if (tmp == "inf")
-            tmp.set("@inf@");
-        else if (tmp == "-inf")
-            tmp.set("-@inf@");
-        else if (tmp == "nan")
-            tmp.set("@nan@");
-
-        //printd(5, "yaml emit float: %s\n", tmp.c_str());
         return emitScalar(tmp, YAML_FLOAT_TAG);
     }
 

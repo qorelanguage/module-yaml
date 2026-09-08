@@ -114,8 +114,8 @@ hash<auto> data = parse_yaml("description: .\nlimit: .inf\nratio: .5\n");
 
     |!QoreType|!YAML Tag|!Qore Example|!YAML Example|!Notes
     |int|\c !!int|\c 300|\c 300|direct serialization
-    |float|\c !!float|\c 3.5|\c 3.5|direct serialization; infinity is serialized as <tt>\@inf\@</tt>, "not a number" \
-        as <tt>\@nan\@</tt>
+    |float|\c !!float|\c 3.5|\c 3.5|exact round-trip serialization; infinity is serialized as \c .inf or \
+        \c -.inf, and "not a number" as \c .nan
     |number|\c !number|\c 3.5|<tt>3.5n{128}</tt>|String serialization in scientific notation (for brevity) with the \
         number appended with an \c "n"; the number is serialized so that no precision is lost.<br><br>Infinity is \
         serialized as <tt>\@inf\@n{128}</tt>, "not a number" as <tt>\@nan\@n{128}</tt><br><br>The precision is \
@@ -155,6 +155,9 @@ hash<auto> data = parse_yaml("description: .\nlimit: .inf\nratio: .5\n");
       - \c yamlrpcio:// and \c yamlrpcios:// URL schemes for ConnectionProvider
 
     <b>Bug Fixes</b>
+    - fixed document float serialization producing invalid scalars such as \c 1e+09.0 and losing
+      significant digits; finite floats now round trip exactly, including signed zero and values
+      outside the integer range, and non-finite floats use standard YAML spellings
     - fixed scalar resolution silently converting digit-free tokens such as \c . and \c .e3 to zero;
       malformed exponents and malformed Qore numeric suffixes now remain strings
     - added YAML \c .inf and \c .nan spellings, including their specified case variants, to implicit
